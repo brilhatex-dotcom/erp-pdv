@@ -57,7 +57,74 @@ separado. Registrado em ADR-0011.
 
 ---
 
-## 2. Princípios inegociáveis
+## 2. Produto e mercado-alvo
+
+Este é um **produto comercial**, vendido para pequenos e médios estabelecimentos
+brasileiros. Não é software sob medida para um cliente.
+
+**Segmentos-alvo (nove):** mercadinhos · padarias · mercearias · casas de construção ·
+autopeças · lojas de conveniência · pequenos depósitos · açougues · hortifrutis.
+
+**Perfil dominante:** 1 a 3 computadores por cliente, sem equipe de TI.
+
+> ⛔ **Escopo: varejo apenas — venda de mercadoria.**
+> Prestação de serviços, Ordem de Serviço e oficina **não fazem parte deste produto**
+> (decisão de 30/07/2026) — serão um sistema separado. Consequência direta: **NFS-e está
+> fora do roteiro fiscal**; o produto emite apenas NFC-e (65) e NF-e (55).
+> Ver `docs/ANALISE-SEGMENTOS.md` §5.1.
+
+### Os cinco critérios que decidem qualquer empate técnico
+
+| Critério | O que significa na prática |
+|---|---|
+| **Simplicidade** | O usuário não deve perceber a complexidade interna. Zero treinamento formal |
+| **Estabilidade** | Travar uma vez destrói a confiança. Falha deve ser degradação, nunca parada |
+| **Velocidade** | Percebida no balcão, não em benchmark. Latência de tecla importa mais que throughput |
+| **Facilidade de manutenção** | Um bug precisa ser diagnosticável remotamente, sem ir à loja |
+| **Baixo custo operacional** | Sem mensalidade de infraestrutura por cliente. Suporte é o maior custo real |
+
+> **Regra derivada:** "parece simples por fora, é profissional por dentro".
+> Complexidade interna é aceitável **apenas** quando reduz complexidade para o usuário
+> ou o custo de suporte. Complexidade que só agrada ao desenvolvedor é rejeitada.
+
+**O custo de suporte é o critério econômico dominante.** Uma decisão que economiza duas
+horas de desenvolvimento e gera um chamado por cliente é uma decisão ruim — o chamado
+se multiplica por toda a base instalada, o desenvolvimento não.
+
+---
+
+## 3. Fluxo obrigatório de desenvolvimento
+
+**Regra permanente.** Nenhum módulo é desenvolvido fora deste fluxo:
+
+| # | Etapa | Critério de conclusão |
+|---|---|---|
+| 1 | **Analisar o problema** | Entender a dor real do estabelecimento, não só o requisito escrito |
+| 2 | **Planejar a solução** | Modelo, fronteiras, impacto nos nove papéis (§1) |
+| 3 | **Explicar o que será desenvolvido** | Antes de codar, por escrito, com trade-offs explícitos |
+| 4 | **Aguardar — só se houver decisão importante** | Decisão de negócio, custo ou mudança de arquitetura. Caso contrário, **prosseguir sem perguntar** |
+| 5 | **Desenvolver** | Solução robusta. **Nunca** implementação rápida só para fechar tarefa |
+| 6 | **Revisar o código** | Contra o checklist dos nove papéis (§8) |
+| 7 | **Executar testes** | Suíte completa, não apenas o teste novo |
+| 8 | **Corrigir problemas** | Falha encontrada é corrigida antes de avançar, nunca adiada |
+| 9 | **Documentar a etapa** | ADR se houve decisão; atualizar `docs/` |
+| 10 | **Só então avançar** | Etapa incompleta não é "concluída" |
+
+**Sobre a etapa 4 — quando parar e quando seguir:**
+
+| Parar e perguntar | Seguir e informar |
+|---|---|
+| Mudança de arquitetura ou de ADR | Escolha de nome, estrutura de pasta, formato de teste |
+| Decisão de escopo ou de modelo comercial | Detalhe de implementação dentro do plano aprovado |
+| Trade-off com impacto em custo ou prazo | Refatoração local sem mudança de contrato |
+| Nova dependência relevante | Correção de bug encontrado no caminho |
+
+**Melhoria identificada durante o desenvolvimento:** apresentar a **justificativa antes**
+de alterar a arquitetura. Nunca alterar primeiro e explicar depois.
+
+---
+
+## 4. Princípios inegociáveis
 
 Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
@@ -71,7 +138,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 3. Decisões já fechadas (não reabrir sem ADR)
+## 5. Decisões já fechadas (não reabrir sem ADR)
 
 | Decisão | Valor | Referência |
 |---|---|---|
@@ -85,7 +152,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 4. Padrões de código
+## 6. Padrões de código
 
 | Aspecto | Regra |
 |---|---|
@@ -100,7 +167,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 5. Portões de qualidade (bloqueiam o merge)
+## 7. Portões de qualidade (bloqueiam o merge)
 
 | Portão | Critério |
 |---|---|
@@ -116,9 +183,9 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 6. Checklist obrigatório antes de entregar qualquer funcionalidade
+## 8. Checklist obrigatório antes de entregar qualquer funcionalidade
 
-Nenhum item é opcional. Cada um corresponde a um papel do comitê:
+Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 
 - [ ] **Arquiteto** — respeita o grafo de dependências? Decisão é reversível?
 - [ ] **Dev Sênior** — tem teste? Alguma regra duplicada?
@@ -132,7 +199,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê:
 
 ---
 
-## 7. O que nunca fazer
+## 9. O que nunca fazer
 
 - Colocar regra de negócio em componente React ou em rota HTTP.
 - Confiar em validação apenas no cliente.
@@ -146,7 +213,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê:
 
 ---
 
-## 8. Referências do projeto
+## 10. Referências do projeto
 
 | Documento | Conteúdo |
 |---|---|

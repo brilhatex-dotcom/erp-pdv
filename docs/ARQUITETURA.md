@@ -1543,7 +1543,7 @@ A legislação fiscal brasileira muda constantemente — e a Reforma Tributária
 | **65** | **NFC-e** | Varejo presencial a consumidor final | 1 |
 | **55** | **NF-e** | B2B, entradas, transferências | 2 |
 | **59** | CF-e-SAT | São Paulo (equipamento SAT) | 3 |
-| — | NFS-e | Serviços (padrão nacional) | 3 |
+| ~~—~~ | ~~NFS-e~~ | ❌ **Fora do escopo** — produto é exclusivamente varejo (`docs/ANALISE-SEGMENTOS.md` §5.1) | — |
 
 ### 15.3 Máquina de estados do documento fiscal
 
@@ -1662,7 +1662,7 @@ graph TB
 | **Postgres local → nuvem** | String de conexão | Absolutamente nada mais — 🔑 ganho direto da decisão de banco único |
 | **Multi-loja** | Novo adapter de sincronização; `lojaId` já existe no modelo | Regras de venda, estoque, fiscal |
 | **App mobile do gestor** | Novo adapter de entrada consumindo a mesma API | Toda a lógica de negócio |
-| **Novo documento fiscal (SAT, NFS-e)** | Novo adapter `EmissorFiscal` | PDV, venda, estoque |
+| **Novo documento fiscal (SAT-CF-e)** | Novo adapter `EmissorFiscal` | PDV, venda, estoque |
 | **TEF / maquininha** | Novo adapter `ProvedorPagamento` | Fluxo de venda |
 | **E-commerce / marketplace** | Adapter de integração + ACL | Catálogo e estoque |
 | **Módulo financeiro** | Novo contexto no domínio, reagindo a `VendaFinalizada` | Contextos existentes |
