@@ -1,0 +1,32 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Banco de dados local e backups
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+prisma/*.db
+backups/
+
+# Variáveis de ambiente (contêm segredos)
+.env
+.env.local
+.env*.local
+
+# Certificado digital A1 — NUNCA versionar
+certificados/
+*.pfx
+*.p12
+
+# Sistema / editor
+.DS_Store
+*.pem
+*.tsbuildinfo
+next-env.d.ts
+.vscode/
+.idea/
+npm-debug.log*
