@@ -71,7 +71,21 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 3. Padrões de código
+## 3. Decisões já fechadas (não reabrir sem ADR)
+
+| Decisão | Valor | Referência |
+|---|---|---|
+| **Banco de dados** | **PostgreSQL 17 único**, embarcado no instalador como serviço. Sem SQLite como sistema de registro | ADR-0013 · §5.2.1 |
+| Cache de contingência do PDV | SQLite embarcado no Electron — **somente** catálogo replicado e fila offline | §12.2 |
+| Topologia | Servidor local na loja + contingência na estação | ADR-0001 · §2.2 |
+| Emissão fiscal | Assíncrona via Outbox, nunca bloqueando a venda | ADR-0006 · §15 |
+| Estoque | Eventos comutativos, sem coluna de saldo mutável | ADR-0007 · §11.4 |
+| Identificadores | UUIDv7 gerado no cliente | ADR-0008 · §11.2 |
+| Dinheiro | Inteiro em centavos (`bigint`) | ADR-0009 · §6.3 |
+
+---
+
+## 4. Padrões de código
 
 | Aspecto | Regra |
 |---|---|
@@ -86,7 +100,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 4. Portões de qualidade (bloqueiam o merge)
+## 5. Portões de qualidade (bloqueiam o merge)
 
 | Portão | Critério |
 |---|---|
@@ -102,7 +116,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 
 ---
 
-## 5. Checklist obrigatório antes de entregar qualquer funcionalidade
+## 6. Checklist obrigatório antes de entregar qualquer funcionalidade
 
 Nenhum item é opcional. Cada um corresponde a um papel do comitê:
 
@@ -118,7 +132,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê:
 
 ---
 
-## 6. O que nunca fazer
+## 7. O que nunca fazer
 
 - Colocar regra de negócio em componente React ou em rota HTTP.
 - Confiar em validação apenas no cliente.
@@ -132,7 +146,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê:
 
 ---
 
-## 7. Referências do projeto
+## 8. Referências do projeto
 
 | Documento | Conteúdo |
 |---|---|

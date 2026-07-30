@@ -3,12 +3,20 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.0 |
+| **Versão do documento** | 1.1 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
+| **Revisão conjunta** | Arquiteto · Dev Sênior · UX/UI · DBA PostgreSQL · Segurança · Fiscal BR · Negócios · QA · DevOps (ver `CLAUDE.md` §1) |
 | **Público-alvo** | Time de desenvolvimento, QA, suporte, stakeholders |
 | **Escopo** | Arquitetura completa. Nenhuma implementação nesta etapa. |
+
+### Histórico de revisões
+
+| Versão | Data | Mudança |
+|---|---|---|
+| 1.0 | 30/07/2026 | Versão inicial |
+| **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
 
 ---
 
@@ -121,7 +129,7 @@ Requisito sem número é opinião. Estas são as metas que o sistema deve cumpri
 | RNF-04 | Finalização de venda (sem fiscal) | < 300 ms (p95) | Benchmark de integração |
 | RNF-05 | Autorização de NFC-e online | < 3 s (p95) | Métrica de produção |
 | RNF-06 | Disponibilidade do PDV | **99,9%, independente de internet** | Telemetria de indisponibilidade |
-| RNF-07 | Perda máxima de dados (RPO) | 15 minutos | Teste de restauração |
+| RNF-07 | Perda máxima de dados (RPO) | **próximo de zero** (PITR) | Teste de restauração |
 | RNF-08 | Tempo de recuperação (RTO) | 30 minutos | Simulação de desastre |
 | RNF-09 | Instalação completa | < 10 minutos, por não-técnico | Teste com usuário real |
 | RNF-10 | Consumo de RAM da estação PDV | < 500 MB | Profiling |
@@ -148,7 +156,7 @@ Requisito sem número é opinião. Estas são as metas que o sistema deve cumpri
 | Mudança de layout fiscal pela SEFAZ | Alto — bloqueia emissão | **Alta** (Reforma Tributária) | Camada fiscal isolada por adapter (§15); versionamento de layout |
 | Reforma Tributária (CBS/IBS/IS) | Alto — remodelagem tributária | **Certa** | Modelo de dados já contempla os grupos novos (§15.7) |
 | Divergência de estoque entre estações | Alto — perda financeira | Média | Estoque como *event sourcing* comutativo (§11.4) |
-| Corrupção do banco por queda de energia | **Crítico** | Média | SQLite WAL + `synchronous=FULL` + backup horário |
+| Corrupção do banco por queda de energia | **Crítico** | Média | PostgreSQL WAL + `full_page_writes` + `synchronous_commit=on` + nobreak recomendado |
 | Complexidade acidental do time | Médio — atrasa entregas | Média | Arquitetura em camadas com fronteiras explícitas no CI |
 
 ---
@@ -174,7 +182,7 @@ graph TB
     subgraph LOJA["🏪 REDE LOCAL DA LOJA"]
         subgraph SRV["💻 Máquina Servidor (escritório)"]
             API["<b>erp-server</b><br/>Node.js + Fastify<br/>API + regras de negócio<br/>porta 3000"]
-            DB[("<b>SQLite (WAL)</b><br/>banco de dados<br/>+ arquivos XML")]
+            DB[("<b>PostgreSQL 17</b><br/>serviço local embarcado<br/>+ arquivos XML")]
             JOBS["<b>Agendador</b><br/>backup, fila fiscal,<br/>sincronização"]
             WEB["<b>erp-web</b><br/>Retaguarda (SPA)<br/>servida pelo erp-server"]
             API --- DB
@@ -184,7 +192,7 @@ graph TB
 
         subgraph EST1["🖥️ Estação PDV 1 (balcão)"]
             PDV1["<b>erp-pdv</b><br/>Electron + React"]
-            LOCAL1[("Cache local<br/>SQLite embarcado")]
+            LOCAL1[("Cache de contingência<br/>SQLite embarcado<br/><i>somente catálogo + fila</i>")]
             HW1["Ponte de Hardware<br/>impressora, gaveta,<br/>balança, SAT"]
             PDV1 --- LOCAL1
             PDV1 --- HW1
@@ -249,7 +257,7 @@ graph TB
     end
 
     subgraph INFRA["🔌 ADAPTADORES DE SAÍDA (Driven)"]
-        PRISMA[Prisma / SQLite]
+        PRISMA[Prisma / PostgreSQL]
         SEFAZ2[Adapter SEFAZ<br/>NFC-e / NF-e]
         ESCPOS[Adapter ESC/POS]
         S3[Adapter de backup]
@@ -272,7 +280,7 @@ graph TB
 
 | Mudança futura | Sem hexagonal | Com hexagonal |
 |---|---|---|
-| Trocar SQLite → PostgreSQL | Reescrita de queries espalhadas | Trocar 1 adapter |
+| Migrar para Postgres gerenciado na nuvem | Reescrita de queries espalhadas | Trocar string de conexão |
 | Adicionar SAT (São Paulo) | `if` no meio do PDV | Novo adapter `EmissorFiscal` |
 | Expor API para app mobile | Duplicar regras | Novo adapter de entrada |
 | Testar regra de troco | Subir banco e servidor | Teste unitário puro, milissegundos |
@@ -364,7 +372,7 @@ erDiagram
 | **Estoque** | `Produto` | Saldo = soma dos movimentos; venda não pode gerar saldo negativo (configurável) |
 | **DocumentoFiscal** | `DocumentoFiscal` | Máquina de estados fiscal; numeração sequencial sem lacuna por série |
 
-Transações **nunca** cruzam agregados. Comunicação entre agregados é via **eventos de domínio** — o que mantém as transações curtas (essencial no SQLite, que serializa escritas) e prepara o caminho para distribuição futura.
+Transações **nunca** cruzam agregados. Comunicação entre agregados é via **eventos de domínio** — o que mantém as transações curtas (reduzindo contenção de lock e tempo de bloat no MVCC do PostgreSQL) e prepara o caminho para distribuição futura.
 
 ### 2.6 Contratos de comunicação
 
@@ -383,7 +391,7 @@ Transações **nunca** cruzam agregados. Comunicação entre agregados é via **
 | # | Decisão | Alternativa rejeitada | Motivo |
 |---|---|---|---|
 | 1 | Servidor local + contingência | Cloud puro | PDV não pode depender de internet |
-| 2 | SQLite (WAL) como padrão | PostgreSQL desde o início | Zero manutenção; volume não justifica; Postgres é troca de adapter |
+| 2 | **PostgreSQL único, embarcado no instalador** | SQLite padrão com Postgres opcional | Um só banco em dev, teste e produção; elimina migration dupla e divergência teste↔produção; sem migração futura por cliente |
 | 3 | Monorepo | Multi-repo | Contratos compartilhados, refatoração atômica, um CI |
 | 4 | Hexagonal | MVC em camadas | Domínio testável e fiscal/hardware plugáveis |
 | 5 | Electron no PDV | Navegador puro | Acesso a impressora, gaveta, balança, SAT e auto-update |
@@ -666,7 +674,7 @@ apps/server/src/
 │   ├── ProcessarFilaFiscal.job.ts    # a cada 30 s
 │   ├── Backup.job.ts                 # de hora em hora + no fechamento
 │   ├── RetransmitirContingencia.job.ts
-│   └── ManutencaoBanco.job.ts        # checkpoint WAL, ANALYZE
+│   └── ManutencaoBanco.job.ts        # VACUUM/ANALYZE, reindex, monitor de bloat
 └── seguranca/                        # sessoes, cofre de certificado, auditoria
 ```
 
@@ -764,9 +772,9 @@ packages/fiscal/src/
 | Linguagem | **TypeScript** (strict) | 5.9+ | C#, Java, Go | Uma linguagem do banco à UI; tipagem forte pega erro fiscal em compilação; mercado de devs amplo |
 | Runtime | **Node.js LTS** | 22 LTS | Bun, Deno | Estabilidade e ecossistema de bibliotecas fiscais/hardware |
 | API | **Fastify** | 5.x | Express, NestJS | 2× mais rápido que Express; validação por schema nativa; NestJS traz peso desnecessário |
-| ORM | **Prisma** | 6.x | Drizzle, TypeORM | Migrations confiáveis, tipagem excelente, troca SQLite↔Postgres |
-| Banco (padrão) | **SQLite** (WAL) | 3.4x | PostgreSQL | Zero manutenção, backup = copiar arquivo, sobra desempenho |
-| Banco (crescimento) | **PostgreSQL** | 17 | — | Mesmo Prisma; ativado por configuração |
+| ORM | **Prisma** | 6.x | Drizzle, TypeORM | Migrations confiáveis, tipagem excelente, `migrate diff` para reversão |
+| **Banco** | **PostgreSQL** (embarcado) | 17 | SQLite, Firebird | Único banco em dev/teste/produção; integridade, MVCC, PITR, roles |
+| Cache local do PDV | **SQLite** (embarcado no Electron) | 3.4x | IndexedDB | Apenas catálogo replicado + fila offline — **não** é sistema de registro |
 | UI | **React** | 19 | Vue, Svelte | Maior ecossistema; contratação mais fácil |
 | Build do front | **Vite** | 7.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
 | Estilo | **Tailwind CSS** | 4.x | CSS Modules | Consistência via tokens; sem CSS órfão |
@@ -781,30 +789,67 @@ packages/fiscal/src/
 
 ### 5.2 Justificativas das escolhas polêmicas
 
-#### 5.2.1 SQLite como banco padrão — a decisão mais questionada
+#### 5.2.1 PostgreSQL único e embarcado — a decisão de maior impacto
 
-A objeção esperada é "SQLite não é banco sério". Os números do projeto dizem o contrário:
+> **Nota de revisão.** A versão 1.0 deste documento recomendava SQLite como padrão, com
+> PostgreSQL como caminho de crescimento. Essa recomendação foi **revista e substituída**
+> após a revisão conjunta com o DBA, o QA e o DevOps. O ADR-0002 foi superseado pelo
+> ADR-0013. O raciocínio original está preservado abaixo, junto com o motivo da mudança.
+
+**O argumento original a favor do SQLite continua tecnicamente correto** — e é importante
+reconhecer isso, porque a decisão não mudou por erro de cálculo:
 
 | Fato | Consequência |
 |---|---|
-| 2.000 vendas/dia = **~0,03 escritas/segundo** de pico real | SQLite entrega dezenas de milhares/s em WAL |
-| Base projetada em 5 anos: ~4 GB | Limite do SQLite: 281 TB |
-| 1 a 3 clientes concorrentes | WAL permite leitura concorrente ilimitada; escrita serializada é irrelevante nesse volume |
-| Público sem equipe de TI | PostgreSQL exigiria instalar serviço, configurar `pg_hba.conf`, gerenciar usuários, tunar — **e cada um desses é um chamado de suporte** |
-| Backup | SQLite: um arquivo. Postgres: `pg_dump`, agendamento, permissões |
+| 2.000 vendas/dia = **~0,03 escritas/segundo** de pico real | SQLite entregaria isso com folga |
+| Base projetada em 5 anos: ~4 GB | Muito abaixo do limite do SQLite |
+| 1 a 3 clientes concorrentes | Escrita serializada seria irrelevante nesse volume |
 
-**O que ganhamos:** instalação de 10 minutos, backup trivial, zero manutenção, desempenho excelente.
-**O que perdemos:** escrita concorrente massiva e replicação nativa — nada disso é requisito.
+**O que mudou:** o critério de decisão. A pergunta certa não é *"SQLite aguenta a carga?"*
+(aguenta), mas *"qual banco entrega o menor custo total ao longo da vida de um produto
+comercial vendido para muitos clientes?"*. Com essa pergunta, o quadro se inverte:
 
-**Mitigações obrigatórias:**
-- `journal_mode = WAL` (leitura concorrente com escrita)
-- `synchronous = FULL` (integridade após queda de energia — prioridade sobre velocidade)
-- `busy_timeout = 5000` (evita `SQLITE_BUSY` sob concorrência)
-- `foreign_keys = ON` (não é padrão no SQLite — precisa ser ativado por conexão)
-- Transações curtas, sempre (regra do §2.5)
-- Checkpoint WAL agendado
+| Papel | Objeção ao SQLite | Peso |
+|---|---|---|
+| **QA** | Testar em SQLite e vender em Postgres significa que a suíte **não exercita o banco de produção**. Diferenças de tipo, `NULL` em índice único, ordenação e nível de isolamento produzem bug que só aparece no cliente | 🔴 Bloqueante |
+| **DevOps** | Dois bancos = duas históricas de migration no Prisma, matriz dupla de CI e **drift permanente** entre elas | 🔴 Bloqueante |
+| **DBA** | Sem roles, sem PITR, sem `EXPLAIN` decente, sem tipos ricos, `ALTER TABLE` limitado (o Prisma reconstrói a tabela inteira — arriscado em base grande) | 🔴 Bloqueante |
+| **Segurança** | Arquivo único, copiável inteiro por qualquer processo com acesso ao disco. Postgres tem separação real de usuários e permissões por objeto | 🟠 Alto |
+| **Negócios** | Migrar depois custa **por cliente**, multiplicado pela base instalada, e cada migração é uma janela de risco de perda de dados | 🔴 Bloqueante |
 
-**A porta de saída existe desde o dia 1:** os repositórios são interfaces (§2.3). Migrar para PostgreSQL significa trocar o provider do Prisma e o adapter — sem tocar em domínio, casos de uso ou UI. Um cliente que cresça para 10 caixas faz essa migração por configuração.
+**O único argumento pró-SQLite que sobrevive é a facilidade de instalação — e ele é
+resolvível de uma vez só**, na engenharia do instalador, em vez de ser pago repetidamente
+em migração e suporte.
+
+**Como o PostgreSQL fica invisível para o usuário final:**
+
+| Preocupação | Solução |
+|---|---|
+| "Precisa instalar banco" | Binários do Postgres **embarcados no instalador**; sobe como serviço do Windows, sem etapa visível |
+| "Precisa configurar `pg_hba.conf`" | Gerado automaticamente na instalação: escuta só em `localhost`, autenticação `scram-sha-256`, senha aleatória |
+| "Precisa tunar" | Perfil conservador aplicado na instalação (`shared_buffers=256MB`, `work_mem=8MB`, `max_connections=20`) — dimensionado para máquina de 4 GB |
+| "Porta 5432 conflita" | Instala em porta dedicada e não-padrão, isolado de qualquer Postgres pré-existente |
+| "Backup é complicado" | `pg_dump` agendado + WAL archiving para PITR, tudo automático (§10) |
+| "Instalador fica grande" | ~200 MB a mais. Irrelevante frente ao Electron e a um download único |
+
+**Configuração obrigatória para integridade** (a preocupação com queda de energia é real
+neste público):
+- `synchronous_commit = on` — não perder transação confirmada
+- `full_page_writes = on` — proteção contra *torn page*
+- `wal_level = replica` — habilita PITR e replicação futura
+- `autovacuum` ativo e monitorado (§10.4)
+- Transações curtas, sempre (regra do §2.5) — evita bloat de MVCC
+
+**O que perdemos ao abandonar o SQLite:** instalador mais leve e um processo a menos na
+máquina. **O que ganhamos:** paridade exata entre teste e produção, uma única história de
+migration, ferramental de backup e diagnóstico maduro, e nenhuma migração futura por
+cliente. Para um produto comercial, essa troca é claramente favorável.
+
+**O SQLite permanece no projeto — em outro papel.** O cache de contingência do PDV
+(catálogo replicado + fila de vendas offline, §12.2) continua em SQLite embarcado no
+Electron. Isso **não** reintroduz o problema: é um esquema pequeno, próprio, descartável e
+reconstruível a partir do servidor — não é sistema de registro e não compartilha migrations
+com o domínio.
 
 #### 5.2.2 Electron no PDV — o custo de 150 MB vale o quê
 
@@ -814,7 +859,7 @@ A objeção esperada é "SQLite não é banco sério". Os números do projeto di
 | Abrir gaveta de dinheiro | ❌ | ✅ |
 | Ler balança (porta serial) | ⚠️ Web Serial: Chrome, com permissão manual toda vez | ✅ |
 | Acionar equipamento SAT (DLL) | ❌ | ✅ |
-| Armazenar catálogo offline com busca rápida | ⚠️ IndexedDB, lento em 50k SKUs | ✅ SQLite embarcado |
+| Armazenar catálogo offline com busca rápida | ⚠️ IndexedDB, lento em 50k SKUs | ✅ SQLite embarcado (cache) |
 | Auto-atualização controlada | ❌ | ✅ |
 | Modo quiosque, sem barra de endereço | ⚠️ | ✅ |
 
@@ -903,7 +948,7 @@ Tão importante quanto o que se adota:
 | Ransomware | E-mail/USB na máquina servidor | **Crítica** | Backup offline + nuvem, versionado e imutável |
 | Acesso não autorizado à rede | Wi-Fi da loja compartilhado | Alta | TLS na rede local, sessão por dispositivo, sem senha padrão |
 | Vazamento de dados de clientes (LGPD) | Exportação indevida, backup exposto | Alta | Criptografia de backup, log de exportação, minimização |
-| Adulteração de preço/estoque | Acesso direto ao arquivo SQLite | Média | Permissões de arquivo, hash de auditoria encadeado |
+| Adulteração de preço/estoque | Acesso direto ao banco por fora da aplicação | Média | Usuário Postgres dedicado com permissão mínima, sem acesso de superusuário à aplicação; hash de auditoria encadeado |
 | Injeção / XSS | Entradas do usuário | Média | Prisma parametrizado, React escapa por padrão, CSP estrita |
 | Falha de fornecimento (supply chain) | Dependência npm comprometida | Média | Lockfile, `npm audit` bloqueante no CI, Dependabot, versões fixadas |
 
@@ -1121,13 +1166,13 @@ Pequenas empresas perdem dados por: HD que falha, ransomware, energia, furto do 
 
 ```mermaid
 graph TB
-    DB[("SQLite em produção")]
+    DB[("PostgreSQL em produção")]
     subgraph C1["Camada 1 — Contínua"]
-        WAL["WAL + synchronous=FULL<br/>sobrevive a queda de energia"]
+        WAL["WAL archiving contínuo<br/>synchronous_commit=on<br/>🔑 permite PITR"]
     end
     subgraph C2["Camada 2 — Local automática"]
-        SNAP["Snapshot de hora em hora<br/>VACUUM INTO"]
-        FECHA["Snapshot no fechamento de caixa"]
+        SNAP["pg_basebackup semanal<br/>+ pg_dump de hora em hora"]
+        FECHA["Dump no fechamento de caixa"]
         RET["Retenção GFS:<br/>24 horários · 7 diários<br/>4 semanais · 12 mensais"]
     end
     subgraph C3["Camada 3 — Externa"]
@@ -1143,11 +1188,15 @@ graph TB
 
 ### 10.4 Detalhes que fazem diferença
 
-**Snapshot consistente:** copiar o arquivo `.db` com o WAL ativo produz backup corrompido. O snapshot usa `VACUUM INTO` (ou a API oficial de backup do SQLite), que gera um arquivo íntegro **sem parar o sistema**.
+**Snapshot consistente:** copiar o diretório de dados do Postgres com o serviço no ar produz backup corrompido. Usamos `pg_dump` (lógico, consistente por snapshot MVCC, sem travar a operação) para os backups frequentes e `pg_basebackup` (físico) como base do PITR.
+
+**Point-in-Time Recovery (PITR) — o ganho concreto da mudança para PostgreSQL.** Com o WAL arquivado continuamente, é possível restaurar o banco para **qualquer instante**, não apenas para o último snapshot. Cenário real: às 15h alguém apaga uma tabela de preços por engano; restauramos para 14h59, sem perder as vendas da manhã. Com snapshot horário apenas, perderíamos até 60 minutos de movimento. É isso que derruba o RPO de 15 minutos para **próximo de zero**.
 
 **Backup no fechamento de caixa:** o momento de maior valor do dia. Se algo falhar amanhã, o movimento de hoje está salvo.
 
-**Verificação automática:** todo backup é validado com `PRAGMA integrity_check` e tem seu hash registrado. Backup que não restaura não é backup — é ilusão de segurança.
+**Verificação automática:** todo backup é validado por restauração real em instância temporária (`pg_restore --list` não basta — só a restauração prova) e tem seu hash registrado. Backup que não restaura não é backup — é ilusão de segurança.
+
+**Manutenção do banco (responsabilidade do DBA, automatizada):** `autovacuum` ativo com monitoramento de bloat, `ANALYZE` após cargas grandes, checagem de índices não utilizados e de *bloat* de índice, e alerta de proximidade de *wraparound* de transação. Nada disso é visível ao usuário — roda no `ManutencaoBanco.job`.
 
 **Teste de restauração mensal automatizado:** um job restaura o backup mais recente num diretório temporário, roda verificações de consistência (soma de vendas, saldo de caixa, contagem de documentos fiscais) e relata. Esse é o único jeito de saber que a estratégia funciona *antes* de precisar dela.
 
@@ -1159,7 +1208,7 @@ graph TB
 
 | Métrica | Meta | Como se cumpre |
 |---|---|---|
-| **RPO** (perda máxima) | 15 min | Snapshot horário + WAL + fila local do PDV |
+| **RPO** (perda máxima) | **próximo de zero** (era 15 min) | 🔑 PITR por WAL archiving contínuo + fila local do PDV |
 | **RTO** (tempo de retorno) | 30 min | Restauração por assistente gráfico, sem linha de comando |
 | Retenção | 12 meses (dados) / 5 anos (fiscal) | Política GFS + arquivo fiscal separado |
 
@@ -1248,7 +1297,7 @@ O sistema tem comportamento definido para cada tipo de falha — nenhuma delas p
 | **N0 — Normal** | Tudo online | 100% | — |
 | **N1 — Sem internet** | Rede local OK, internet fora | Venda, estoque, caixa, relatórios | NFC-e entra em **contingência offline** |
 | **N2 — Sem servidor** | Servidor caiu ou rede local fora | **Venda continua** com catálogo replicado | Sem consulta a outras estações; estoque converge depois |
-| **N3 — Sem energia** | Queda total | Nada | Nobreak recomendado; WAL garante integridade ao voltar |
+| **N3 — Sem energia** | Queda total | Nada | Nobreak recomendado; WAL + `full_page_writes` garantem recuperação automática ao voltar |
 
 **A distinção N1/N2 é o que a maioria dos sistemas não faz.** Muitos tratam "sem internet" e "sem servidor" como a mesma coisa e param nos dois casos.
 
@@ -1271,7 +1320,7 @@ O sistema tem comportamento definido para cada tipo de falha — nenhuma delas p
 stateDiagram-v2
     [*] --> Registrando: operador bipa itens
     Registrando --> Finalizada: pagamento confirmado
-    Finalizada --> GravadaLocal: 💾 SQLite local (durável)
+    Finalizada --> GravadaLocal: 💾 SQLite de contingência (durável)
     GravadaLocal --> CupomImpresso: 🖨️ imprime imediatamente
     CupomImpresso --> NaFila: entra na fila de sincronização
 
@@ -1350,7 +1399,13 @@ graph LR
 
 Em qualquer ponto desse caminho é possível voltar para a versão anterior sem perda de dados. Uma migração que apaga coluna na mesma versão que passa a usar a nova torna o rollback impossível — e é assim que atualizações destroem clientes.
 
-**Regras adicionais:** migrations versionadas e sequenciais, sempre com script de reversão testado, executadas em transação (o SQLite suporta DDL transacional), e validadas contra uma cópia real de banco de produção antes de liberar.
+**Regras adicionais:** migrations versionadas e sequenciais, sempre com script de reversão testado, executadas em transação (o PostgreSQL tem DDL transacional — uma migração que falha no meio reverte inteira, sem estado intermediário), e validadas contra uma cópia real de banco de produção antes de liberar.
+
+**Cuidados específicos de PostgreSQL em migração** (responsabilidade do DBA):
+- `CREATE INDEX CONCURRENTLY` para não bloquear a operação — e, por isso, **fora** de transação
+- Evitar `ALTER TABLE ... SET NOT NULL` direto em tabela grande; usar constraint `NOT VALID` seguida de `VALIDATE`
+- Adicionar coluna com `DEFAULT` é barato no Postgres 11+, mas **backfill em lote**, nunca num `UPDATE` único
+- `lock_timeout` e `statement_timeout` definidos na sessão de migração para não travar o caixa
 
 ### 13.5 Fluxo de atualização
 
@@ -1592,7 +1647,7 @@ XMLs autorizados e cancelados são armazenados em disco (`ano/mês`), com backup
 ```mermaid
 graph TB
     HOJE["<b>HOJE</b><br/>1 loja · 1-3 caixas · local"]
-    E1["<b>Eixo 1 — Escala</b><br/>mais caixas · mais volume<br/>SQLite → PostgreSQL"]
+    E1["<b>Eixo 1 — Escala</b><br/>mais caixas · mais volume<br/>pool de conexões · réplica de leitura"]
     E2["<b>Eixo 2 — Alcance</b><br/>multi-loja · nuvem<br/>app do gestor"]
     E3["<b>Eixo 3 — Funcional</b><br/>financeiro · fiscal completo<br/>CRM · fidelidade · BI"]
     E4["<b>Eixo 4 — Integração</b><br/>e-commerce · marketplace<br/>TEF · delivery · contabilidade"]
@@ -1603,7 +1658,8 @@ graph TB
 
 | Eixo | Mudança necessária | O que **não** muda |
 |---|---|---|
-| **SQLite → PostgreSQL** | Provider do Prisma + adapter de repositório | Domínio, casos de uso, API, UI |
+| **Mais volume / mais caixas** | Pool de conexões (PgBouncer) e réplica de leitura para relatórios | Domínio, casos de uso, API, UI |
+| **Postgres local → nuvem** | String de conexão | Absolutamente nada mais — 🔑 ganho direto da decisão de banco único |
 | **Multi-loja** | Novo adapter de sincronização; `lojaId` já existe no modelo | Regras de venda, estoque, fiscal |
 | **App mobile do gestor** | Novo adapter de entrada consumindo a mesma API | Toda a lógica de negócio |
 | **Novo documento fiscal (SAT, NFS-e)** | Novo adapter `EmissorFiscal` | PDV, venda, estoque |
@@ -1653,7 +1709,7 @@ Sequência proposta, com fronteiras claras entre entregas:
 
 | Etapa | Entrega | Depende de |
 |---|---|---|
-| **0** | Fundação: monorepo, pnpm/Turborepo, CI, regras de arquitetura, design system base | — |
+| **0** | Fundação: monorepo, pnpm/Turborepo, CI, regras de arquitetura, design system base, **PostgreSQL em Docker para desenvolvimento** (mesma versão da produção) | — |
 | **1** | `@erp/domain` — objetos de valor (`Dinheiro`, `CPF`, `NCM`), agregados e testes unitários | 0 |
 | **2** | `@erp/database` — schema Prisma, migrations, repositórios | 1 |
 | **3** | Autenticação, papéis e permissões ponta a ponta | 2 |
@@ -1664,7 +1720,7 @@ Sequência proposta, com fronteiras claras entre entregas:
 | **8** | Impressão — ESC/POS, cupom, fechamento | 7 |
 | **9** | Fiscal — `NuloEmissor` → NFC-e homologação → produção | 7 |
 | **10** | Offline e sincronização — réplica local, fila, contingência | 6, 9 |
-| **11** | Backup, atualização e instalador | todas |
+| **11** | Backup (PITR), atualização e **instalador com PostgreSQL embarcado** — autoconfiguração como serviço do Windows | todas |
 | **12** | Relatórios e dashboard | 7 |
 
 **Marco comercial (MVP vendável):** conclusão da etapa 11.
@@ -1678,7 +1734,7 @@ As decisões deste documento serão registradas individualmente em `docs/adr/`, 
 | ADR | Decisão | Seção |
 |---|---|---|
 | 0001 | Servidor local com contingência no cliente | §2.2 |
-| 0002 | SQLite como banco padrão, PostgreSQL como caminho de crescimento | §5.2.1 |
+| ~~0002~~ | ~~SQLite como banco padrão~~ — **superseado pelo ADR-0013** | §5.2.1 |
 | 0003 | Monorepo com pnpm + Turborepo | §3 |
 | 0004 | Arquitetura hexagonal com domínio puro | §2.3 |
 | 0005 | Electron no PDV, web na retaguarda | §5.2.2 |
@@ -1689,6 +1745,7 @@ As decisões deste documento serão registradas individualmente em `docs/adr/`, 
 | 0010 | Domínio nomeado em português | §4.7 |
 | 0011 | Autenticação diferenciada: PIN no PDV, senha + 2FA na retaguarda | §8.1 |
 | 0012 | Migrações no padrão expand-contract | §13.4 |
+| **0013** | **PostgreSQL único embarcado no instalador** (supersede o 0002) | §5.2.1 |
 
 ---
 
@@ -1712,7 +1769,9 @@ As decisões deste documento serão registradas individualmente em `docs/adr/`, 
 | **RPO / RTO** | Perda máxima de dados aceitável / tempo máximo de recuperação |
 | **Sangria** | Retirada de dinheiro do caixa durante o expediente |
 | **SAT** | Equipamento fiscal usado em São Paulo (CF-e, modelo 59) |
-| **WAL** | Write-Ahead Logging — modo do SQLite que permite leitura concorrente à escrita |
+| **MVCC** | Controle de concorrência do PostgreSQL: leitores não bloqueiam escritores nem vice-versa |
+| **PITR** | Point-in-Time Recovery — restauração do banco para qualquer instante, via WAL arquivado |
+| **WAL** | Write-Ahead Logging — log de escrita que garante durabilidade e viabiliza PITR |
 
 ---
 
@@ -1720,7 +1779,7 @@ As decisões deste documento serão registradas individualmente em `docs/adr/`, 
 
 Este documento requer **aprovação** antes de qualquer implementação. Pontos que pedem decisão explícita:
 
-1. **Confirmar SQLite como banco padrão** (§5.2.1) — é a decisão de maior impacto.
+1. ~~Confirmar o banco de dados~~ — ✅ **decidido**: PostgreSQL único embarcado (ADR-0013, §5.2.1).
 2. **Confirmar Electron no PDV** (§5.2.2) — define se haverá suporte a hardware fiscal.
 3. **Confirmar o escopo da Fase 1** (§1.4) e o marco de MVP (§17).
 4. **Definir o modelo comercial** (licença única, assinatura, por módulo) — influencia §16.3.
