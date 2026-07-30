@@ -1,4 +1,6 @@
 // ── Base ────────────────────────────────────────────────────────────────
+export { AggregateRoot } from "./shared/AggregateRoot.js";
+export type { DomainEvent } from "./shared/DomainEvent.js";
 export {
   DomainError,
   ErroConflito,
@@ -8,6 +10,12 @@ export {
   ErroValidacao,
   type TipoErro,
 } from "./shared/DomainError.js";
+export { Entity } from "./shared/Entity.js";
+export {
+  BYTES_ALEATORIOS_UUID_V7,
+  Identificador,
+  montarUuidV7,
+} from "./shared/Identificador.js";
 export { combine, combineAll, err, Err, ok, Ok, type Result } from "./shared/Result.js";
 export type { ValueObject } from "./shared/ValueObject.js";
 
@@ -23,3 +31,18 @@ export {
   UNIDADES,
   type UnidadeMedida,
 } from "./valores/UnidadeMedida.js";
+
+// ── Catálogo ────────────────────────────────────────────────────────────
+export {
+  type ConteudoBalanca,
+  ehCodigoDeBalanca,
+  interpretarCodigoBalanca,
+  LAYOUT_BALANCA_PADRAO,
+  type LayoutBalanca,
+  type LeituraBalanca,
+} from "./catalogo/CodigoBalanca.js";
+export {
+  CodigoBarras,
+  type PadraoCodigo,
+  temDigitoVerificadorValido,
+} from "./catalogo/CodigoBarras.js";

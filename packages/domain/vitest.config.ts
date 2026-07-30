@@ -7,9 +7,10 @@ export default mergeConfig(base, {
       exclude: [
         "src/**/*.{test,spec}.ts",
         "src/**/index.ts",
-        // Módulo só de tipos: não emite código executável, então cobertura não
-        // se aplica. Aparece como 0% e distorceria o total.
+        // Módulos só de tipos: não emitem código executável, então cobertura
+        // não se aplica. Apareceriam como 0% e distorceriam o total.
         "src/shared/ValueObject.ts",
+        "src/shared/DomainEvent.ts",
       ],
     },
   },
