@@ -1,9 +1,9 @@
 {
-  "name": "@erp/domain",
+  "name": "@erp/utils",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Núcleo de negócio puro — entidades, objetos de valor e regras. Zero dependências de runtime.",
+  "description": "Utilitários puros — validadores e formatadores sem dependência alguma",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -26,8 +26,5 @@
     "@erp/config": "workspace:*",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  },
-  "dependencies": {
-    "@erp/utils": "workspace:*"
   }
 }

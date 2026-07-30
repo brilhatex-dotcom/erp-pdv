@@ -13,8 +13,9 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 |---|---|
 | Arquitetura | ✅ Definida — [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) |
 | Análise de segmentos | ✅ Concluída — [`docs/ANALISE-SEGMENTOS.md`](docs/ANALISE-SEGMENTOS.md) |
-| **Etapa 0 — Fundação** | ✅ **Concluída** — monorepo, portões de qualidade e CI operantes |
-| Etapa 1 — Domínio | ⬜ Próxima |
+| Etapa 0 — Fundação | ✅ Concluída — monorepo, portões de qualidade e CI operantes |
+| **Etapa 1 — Domínio** | ✅ **Concluída** — objetos de valor, 255 testes, 100% de cobertura |
+| Etapa 2 — Agregados e schema | ⬜ Próxima |
 
 ## Requisitos
 
@@ -54,6 +55,7 @@ passa no CI.
 apps/          aplicações executáveis (criadas nas suas etapas)
 packages/
   config/      configurações compartilhadas de TS, ESLint e Vitest
+  utils/       validadores e formatadores puros (CPF, CNPJ, texto)
   domain/      núcleo de negócio puro — zero dependências de runtime
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)

@@ -56,6 +56,22 @@ importers:
         version: 3.2.7(@types/node@22.20.1)
 
   packages/domain:
+    dependencies:
+      '@erp/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
+      '@erp/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
+  packages/utils:
     devDependencies:
       '@erp/config':
         specifier: workspace:*
