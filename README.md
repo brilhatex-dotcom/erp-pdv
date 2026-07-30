@@ -1,31 +1,81 @@
 # ERP + PDV
 
-Sistema ERP com PDV (Ponto de Venda) para pequenas empresas brasileiras.
+Sistema ERP com PDV (Ponto de Venda) para pequenos e médios estabelecimentos
+brasileiros: mercadinhos, padarias, mercearias, casas de construção, autopeças,
+lojas de conveniência, depósitos, açougues e hortifrutis.
 
-**Status atual: fase de arquitetura.** Nenhuma implementação iniciada — por decisão
-de projeto, a arquitetura é definida e aprovada antes da primeira linha de código.
+**Escopo: varejo — venda de mercadoria.** Prestação de serviços está fora do produto
+([ADR-0014](docs/adr/0014-escopo-varejo-apenas.md)).
 
-## Documentação
+## Estado atual
 
-| Documento | Conteúdo |
+| Etapa | Situação |
 |---|---|
-| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | **Documento de arquitetura completo** — visão geral, topologia, monorepo, estrutura de pastas, tecnologias, padrões, segurança, autenticação, permissões, backup, sincronização, offline, atualização, impressão, emissão fiscal e crescimento futuro |
-| `docs/adr/` | Registro de decisões arquiteturais (a criar) |
-| `docs/fiscal/` | Notas técnicas, layouts e tabelas fiscais (a criar) |
-| `docs/operacao/` | Instalação, backup e suporte (a criar) |
+| Arquitetura | ✅ Definida — [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) |
+| Análise de segmentos | ✅ Concluída — [`docs/ANALISE-SEGMENTOS.md`](docs/ANALISE-SEGMENTOS.md) |
+| **Etapa 0 — Fundação** | ✅ **Concluída** — monorepo, portões de qualidade e CI operantes |
+| Etapa 1 — Domínio | ⬜ Próxima |
 
-## Resumo da proposta
+## Requisitos
 
-- **Local-first**: uma máquina hospeda o servidor; as estações acessam pela rede local.
-  O PDV continua vendendo mesmo sem internet e mesmo sem o servidor.
-- **Monorepo** (pnpm + Turborepo) com domínio de negócio isolado em pacote sem
-  dependências, seguindo arquitetura hexagonal.
-- **Fiscal desacoplado**: NFC-e, NF-e e SAT entram como adapters, com contingência
-  automática e preparação para a Reforma Tributária (CBS/IBS/IS).
-- **Sem reescrita para crescer**: trocar SQLite por PostgreSQL, adicionar multi-loja
-  ou expor API mobile são trocas de adapter, não mudanças de núcleo.
+- **Node.js 22+** (ver `.nvmrc`)
+- **pnpm 10+** — `corepack enable && corepack prepare pnpm@latest --activate`
+- **Docker** — apenas para o PostgreSQL de desenvolvimento
 
-## Próximo passo
+## Começando
 
-Aprovação do documento de arquitetura. Os pontos que exigem decisão explícita estão
-listados na seção *Próximos passos* de [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+```bash
+pnpm install          # instala as dependências do monorepo
+pnpm db:up            # sobe o PostgreSQL 17 (porta 55432)
+pnpm verify           # roda TODOS os portões de qualidade
+```
+
+`pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
+arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
+passa no CI.
+
+### Comandos
+
+| Comando | O que faz |
+|---|---|
+| `pnpm verify` | Todos os portões de qualidade (use antes de commitar) |
+| `pnpm build` | Compila todos os pacotes |
+| `pnpm test` | Testes |
+| `pnpm test:cov` | Testes com cobertura (mínimo 90% no domínio) |
+| `pnpm typecheck` | Verificação de tipos |
+| `pnpm lint` | ESLint |
+| `pnpm arch` | Valida o grafo de dependências entre camadas |
+| `pnpm format` | Formata o código |
+| `pnpm db:up` / `db:down` | Sobe / derruba o PostgreSQL de desenvolvimento |
+
+## Estrutura
+
+```
+apps/          aplicações executáveis (criadas nas suas etapas)
+packages/
+  config/      configurações compartilhadas de TS, ESLint e Vitest
+  domain/      núcleo de negócio puro — zero dependências de runtime
+docs/
+  ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
+  ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
+  adr/                  decisões arquiteturais registradas
+CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões
+```
+
+## Arquitetura em uma página
+
+- **Local-first.** Uma máquina hospeda o servidor; as estações acessam pela rede local.
+  O PDV continua vendendo sem internet e mesmo sem o servidor.
+- **Hexagonal.** `@erp/domain` não conhece banco, HTTP nem UI — e o CI **impede** que
+  passe a conhecer.
+- **PostgreSQL 17 único**, embarcado no instalador ([ADR-0013](docs/adr/0013-postgresql-unico-embarcado.md)).
+- **Fiscal desacoplado.** NFC-e e NF-e entram como adapters, com contingência automática
+  e preparação para a Reforma Tributária (CBS/IBS/IS).
+- **Dinheiro em centavos**, sempre inteiro.
+
+Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+
+## Contribuindo
+
+Leia [`CLAUDE.md`](CLAUDE.md) antes. Ele define o fluxo obrigatório de desenvolvimento,
+os nove papéis que revisam cada decisão e os portões que bloqueiam merge.

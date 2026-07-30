@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # Portões de qualidade do CLAUDE.md §7. Todos bloqueiam o merge.
+  qualidade:
+    name: Qualidade
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependências
+        # --frozen-lockfile: o CI nunca resolve versão diferente da do
+        # desenvolvedor. Build reproduzível é veto do DevOps.
+        run: pnpm install --frozen-lockfile
+
+      - name: Formatação
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Tipagem
+        run: pnpm typecheck
+
+      - name: Regras de arquitetura
+        # Valida o grafo de docs/ARQUITETURA.md §3.3. Sem este passo, a
+        # separação de camadas dura até o primeiro prazo apertado.
+        run: pnpm arch
+
+      - name: Testes com cobertura
+        run: pnpm test:cov
+
+  seguranca:
+    name: Segurança
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Auditoria de dependências
+        # Vulnerabilidade alta ou crítica bloqueia o merge (CLAUDE.md §7).
+        run: pnpm audit --audit-level high

@@ -1,32 +1,39 @@
+# Dependências e artefatos de build
 node_modules/
-.next/
-out/
-build/
 dist/
+build/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
 
 # Banco de dados local e backups
 *.db
 *.db-journal
-*.db-wal
-*.db-shm
-prisma/*.db
 backups/
+pgdata/
 
 # Variáveis de ambiente (contêm segredos)
 .env
 .env.local
 .env*.local
 
-# Certificado digital A1 — NUNCA versionar
+# Certificado digital A1 — NUNCA versionar (ARQUITETURA.md §7.3)
 certificados/
 *.pfx
 *.p12
+*.pem
+
+# XMLs fiscais — dados do cliente, guarda local de 5 anos
+xml-fiscal/
+
+# Instaladores gerados
+tooling/installers/output/
 
 # Sistema / editor
 .DS_Store
-*.pem
-*.tsbuildinfo
-next-env.d.ts
+Thumbs.db
 .vscode/
 .idea/
+*.log
 npm-debug.log*

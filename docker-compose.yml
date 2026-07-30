@@ -1,0 +1,50 @@
+# PostgreSQL de desenvolvimento.
+#
+# Roda a MESMA versão maior que será embarcada no instalador (ADR-0013).
+# Testar contra outra versão reintroduz exatamente a divergência
+# teste↔produção que motivou abandonar o SQLite.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: erp-pdv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: erp_dev_only
+      POSTGRES_DB: erp_pdv
+      # Collation determinística: o Postgres embarcado no cliente usará a
+      # mesma, para que ordenação e índice se comportem igual em toda a base.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pt-BR --encoding=UTF8"
+    ports:
+      # Porta não-padrão para não colidir com um Postgres já instalado.
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command:
+      - "postgres"
+      # Espelha a configuração de produção descrita em ARQUITETURA.md §5.2.1.
+      - "-c"
+      - "synchronous_commit=on"
+      - "-c"
+      - "full_page_writes=on"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "max_connections=20"
+      # Registra consulta lenta: é assim que o DBA encontra índice faltando
+      # antes do cliente sentir (RNF-02).
+      - "-c"
+      - "log_min_duration_statement=200"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp -d erp_pdv"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+    name: erp-pdv-postgres-data

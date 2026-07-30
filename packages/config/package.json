@@ -1,0 +1,25 @@
+{
+  "name": "@erp/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Configurações compartilhadas de TypeScript, ESLint e Vitest",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./eslint": "./eslint.base.mjs",
+    "./vitest": "./vitest.base.ts"
+  },
+  "files": [
+    "tsconfig.base.json",
+    "eslint.base.mjs",
+    "vitest.base.ts"
+  ],
+  "dependencies": {
+    "@eslint/js": "^9.37.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.37.0",
+    "typescript-eslint": "^8.45.0",
+    "vitest": "^3.2.4"
+  }
+}
