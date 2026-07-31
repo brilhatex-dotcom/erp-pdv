@@ -129,7 +129,19 @@ export class SessaoCaixa extends AggregateRoot {
       );
     }
 
-    return ok(new SessaoCaixa(dados));
+    const sessao = new SessaoCaixa(dados);
+
+    // A abertura é fato auditável como o fechamento. Sem este evento, a
+    // pergunta "quem abriu este caixa e declarou este fundo de troco?" não tem
+    // resposta — e ela é a primeira que se faz quando a gaveta não bate no fim
+    // do dia.
+    sessao.registrarEvento({
+      tipo: "CaixaAberto",
+      agregadoId: sessao.id,
+      ocorridoEm: dados.abertaEm,
+    });
+
+    return ok(sessao);
   }
 
   /**

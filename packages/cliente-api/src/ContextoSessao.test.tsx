@@ -58,7 +58,11 @@ function montarCliente(rotas: Rotas): ClienteApi {
 
 function envolver(cliente: ClienteApi) {
   return function Envolvido({ children }: { readonly children: ReactNode }): ReactNode {
-    return <ProvedorSessao cliente={cliente}>{children}</ProvedorSessao>;
+    return (
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
+        {children}
+      </ProvedorSessao>
+    );
   };
 }
 
@@ -305,7 +309,7 @@ describe("provedor sem cliente injetado", () => {
     vi.stubGlobal("fetch", buscar);
 
     render(
-      <ProvedorSessao>
+      <ProvedorSessao contexto="RETAGUARDA">
         <p>retaguarda</p>
       </ProvedorSessao>,
     );

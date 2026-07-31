@@ -84,7 +84,7 @@ function montar(rotas: Rotas): { readonly chamadas: Chamada[] } {
 
   function Envolvido(): ReactNode {
     return (
-      <ProvedorSessao cliente={cliente}>
+      <ProvedorSessao contexto="PDV" cliente={cliente}>
         <App />
       </ProvedorSessao>
     );
@@ -129,6 +129,77 @@ describe("entrada no caixa", () => {
       expect(screen.getByLabelText(/PIN/)).toBeVisible();
     });
     expect(screen.queryByLabelText(/Senha/)).not.toBeInTheDocument();
+  });
+
+  it("🔑 o login do balcão declara contexto PDV — é o que faz o PIN ser conferido", async () => {
+    // O servidor compara contra `hashPin` ou `hashSenha` conforme este campo.
+    // Mandar RETAGUARDA daqui conferiria o PIN contra a senha longa, e nenhum
+    // operador conseguiria entrar no caixa.
+    const { chamadas } = montar({
+      "/api/acesso/eu": () =>
+        json(401, { erro: { codigo: "TOKEN_AUSENTE", mensagem: "x" } }),
+      "/api/acesso/login": () => json(200, { token: "abc", usuario: OPERADOR }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Matrícula/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "42");
+    await userEvent.type(screen.getByLabelText(/PIN/), "419273{Enter}");
+
+    await waitFor(() => {
+      expect(chamadas.some((c) => c.url === "/api/acesso/login")).toBe(true);
+    });
+
+    expect(chamadas.find((c) => c.url === "/api/acesso/login")?.corpo).toMatchObject({
+      matricula: "42",
+      contexto: "PDV",
+    });
+  });
+
+  it("🔑 PIN incompleto não vira tentativa — o bloqueio não pode ser gasto à toa", async () => {
+    // O servidor bloqueia progressivamente depois de poucas tentativas. Se
+    // Enter com o campo pela metade contasse como erro, o operador travaria o
+    // próprio acesso no meio do movimento, sem ter errado o PIN uma vez.
+    const { chamadas } = montar({
+      "/api/acesso/eu": () =>
+        json(401, { erro: { codigo: "TOKEN_AUSENTE", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Matrícula/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "42");
+    await userEvent.type(screen.getByLabelText(/PIN/), "419{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("O PIN tem 6 números");
+    });
+
+    expect(chamadas.some((c) => c.url === "/api/acesso/login")).toBe(false);
+    expect(screen.getByLabelText(/PIN/)).toHaveFocus();
+  });
+
+  it("sem matrícula, o PIN completo também não vai ao servidor", async () => {
+    const { chamadas } = montar({
+      "/api/acesso/eu": () =>
+        json(401, { erro: { codigo: "TOKEN_AUSENTE", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/PIN/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/PIN/), "419273{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Informe a matrícula");
+    });
+
+    expect(chamadas.some((c) => c.url === "/api/acesso/login")).toBe(false);
+    expect(screen.getByLabelText(/Matrícula/)).toHaveFocus();
   });
 
   it("🔑 não pisca o login para quem já está autenticado", async () => {
@@ -285,7 +356,7 @@ describe("venda pelo teclado", () => {
     const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
 
     render(
-      <ProvedorSessao cliente={cliente}>
+      <ProvedorSessao contexto="PDV" cliente={cliente}>
         <App />
       </ProvedorSessao>,
     );

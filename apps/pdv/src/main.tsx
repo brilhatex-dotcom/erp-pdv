@@ -13,7 +13,7 @@ if (raiz === null) {
 
 createRoot(raiz).render(
   <StrictMode>
-    <ProvedorSessao>
+    <ProvedorSessao contexto="PDV">
       <App />
     </ProvedorSessao>
   </StrictMode>,

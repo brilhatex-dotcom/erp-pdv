@@ -60,7 +60,7 @@ function montarApp(rotas: Rotas) {
 
   function Envolvido(): ReactNode {
     return (
-      <ProvedorSessao cliente={cliente}>
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
         <App />
       </ProvedorSessao>
     );
@@ -206,7 +206,7 @@ describe("Login da retaguarda", () => {
     const cliente = new ClienteApi(new Sessao(), "", buscar);
 
     render(
-      <ProvedorSessao cliente={cliente}>
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
         <App />
       </ProvedorSessao>,
     );

@@ -15,6 +15,7 @@ export type {
 } from "./portas/repositorios/Repositorios.js";
 
 // ── Casos de uso ────────────────────────────────────────────────────────
+export { AbrirCaixa, type EntradaAbrirCaixa } from "./casos-de-uso/caixa/AbrirCaixa.js";
 export {
   AdicionarItemPorCodigo,
   type EntradaAdicionarItem,
