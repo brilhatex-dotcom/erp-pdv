@@ -9,6 +9,10 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 
 ## Estado atual
 
+> **Continuando o desenvolvimento? Leia [`ESTADO.md`](ESTADO.md) primeiro.** Ele diz
+> onde o trabalho parou, o que vem em seguida e quais armadilhas já foram pagas.
+> Todo o código vivo está em `main` — não há trabalho em outra branch.
+
 | Etapa | Situação |
 |---|---|
 | Arquitetura | ✅ Definida — [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) |

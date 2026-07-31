@@ -138,6 +138,22 @@ lucrativo vira prejuízo sem que nada tenha sido decidido errado no dia da assin
 **Melhoria identificada durante o desenvolvimento:** apresentar a **justificativa antes**
 de alterar a arquitetura. Nunca alterar primeiro e explicar depois.
 
+### Regra permanente: `main` é o único lugar onde o trabalho existe
+
+Sessões de desenvolvimento terminam sem aviso — token acaba, contexto estoura, máquina
+é reciclada. A sessão seguinte só encontra o que estiver em `main`.
+
+| Regra | Motivo |
+|---|---|
+| Todo trabalho concluído vai para **`main`** antes de a sessão terminar | Branch que ninguém conhece é trabalho perdido |
+| Branch de trabalho é **descartável**: criada de `main`, mesclada, apagada | Branch sobrevivente vira segunda fonte da verdade |
+| Sessão nova **começa lendo `ESTADO.md`** e recria a branch de `origin/main` | Impede reimplementar o que já existe |
+| Ao concluir uma etapa, **atualizar `ESTADO.md`** (etapa 9 do fluxo acima) | Documento desatualizado é pior que ausente: engana |
+
+**Origem desta regra:** em 31/07/2026, com `main` vazia, duas sessões trabalharam em
+paralelo sem se conhecer e implementaram autenticação duas vezes, com modelos diferentes.
+Nenhuma errou — a estrutura permitiu. Custou uma tarde de unificação.
+
 ---
 
 ## 4. Princípios inegociáveis
@@ -240,6 +256,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 
 | Documento | Conteúdo |
 |---|---|
+| **`ESTADO.md`** | **Onde o trabalho parou, o que vem em seguida e as armadilhas já pagas. Ler antes de continuar o desenvolvimento** |
 | `docs/ARQUITETURA.md` | Arquitetura completa — fonte da verdade técnica |
 | `docs/adr/` | Decisões arquiteturais. **Imutáveis**: revisão gera novo ADR que supersede |
 | `docs/fiscal/` | Notas técnicas, layouts e tabelas fiscais |
