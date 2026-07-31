@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import { ClienteApi, Sessao } from "../api/cliente.js";
+import { ClienteApi, Sessao } from "./cliente.js";
 
 export interface UsuarioLogado {
   readonly id: string;

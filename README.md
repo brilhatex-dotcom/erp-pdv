@@ -24,7 +24,9 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
 | **Etapa 6b — Servidor HTTP** | ✅ **Concluída** — Fastify, container, login com Argon2id, sessão rotativa e autorização no servidor. 1.121 testes |
 | **Etapa 7a — Design system e retaguarda** | ✅ **Concluída** — tokens calibrados para o balcão, primitivos acessíveis, login e consulta de produto. 1.187 testes |
-| Etapa 7b — PDV (Electron, teclado-first) | ⬜ Próxima |
+| **Etapa 7b — Rotas de venda** | ✅ **Concluída** — carrinho, pagamento e fechamento pela API, com o operador vindo do token. 1.219 testes |
+| **Etapa 7c — `@erp/cliente-api`** | ✅ **Concluída** — cliente HTTP e sessão extraídos de `apps/web` para o PDV reusar. 1.223 testes |
+| Etapa 8 — PDV (Electron, teclado-first) | ⬜ Próxima |
 
 ## Requisitos
 
@@ -48,8 +50,13 @@ cadastro que você estava usando para conferir algo na tela, e as duas suítes,
 que o Turbo roda em paralelo, derrubariam os dados uma da outra.
 
 `pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
-arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
-passa no CI.
+arquitetura** → testes **com cobertura** → auditoria das dependências de
+produção. É o mesmo conjunto que o CI aplica, com os mesmos comandos — se passar
+localmente, passa no CI.
+
+> A cobertura faz parte do `verify` de propósito. Rodar `pnpm test` localmente e
+> `pnpm test:cov` no CI parece equivalente e não é: o provedor de cobertura tem
+> dependências próprias, e já houve uma quebra que só aparecia com `--coverage`.
 
 ### Comandos
 
@@ -78,6 +85,7 @@ packages/
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
+  cliente-api/ cliente HTTP e sessão, usados pela retaguarda e pelo PDV
   ui/          design system: tokens, componentes e estados de tela
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas

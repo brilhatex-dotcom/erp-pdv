@@ -1,8 +1,8 @@
 import { Botao, CampoTexto } from "@erp/ui";
 import { type SyntheticEvent, type ReactNode, useRef, useState } from "react";
 
-import { mensagemDe } from "../api/cliente.js";
-import { useSessao } from "../sessao/ContextoSessao.js";
+import { mensagemDe } from "@erp/cliente-api";
+import { useSessao } from "@erp/cliente-api";
 
 /**
  * Tela de entrada da retaguarda.

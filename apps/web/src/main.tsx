@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App.js";
-import { ProvedorSessao } from "./sessao/ContextoSessao.js";
+import { ProvedorSessao } from "@erp/cliente-api";
 import "./estilo.css";
 
 const raiz = document.getElementById("raiz");
