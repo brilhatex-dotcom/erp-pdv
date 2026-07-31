@@ -36,6 +36,14 @@ verificada no CI pelo `dependency-cruiser`.
 | `Embalagem` | Conversão fardo → unidade, para entrada de mercadoria |
 | `ReferenciaProduto` | Código de fabricante, original e similar — busca de autopeças |
 
+### `estoque/`
+
+| Objeto | Papel |
+|---|---|
+| `MovimentoEstoque` | Fato imutável. Quantidade sempre positiva; o **tipo** dá o sinal |
+| `SaldoEstoque` | Projeção **comutativa** dos movimentos + custo médio ponderado móvel |
+| `TipoMovimento` | Direção de cada tipo e quais afetam o custo médio |
+
 ## Decisões que merecem atenção
 
 **Rateio com resgate de sobra.** `Dinheiro.ratear(3)` sobre R$ 10,00 devolve
@@ -55,13 +63,26 @@ lê no cupom.
 ICU do runtime — inclusive o tipo de espaço depois de "R$". Cupom fiscal não pode
 sair diferente conforme a máquina do cliente.
 
+**Saldo de estoque é projeção, não coluna.** `SaldoEstoque` soma movimentos, e a
+soma é comutativa — há um teste que verifica as **120 permutações** de 5 movimentos e
+exige o mesmo resultado. É essa propriedade que faz duas estações de PDV convergirem
+sem trava distribuída (ADR-0007). Com saldo mutável, uma venda sobrescreveria a outra.
+
+**Saldo negativo é permitido por padrão.** Acontece quando a venda é lançada antes da
+entrada da nota de compra, o que é rotina em comércio de bairro. Recusar a venda por
+atraso administrativo seria parar a loja — o oposto do princípio 1. Quem controla
+estoque com rigor liga o bloqueio.
+
+**Ajuste e perda exigem justificativa.** Ajuste sem motivo é a rota preferida de quem
+desvia mercadoria; exigir texto torna o desvio rastreável.
+
 **A unidade faz parte da `Quantidade`.** Somar 2 kg com 3 caixas devolve erro em
 vez de um número sem sentido. Foi por não separar isso que sistemas de depósito
 misturam palete com saco e o estoque nunca fecha.
 
 ## Testes
 
-448 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
+535 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
 O limiar é `perFile`, não média: média deixa um módulo mal coberto passar escondido
 atrás dos bem cobertos.
 
@@ -71,5 +92,4 @@ pnpm --filter @erp/domain test:cov
 
 ## Próximo
 
-Etapa 3 — contextos de `Estoque` e `Venda`, que é onde `Produto` passa a ser usado
-de verdade.
+Etapa 3b — agregado `Venda`, com itens, pagamentos e desconto rateado por item.

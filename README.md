@@ -16,7 +16,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | Etapa 0 — Fundação | ✅ Concluída — monorepo, portões de qualidade e CI operantes |
 | Etapa 1 — Domínio: objetos de valor | ✅ Concluída |
 | **Etapa 2 — Agregados e catálogo** | ✅ **Concluída** — `Produto`, códigos de barras e balança. 448 testes, 100% de cobertura |
-| Etapa 3 — Estoque e Venda | ⬜ Próxima |
+| **Etapa 3a — Estoque** | ✅ **Concluída** — movimentos comutativos e custo médio. 535 testes |
+| Etapa 3b — Venda | ⬜ Próxima |
 
 ## Requisitos
 

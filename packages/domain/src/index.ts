@@ -58,3 +58,19 @@ export {
 } from "./catalogo/eventos.js";
 export { type DadosProduto, Produto, type TipoProduto } from "./catalogo/Produto.js";
 export { ReferenciaProduto, type TipoReferencia } from "./catalogo/ReferenciaProduto.js";
+
+// ── Estoque ─────────────────────────────────────────────────────────────
+export {
+  type DadosMovimento,
+  MovimentoEstoque,
+  type OrigemMovimento,
+} from "./estoque/MovimentoEstoque.js";
+export { type EstoqueMovimentado, estoqueMovimentado } from "./estoque/eventos.js";
+export { SaldoEstoque } from "./estoque/SaldoEstoque.js";
+export {
+  afetaCustoMedio,
+  efeitoDoTipo,
+  ehEntrada,
+  ehSaida,
+  type TipoMovimento,
+} from "./estoque/TipoMovimento.js";

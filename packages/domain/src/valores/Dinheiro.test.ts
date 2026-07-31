@@ -372,3 +372,69 @@ describe("Dinheiro", () => {
     });
   });
 });
+
+describe("Dinheiro.mediaPonderada", () => {
+  it("calcula custo médio ponderado móvel do estoque", () => {
+    // 10 unidades a R$ 3,00 e 5 a R$ 4,00 → (30 + 20) / 15 = R$ 3,33
+    const media = Dinheiro.mediaPonderada([
+      { valor: reais("3,00"), peso: 10n },
+      { valor: reais("4,00"), peso: 5n },
+    ]).unwrap();
+
+    expect(media.formatar()).toBe("R$ 3,33");
+  });
+
+  it("devolve o próprio valor quando há uma entrada só", () => {
+    expect(
+      Dinheiro.mediaPonderada([{ valor: reais("7,50"), peso: 3n }])
+        .unwrap()
+        .formatar(),
+    ).toBe("R$ 7,50");
+  });
+
+  it("ignora entrada com peso zero", () => {
+    const media = Dinheiro.mediaPonderada([
+      { valor: reais("10,00"), peso: 1n },
+      { valor: reais("99,00"), peso: 0n },
+    ]).unwrap();
+
+    expect(media.formatar()).toBe("R$ 10,00");
+  });
+
+  it("arredonda meio para cima", () => {
+    // (1 + 2) / 2 = 1,5 centavo → 2 centavos
+    const media = Dinheiro.mediaPonderada([
+      { valor: Dinheiro.deCentavos(1n).unwrap(), peso: 1n },
+      { valor: Dinheiro.deCentavos(2n).unwrap(), peso: 1n },
+    ]).unwrap();
+
+    expect(media.centavos).toBe(2n);
+  });
+
+  it("rejeita lista vazia", () => {
+    const resultado = Dinheiro.mediaPonderada([]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("MEDIA_SEM_ENTRADAS");
+    }
+  });
+
+  it("rejeita peso negativo", () => {
+    const resultado = Dinheiro.mediaPonderada([{ valor: reais("1,00"), peso: -1n }]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("MEDIA_PESO_NEGATIVO");
+    }
+  });
+
+  it("rejeita quando todos os pesos são zero", () => {
+    const resultado = Dinheiro.mediaPonderada([{ valor: reais("1,00"), peso: 0n }]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("MEDIA_PESO_TOTAL_ZERO");
+    }
+  });
+});

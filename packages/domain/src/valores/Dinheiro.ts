@@ -219,6 +219,48 @@ export class Dinheiro implements ValueObject<Dinheiro> {
     return ok(partes.map((parte) => new Dinheiro(parte.valor * sinal)));
   }
 
+  /**
+   * Média ponderada de vários valores.
+   *
+   * É o cálculo do **custo médio ponderado móvel** do estoque: entrou 10 peças
+   * a R$ 3,00 e depois 5 a R$ 4,00, o custo passa a ser R$ 3,33.
+   * Fica aqui, e não no estoque, porque o arredondamento é regra monetária — e
+   * espalhar arredondamento pelo código é como se perde centavo.
+   */
+  static mediaPonderada(
+    entradas: readonly { readonly valor: Dinheiro; readonly peso: bigint }[],
+  ): Result<Dinheiro, ErroValidacao> {
+    if (entradas.length === 0) {
+      return err(
+        new ErroValidacao("MEDIA_SEM_ENTRADAS", "Não há valores para calcular a média."),
+      );
+    }
+
+    if (entradas.some((entrada) => entrada.peso < 0n)) {
+      return err(
+        new ErroValidacao("MEDIA_PESO_NEGATIVO", "Peso inválido no cálculo da média."),
+      );
+    }
+
+    const pesoTotal = entradas.reduce((total, entrada) => total + entrada.peso, 0n);
+
+    if (pesoTotal === 0n) {
+      return err(
+        new ErroValidacao(
+          "MEDIA_PESO_TOTAL_ZERO",
+          "Não é possível calcular a média: os pesos somam zero.",
+        ),
+      );
+    }
+
+    const somaPonderada = entradas.reduce(
+      (total, entrada) => total + entrada.valor.#centavos * entrada.peso,
+      0n,
+    );
+
+    return Dinheiro.deCentavos(dividirArredondando(somaPonderada, pesoTotal));
+  }
+
   // ── Comparação ─────────────────────────────────────────────────────────
 
   equals(outro: Dinheiro): boolean {
