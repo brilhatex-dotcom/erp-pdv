@@ -4,4 +4,5 @@ export {
   apenasDigitos,
   normalizarParaBusca,
   preencherEsquerda,
+  textoOpcional,
 } from "./texto.js";

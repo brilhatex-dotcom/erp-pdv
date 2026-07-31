@@ -1,9 +1,13 @@
 import {
+  type Categoria,
+  type Cliente,
   type CodigoUnidade,
   CredencialHash,
+  type Documento,
   type DomainError,
   type DomainEvent,
   err,
+  type Fornecedor,
   type Identificador,
   type Matricula,
   montarUuidV7,
@@ -31,6 +35,12 @@ import type {
   Repositorios,
   VendaRepository,
 } from "../portas/repositorios/Repositorios.js";
+import type {
+  CategoriaRepository,
+  ClienteRepository,
+  FiltroBusca,
+  FornecedorRepository,
+} from "../portas/repositorios/RepositoriosCadastros.js";
 import type {
   PapelRepository,
   SessaoAcessoRepository,
@@ -297,6 +307,110 @@ export class SessaoAcessoRepositorioEmMemoria implements SessaoAcessoRepository 
   }
 }
 
+export class CategoriaRepositorioEmMemoria implements CategoriaRepository {
+  readonly itens = new Map<string, Categoria>();
+
+  adicionar(categoria: Categoria): void {
+    this.itens.set(categoria.id.valor, categoria);
+  }
+
+  porId(id: Identificador): Promise<Categoria | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porNome(nome: string): Promise<Categoria | undefined> {
+    for (const categoria of this.itens.values()) {
+      if (categoria.nomeBusca === nome) return Promise.resolve(categoria);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  listar(apenasAtivas: boolean): Promise<readonly Categoria[]> {
+    const todas = [...this.itens.values()];
+
+    return Promise.resolve(apenasAtivas ? todas.filter((atual) => atual.ativa) : todas);
+  }
+
+  salvar(categoria: Categoria): Promise<void> {
+    this.itens.set(categoria.id.valor, categoria);
+    return Promise.resolve();
+  }
+}
+
+export class ClienteRepositorioEmMemoria implements ClienteRepository {
+  readonly itens = new Map<string, Cliente>();
+
+  adicionar(cliente: Cliente): void {
+    this.itens.set(cliente.id.valor, cliente);
+  }
+
+  porId(id: Identificador): Promise<Cliente | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porDocumento(documento: Documento): Promise<Cliente | undefined> {
+    for (const cliente of this.itens.values()) {
+      if (cliente.documento?.equals(documento) === true) return Promise.resolve(cliente);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  buscar(filtro: FiltroBusca): Promise<readonly Cliente[]> {
+    return Promise.resolve(
+      filtrar(this.itens.values(), filtro, (cliente) => cliente.ativo),
+    );
+  }
+
+  salvar(cliente: Cliente): Promise<void> {
+    this.itens.set(cliente.id.valor, cliente);
+    return Promise.resolve();
+  }
+}
+
+export class FornecedorRepositorioEmMemoria implements FornecedorRepository {
+  readonly itens = new Map<string, Fornecedor>();
+
+  adicionar(fornecedor: Fornecedor): void {
+    this.itens.set(fornecedor.id.valor, fornecedor);
+  }
+
+  porId(id: Identificador): Promise<Fornecedor | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porDocumento(documento: Documento): Promise<Fornecedor | undefined> {
+    for (const fornecedor of this.itens.values()) {
+      if (fornecedor.documento.equals(documento)) return Promise.resolve(fornecedor);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  buscar(filtro: FiltroBusca): Promise<readonly Fornecedor[]> {
+    return Promise.resolve(
+      filtrar(this.itens.values(), filtro, (fornecedor) => fornecedor.ativo),
+    );
+  }
+
+  salvar(fornecedor: Fornecedor): Promise<void> {
+    this.itens.set(fornecedor.id.valor, fornecedor);
+    return Promise.resolve();
+  }
+}
+
+/** Busca em memória com o mesmo contrato da consulta do banco. */
+function filtrar<T extends { correspondeAoTermo(termo: string): boolean }>(
+  itens: Iterable<T>,
+  filtro: FiltroBusca,
+  estaAtivo: (item: T) => boolean,
+): T[] {
+  const termo = filtro.termo?.trim() ?? "";
+
+  return [...itens]
+    .filter((item) => (filtro.apenasAtivos === true ? estaAtivo(item) : true))
+    .filter((item) => (termo === "" ? true : item.correspondeAoTermo(termo)))
+    .slice(0, filtro.limite);
+}
+
 /**
  * Hasher falso — reversível e instantâneo.
  *
@@ -335,6 +449,9 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly usuarios: UsuarioRepositorioEmMemoria;
   readonly papeis: PapelRepositorioEmMemoria;
   readonly sessoes: SessaoAcessoRepositorioEmMemoria;
+  readonly categorias: CategoriaRepositorioEmMemoria;
+  readonly clientes: ClienteRepositorioEmMemoria;
+  readonly fornecedores: FornecedorRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -348,6 +465,9 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const usuarios = new UsuarioRepositorioEmMemoria();
   const papeis = new PapelRepositorioEmMemoria();
   const sessoes = new SessaoAcessoRepositorioEmMemoria();
+  const categorias = new CategoriaRepositorioEmMemoria();
+  const clientes = new ClienteRepositorioEmMemoria();
+  const fornecedores = new FornecedorRepositorioEmMemoria();
 
   return {
     produtos,
@@ -358,6 +478,9 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     usuarios,
     papeis,
     sessoes,
+    categorias,
+    clientes,
+    fornecedores,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -368,6 +491,9 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       usuarios,
       papeis,
       sessoes,
+      categorias,
+      clientes,
+      fornecedores,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

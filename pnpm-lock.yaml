@@ -197,6 +197,9 @@ importers:
       '@erp/domain':
         specifier: workspace:*
         version: link:../domain
+      '@erp/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       '@erp/config':
         specifier: workspace:*
