@@ -74,3 +74,21 @@ export {
   ehSaida,
   type TipoMovimento,
 } from "./estoque/TipoMovimento.js";
+
+// ── Vendas ──────────────────────────────────────────────────────────────
+export {
+  type CodigoFormaPagamento,
+  ehCodigoFormaPagamento,
+  type FormaPagamento,
+  FORMAS_PAGAMENTO,
+  obterFormaPagamento,
+} from "./vendas/FormaPagamento.js";
+export { Pagamento } from "./vendas/Pagamento.js";
+export {
+  type EventoVenda,
+  type ItemVendido,
+  type VendaCancelada,
+  type VendaFinalizada,
+} from "./vendas/eventos.js";
+export { type DadosVenda, type StatusVenda, Venda } from "./vendas/Venda.js";
+export { type DadosItemVenda, VendaItem } from "./vendas/VendaItem.js";

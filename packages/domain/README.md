@@ -44,6 +44,15 @@ verificada no CI pelo `dependency-cruiser`.
 | `SaldoEstoque` | Projeção **comutativa** dos movimentos + custo médio ponderado móvel |
 | `TipoMovimento` | Direção de cada tipo e quais afetam o custo médio |
 
+### `vendas/`
+
+| Objeto | Papel |
+|---|---|
+| `Venda` | Agregado central: itens, pagamentos, descontos, finalização e cancelamento |
+| `VendaItem` | Preço e descrição **congelados** no instante da venda |
+| `Pagamento` | Múltiplas formas na mesma venda, com parcelamento e NSU |
+| `FormaPagamento` | Registro com `tPag` fiscal e classificação para o caixa |
+
 ## Decisões que merecem atenção
 
 **Rateio com resgate de sobra.** `Dinheiro.ratear(3)` sobre R$ 10,00 devolve
@@ -62,6 +71,23 @@ lê no cupom.
 **Formatação é manual, sem `Intl`.** A saída do `Intl` muda conforme a build de
 ICU do runtime — inclusive o tipo de espaço depois de "R$". Cupom fiscal não pode
 sair diferente conforme a máquina do cliente.
+
+**O total da venda é exatamente a soma dos itens.** Parece óbvio, e é onde os
+sistemas erram: um desconto dado na venda inteira precisa ser **rateado entre os
+itens**, porque o documento fiscal exige valor por item. Se o rateio perder um
+centavo, a SEFAZ rejeita a nota — com a venda já feita e o cliente fora da loja.
+Há teste verificando que a soma dos itens fecha com o total.
+
+**Crediário conta como a receber, nunca como recebido.** `FormaPagamento` separa
+três coisas: o que entra na gaveta (só dinheiro), o que gera conta a receber (só
+crediário) e o que devolve troco (só dinheiro). Somar fiado como dinheiro faria o
+caixa fechar com sobra inexistente, e o histórico ficaria irrecuperável.
+
+**Vender fiado exige cliente identificado.** Sem isso é dinheiro que ninguém
+consegue receber depois.
+
+**Preço e descrição são congelados no item.** Referenciar o cadastro faria o
+histórico mudar retroativamente quando o produto mudasse de preço.
 
 **Saldo de estoque é projeção, não coluna.** `SaldoEstoque` soma movimentos, e a
 soma é comutativa — há um teste que verifica as **120 permutações** de 5 movimentos e
@@ -82,7 +108,7 @@ misturam palete com saco e o estoque nunca fecha.
 
 ## Testes
 
-535 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
+678 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
 O limiar é `perFile`, não média: média deixa um módulo mal coberto passar escondido
 atrás dos bem cobertos.
 
@@ -92,4 +118,5 @@ pnpm --filter @erp/domain test:cov
 
 ## Próximo
 
-Etapa 3b — agregado `Venda`, com itens, pagamentos e desconto rateado por item.
+Etapa 3c — `SessaoCaixa`, com abertura, sangria, suprimento e fechamento com
+conferência por forma de pagamento.
