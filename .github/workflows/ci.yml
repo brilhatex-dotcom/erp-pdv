@@ -1,19 +1,33 @@
 name: CI
 
-# Quando o CI roda.
+# Quando o CI roda: **em todo push, em qualquer branch.**
 #
-# `claude/**` está aqui por causa de um defeito de processo, não de gosto: com o
-# gatilho restrito a `main` e `pull_request`, a branch de trabalho ficava **sem
-# CI nenhum** entre o merge de um PR e a abertura do próximo. Foi nessa janela
-# que quatro defeitos atravessaram o repositório sem serem vistos — entre eles um
-# pacote que publicava `dist` sem o cliente do Prisma e um portão de cobertura
-# que dependia de variável de ambiente.
+# Antes o gatilho era `main` + `pull_request`, e isso deixava um buraco: como
+# ninguém empurra direto no `main`, era o PR que mantinha o CI ligado. No
+# instante em que um PR era mesclado, a branch de trabalho ficava sem
+# verificação nenhuma até alguém abrir o próximo. Foi nessa janela que quatro
+# defeitos atravessaram o repositório sem serem vistos — entre eles um pacote
+# que publicava `dist` sem o cliente do Prisma e um portão de cobertura que
+# dependia de variável de ambiente.
 #
-# Portão que só existe quando alguém lembra de abrir um PR não é portão.
+# A primeira correção acrescentou `claude/**` ao `push` e manteve o
+# `pull_request`. Os dois passaram a se sobrepor: cada push com PR aberto
+# gerava **duas execuções idênticas**, dobrando o tempo de CI e enchendo a
+# lista de verificações com pares redundantes.
+#
+# `push` sem filtro de branch resolve os dois de uma vez. As verificações se
+# fixam no commit, e o GitHub as exibe no PR de qualquer forma — o gatilho de
+# `pull_request` não acrescentava cobertura, só duplicata.
+#
+# Portão que só existe quando alguém lembra de abrir um PR não é portão. E
+# portão que roda duas vezes não é mais rigoroso, é mais lento.
+#
+# A exceção conhecida: PR vindo de *fork* não dispara `push` neste
+# repositório. Não há forks hoje; quando houver, o gatilho de `pull_request`
+# volta restrito a `types: [opened, reopened]`, que cobre o fork sem duplicar
+# o resto.
 on:
   push:
-    branches: ["main", "claude/**"]
-  pull_request:
   workflow_dispatch:
 
 concurrency:
