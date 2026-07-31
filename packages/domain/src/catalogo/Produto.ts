@@ -359,7 +359,7 @@ export class Produto extends AggregateRoot {
       return ok(quantidade);
     }
 
-    const embalagem = this.encontrarEmbalagem(quantidade.unidade.codigo as CodigoUnidade);
+    const embalagem = this.encontrarEmbalagem(quantidade.unidade.codigo);
 
     if (embalagem === undefined) {
       return err(
@@ -371,10 +371,7 @@ export class Produto extends AggregateRoot {
       );
     }
 
-    return embalagem.converterParaBase(
-      quantidade,
-      this.#unidadeBase.codigo as CodigoUnidade,
-    );
+    return embalagem.converterParaBase(quantidade, this.#unidadeBase.codigo);
   }
 
   /** Verifica se algum código do produto corresponde ao informado. */

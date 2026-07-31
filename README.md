@@ -19,7 +19,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 3a — Estoque** | ✅ **Concluída** — movimentos comutativos e custo médio. 535 testes |
 | **Etapa 3b — Venda** | ✅ **Concluída** — itens, pagamentos, desconto rateado, crediário. 678 testes |
 | **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
-| Etapa 4 — Aplicação (portas e casos de uso) | ⬜ Próxima |
+| **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
+| Etapa 5 — Persistência (Prisma + PostgreSQL) | ⬜ Próxima |
 
 ## Requisitos
 
@@ -61,6 +62,7 @@ packages/
   config/      configurações compartilhadas de TS, ESLint e Vitest
   utils/       validadores e formatadores puros (CPF, CNPJ, texto)
   domain/      núcleo de negócio puro — zero dependências de runtime
+  application/ casos de uso e portas — não conhece banco, rede nem UI
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio

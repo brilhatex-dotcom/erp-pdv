@@ -122,7 +122,7 @@ export class Quantidade implements ValueObject<Quantidade> {
 
     return Quantidade.deMilesimos(
       this.#milesimos + outra.#milesimos,
-      this.#unidade.codigo as CodigoUnidade,
+      this.#unidade.codigo,
     );
   }
 
@@ -132,7 +132,7 @@ export class Quantidade implements ValueObject<Quantidade> {
 
     return Quantidade.deMilesimos(
       this.#milesimos - outra.#milesimos,
-      this.#unidade.codigo as CodigoUnidade,
+      this.#unidade.codigo,
     );
   }
 

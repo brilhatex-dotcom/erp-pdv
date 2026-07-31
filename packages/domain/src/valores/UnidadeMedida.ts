@@ -6,9 +6,31 @@
  * isso na unidade faz o domínio recusar `0,5 CX` sem que cada tela precise
  * lembrar da regra.
  */
+
+/**
+ * Códigos aceitos. Declarado explicitamente, e não derivado de `UNIDADES`,
+ * para que `UnidadeMedida.codigo` possa ser este tipo sem criar referência
+ * circular — é o que evita `as CodigoUnidade` espalhado por quem consome.
+ */
+export type CodigoUnidade =
+  | "UN"
+  | "PC"
+  | "CX"
+  | "FD"
+  | "PCT"
+  | "DZ"
+  | "KG"
+  | "G"
+  | "L"
+  | "ML"
+  | "M"
+  | "M2"
+  | "M3"
+  | "SC";
+
 export interface UnidadeMedida {
   /** Código usado no XML fiscal (campo `uCom`, até 6 caracteres). */
-  readonly codigo: string;
+  readonly codigo: CodigoUnidade;
   readonly simbolo: string;
   readonly descricao: string;
   readonly fracionavel: boolean;
@@ -29,9 +51,7 @@ export const UNIDADES = {
   M2: { codigo: "M2", simbolo: "m²", descricao: "Metro quadrado", fracionavel: true },
   M3: { codigo: "M3", simbolo: "m³", descricao: "Metro cúbico", fracionavel: true },
   SC: { codigo: "SC", simbolo: "sc", descricao: "Saco", fracionavel: false },
-} as const satisfies Record<string, UnidadeMedida>;
-
-export type CodigoUnidade = keyof typeof UNIDADES;
+} as const satisfies Record<CodigoUnidade, UnidadeMedida>;
 
 export function ehCodigoUnidade(codigo: string): codigo is CodigoUnidade {
   return Object.hasOwn(UNIDADES, codigo);

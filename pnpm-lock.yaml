@@ -39,6 +39,22 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
+  packages/application:
+    dependencies:
+      '@erp/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@erp/config':
+        specifier: workspace:*
+        version: link:../config
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
   packages/config:
     dependencies:
       '@eslint/js':
