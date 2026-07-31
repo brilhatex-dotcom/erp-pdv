@@ -18,7 +18,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 2 — Agregados e catálogo** | ✅ **Concluída** — `Produto`, códigos de barras e balança. 448 testes, 100% de cobertura |
 | **Etapa 3a — Estoque** | ✅ **Concluída** — movimentos comutativos e custo médio. 535 testes |
 | **Etapa 3b — Venda** | ✅ **Concluída** — itens, pagamentos, desconto rateado, crediário. 678 testes |
-| Etapa 3c — Caixa | ⬜ Próxima |
+| **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
+| Etapa 4 — Aplicação (portas e casos de uso) | ⬜ Próxima |
 
 ## Requisitos
 

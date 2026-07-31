@@ -53,6 +53,13 @@ verificada no CI pelo `dependency-cruiser`.
 | `Pagamento` | Múltiplas formas na mesma venda, com parcelamento e NSU |
 | `FormaPagamento` | Registro com `tPag` fiscal e classificação para o caixa |
 
+### `caixa/`
+
+| Objeto | Papel |
+|---|---|
+| `SessaoCaixa` | Abertura com fundo de troco, sangria, suprimento e fechamento com conferência |
+| `MovimentoCaixa` | Sangria e suprimento — fatos imutáveis, com motivo obrigatório |
+
 ## Decisões que merecem atenção
 
 **Rateio com resgate de sobra.** `Dinheiro.ratear(3)` sobre R$ 10,00 devolve
@@ -77,6 +84,14 @@ sistemas erram: um desconto dado na venda inteira precisa ser **rateado entre os
 itens**, porque o documento fiscal exige valor por item. Se o rateio perder um
 centavo, a SEFAZ rejeita a nota — com a venda já feita e o cliente fora da loja.
 Há teste verificando que a soma dos itens fecha com o total.
+
+**O fechamento nunca é bloqueado por divergência.** Impedir o fechamento deixaria
+a loja com o caixa aberto e o operador sem saída — e a diferença continuaria
+existindo de qualquer forma. A divergência é calculada, registrada e vira alerta na
+retaguarda.
+
+**A sessão acumula totais, não a lista de vendas.** Carregar 2.000 vendas para abrir
+a gaveta quebraria a meta de resposta do PDV. O caixa só precisa dos totais por forma.
 
 **Crediário conta como a receber, nunca como recebido.** `FormaPagamento` separa
 três coisas: o que entra na gaveta (só dinheiro), o que gera conta a receber (só
@@ -108,7 +123,7 @@ misturam palete com saco e o estoque nunca fecha.
 
 ## Testes
 
-678 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
+734 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
 O limiar é `perFile`, não média: média deixa um módulo mal coberto passar escondido
 atrás dos bem cobertos.
 
@@ -118,5 +133,5 @@ pnpm --filter @erp/domain test:cov
 
 ## Próximo
 
-Etapa 3c — `SessaoCaixa`, com abertura, sangria, suprimento e fechamento com
-conferência por forma de pagamento.
+O domínio da Fase 1 está completo. A próxima etapa sai de `@erp/domain`:
+`@erp/application`, com as portas e os casos de uso que orquestram estes agregados.

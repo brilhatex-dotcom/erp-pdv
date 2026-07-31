@@ -92,3 +92,20 @@ export {
 } from "./vendas/eventos.js";
 export { type DadosVenda, type StatusVenda, Venda } from "./vendas/Venda.js";
 export { type DadosItemVenda, VendaItem } from "./vendas/VendaItem.js";
+
+// ── Caixa ───────────────────────────────────────────────────────────────
+export {
+  type DadosMovimentoCaixa,
+  MovimentoCaixa,
+  type TipoMovimentoCaixa,
+} from "./caixa/MovimentoCaixa.js";
+export {
+  type ConferenciaCaixa,
+  type ConferenciaForma,
+  type DadosSessaoCaixa,
+  type ErroCaixa,
+  type PagamentoResumido,
+  type ResumoVenda,
+  SessaoCaixa,
+  type StatusCaixa,
+} from "./caixa/SessaoCaixa.js";
