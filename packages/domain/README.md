@@ -3,7 +3,7 @@
 Núcleo de negócio. **Zero dependências de runtime** além de `@erp/utils` — regra
 verificada no CI pelo `dependency-cruiser`.
 
-## O que existe hoje (Etapa 1)
+## O que existe hoje (Etapas 1 e 2)
 
 ### `shared/`
 
@@ -13,6 +13,8 @@ verificada no CI pelo `dependency-cruiser`.
 | `DomainError` | Hierarquia de erros com **mensagem escrita para o operador**, não para o desenvolvedor |
 | `ValueObject<T>` | Contrato de igualdade estrutural |
 | `decimal` | Conversão texto → inteiro escalado, sem passar por ponto flutuante |
+| `Identificador` | UUIDv7 — gerado no cliente (offline) e ordenável por tempo |
+| `Entity` / `AggregateRoot` | Identidade e acúmulo de eventos até a transação confirmar |
 
 ### `valores/`
 
@@ -23,6 +25,16 @@ verificada no CI pelo `dependency-cruiser`.
 | `UnidadeMedida` | registro com `fracionavel` | Meio quilo existe; meia caixa não |
 | `CPF` | 11 dígitos validados | CPF inválido não consegue chegar ao XML fiscal |
 | `CNPJ` | 14 caracteres validados | Aceita numérico **e alfanumérico** (emitido desde 2026) |
+
+### `catalogo/`
+
+| Objeto | Papel |
+|---|---|
+| `Produto` | Agregado: pesável/unitário, embalagens, referências, preço e custo |
+| `CodigoBarras` | EAN-8/12/13 e DUN-14 com dígito verificador GS1 |
+| `CodigoBalanca` | Lê a etiqueta da balança — peso ou preço embutido no EAN-13 |
+| `Embalagem` | Conversão fardo → unidade, para entrada de mercadoria |
+| `ReferenciaProduto` | Código de fabricante, original e similar — busca de autopeças |
 
 ## Decisões que merecem atenção
 
@@ -49,7 +61,9 @@ misturam palete com saco e o estoque nunca fecha.
 
 ## Testes
 
-255 testes, **100% de cobertura** (statements, branches, functions e lines).
+448 testes, **100% de cobertura por arquivo** (statements, branches, functions e lines).
+O limiar é `perFile`, não média: média deixa um módulo mal coberto passar escondido
+atrás dos bem cobertos.
 
 ```bash
 pnpm --filter @erp/domain test:cov
@@ -57,5 +71,5 @@ pnpm --filter @erp/domain test:cov
 
 ## Próximo
 
-Etapa 2 — `Entity`, `AggregateRoot` e `DomainEvent`, junto com o primeiro
-agregado (`Produto`), que é quando essas bases passam a ter uso real.
+Etapa 3 — contextos de `Estoque` e `Venda`, que é onde `Produto` passa a ser usado
+de verdade.

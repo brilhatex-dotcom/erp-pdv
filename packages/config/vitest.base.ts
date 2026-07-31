@@ -18,6 +18,10 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.{test,spec}.ts", "src/**/index.ts"],
       thresholds: {
+        // Por arquivo, não pela média. A média deixa um módulo mal coberto
+        // passar escondido atrás dos bem cobertos — foi exatamente o que
+        // aconteceu com Embalagem e ReferenciaProduto na Etapa 2b.
+        perFile: true,
         lines: 90,
         functions: 90,
         branches: 90,

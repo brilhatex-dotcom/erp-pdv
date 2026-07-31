@@ -46,3 +46,15 @@ export {
   type PadraoCodigo,
   temDigitoVerificadorValido,
 } from "./catalogo/CodigoBarras.js";
+export { Embalagem } from "./catalogo/Embalagem.js";
+export {
+  custoAlterado,
+  type CustoAlterado,
+  type EventoCatalogo,
+  precoAlterado,
+  type PrecoAlterado,
+  type ProdutoAtivado,
+  type ProdutoDesativado,
+} from "./catalogo/eventos.js";
+export { type DadosProduto, Produto, type TipoProduto } from "./catalogo/Produto.js";
+export { ReferenciaProduto, type TipoReferencia } from "./catalogo/ReferenciaProduto.js";
