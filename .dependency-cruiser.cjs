@@ -160,6 +160,9 @@ module.exports = {
         // Cliente gerado pelo Prisma. O grafo descreve decisões de arquitetura
         // nossas; código que a ferramenta reescreve a cada migração não é uma.
         "src/gerado",
+        // Preparo do Vitest: carregado pela configuração de teste, que já está
+        // fora do grafo. Apareceria como órfão sem ser um.
+        "src/testes/preparo\\.ts$",
       ],
     },
     tsPreCompilationDeps: true,

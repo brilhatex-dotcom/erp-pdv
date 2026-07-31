@@ -23,7 +23,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
 | **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
 | **Etapa 6b — Servidor HTTP** | ✅ **Concluída** — Fastify, container, login com Argon2id, sessão rotativa e autorização no servidor. 1.121 testes |
-| Etapa 7 — Retaguarda web e PDV | ⬜ Próxima |
+| **Etapa 7a — Design system e retaguarda** | ✅ **Concluída** — tokens calibrados para o balcão, primitivos acessíveis, login e consulta de produto. 1.187 testes |
+| Etapa 7b — PDV (Electron, teclado-first) | ⬜ Próxima |
 
 ## Requisitos
 
@@ -66,6 +67,7 @@ passa no CI.
 | `pnpm db:migrate` | Cria e aplica migrações a partir do schema Prisma |
 | `pnpm db:deploy` | Aplica migrações já existentes (é o que roda na instalação) |
 | `pnpm --filter @erp/server start` | Sobe a API (exige `SEGREDO_TOKEN` e `DATABASE_URL`) |
+| `pnpm --filter @erp/web dev` | Abre a retaguarda em `localhost:5173` (proxy para a API) |
 
 ## Estrutura
 
@@ -76,8 +78,10 @@ packages/
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
+  ui/          design system: tokens, componentes e estados de tela
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
+  web/         retaguarda: SPA React + Vite
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
@@ -97,7 +101,10 @@ CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões
   especializada atrás da porta `ProvedorFiscal` — o ERP nunca conhece o fornecedor, e
   trocá-lo é escrever um adapter ([ADR-0015](docs/adr/0015-emissao-fiscal-via-provedor-externo.md)).
   O módulo pode ser desligado por empresa ([ADR-0016](docs/adr/0016-modulo-fiscal-opcional-por-empresa.md)).
-- **Dinheiro em centavos**, sempre inteiro.
+- **Dinheiro em centavos**, sempre inteiro — inclusive na fronteira HTTP, onde
+  trafega como **texto**: `number` perde precisão antes do que se imagina.
+- **Toda tela tem carregando, vazio e erro.** Não é acabamento: as três situações
+  parecem iguais numa tela branca e exigem reações diferentes do operador.
 - **Autorização sempre no servidor.** A interface esconde o que o usuário não pode
   fazer — isso é experiência, não segurança. Acima do limite, o sistema **pede
   supervisor** em vez de bloquear, e registra quem pediu e quem autorizou

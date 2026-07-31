@@ -776,7 +776,7 @@ packages/fiscal/src/
 | **Banco** | **PostgreSQL** (embarcado) | 17 | SQLite, Firebird | Único banco em dev/teste/produção; integridade, MVCC, PITR, roles |
 | Cache local do PDV | **SQLite** (embarcado no Electron) | 3.4x | IndexedDB | Apenas catálogo replicado + fila offline — **não** é sistema de registro |
 | UI | **React** | 19 | Vue, Svelte | Maior ecossistema; contratação mais fácil |
-| Build do front | **Vite** | 7.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
+| Build do front | **Vite** | 8.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
 | Estilo | **Tailwind CSS** | 4.x | CSS Modules | Consistência via tokens; sem CSS órfão |
 | Estado servidor | **TanStack Query** | 5.x | Redux | Cache, revalidação e offline nativos |
 | Estado local | **Zustand** | 5.x | Redux Toolkit | Mínimo necessário para o carrinho |
