@@ -229,7 +229,13 @@ function identificadorDaRota(requisicao: FastifyRequest): Identificador | undefi
  * Unidade desconhecida é recusada em vez de assumida: adivinhar "UN" para uma
  * etiqueta de quilo faria a balança cobrar por peça.
  */
-function interpretarQuantidade(
+/**
+ * Exportada porque a rota de sincronização remonta a mesma venda.
+ *
+ * Duplicar a conversão criaria dois lugares onde "unidade válida" é decidido —
+ * e o segundo diverge do primeiro na primeira unidade nova.
+ */
+export function interpretarQuantidade(
   bruta: { readonly milesimos: string; readonly unidade: string } | undefined,
 ): Quantidade | undefined | "INVALIDA" {
   if (bruta === undefined) return undefined;

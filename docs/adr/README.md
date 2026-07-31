@@ -36,6 +36,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0018](0018-um-papel-por-usuario.md) | Um papel por usuário, com papéis personalizáveis | Aceito |
 | [0019](0019-desfecho-explicito-em-transacao.md) | Desfecho explícito em transação, para gravações que sobrevivem ao erro | Aceito |
 | [0020](0020-cliente-api-como-pacote-compartilhado.md) | `@erp/cliente-api` compartilhado entre retaguarda e PDV | Aceito |
+| [0021](0021-contingencia-do-pdv-em-arquivo.md) | Contingência do PDV em arquivo, não em SQLite | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo

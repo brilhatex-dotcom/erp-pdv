@@ -280,9 +280,10 @@ model Venda {
   abertaEm      DateTime    @map("aberta_em") @db.Timestamptz(3)
   finalizadaEm  DateTime?   @map("finalizada_em") @db.Timestamptz(3)
 
-  sessao     SessaoCaixa @relation(fields: [sessaoCaixaId], references: [id])
+  sessao     SessaoCaixa     @relation(fields: [sessaoCaixaId], references: [id])
   itens      VendaItem[]
   pagamentos Pagamento[]
+  importada  VendaImportada?
 
   // Numeração fiscal é sequencial e sem lacuna POR ESTAÇÃO (uma série por PDV).
   @@unique([estacaoId, numero], map: "uq_vendas_estacao_numero")
@@ -564,4 +565,23 @@ model Fornecedor {
 
   @@index([razaoSocialBusca(ops: raw("text_pattern_ops"))], map: "ix_fornecedor_razao_busca", type: BTree)
   @@map("fornecedores")
+}
+
+/// Vendas que chegaram da fila offline de uma estação.
+///
+/// Existe para uma coisa só: **reenviar não pode duplicar**. A resposta do
+/// servidor pode se perder depois de ele ter gravado a venda, e sem esta tabela
+/// o reenvio criaria uma segunda — o fechamento acusaria dinheiro que não
+/// existe, e ninguém saberia de onde veio.
+model VendaImportada {
+  /// Identificador gerado na estação, antes de qualquer ida ao servidor.
+  chave     String   @id @db.VarChar(64)
+  vendaId   String   @unique @map("venda_id") @db.Uuid
+  estacaoId String   @map("estacao_id") @db.Uuid
+  criadoEm  DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  venda Venda @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+
+  @@index([estacaoId, criadoEm], map: "ix_venda_importada_estacao")
+  @@map("vendas_importadas")
 }

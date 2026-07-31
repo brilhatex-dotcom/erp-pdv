@@ -4,6 +4,7 @@ import {
   type GeradorId,
   type Hasher,
   IniciarVenda,
+  AbrirCaixa,
   AdicionarItemPorCodigo,
   AlterarCategoria,
   AlterarCliente,
@@ -71,6 +72,7 @@ export interface Container {
   readonly renovarSessao: RenovarSessao;
   readonly autorizarOperacao: AutorizarOperacao;
 
+  readonly abrirCaixa: AbrirCaixa;
   readonly iniciarVenda: IniciarVenda;
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
@@ -143,6 +145,7 @@ export function montarContainer(ambiente: Ambiente): Container {
     ),
     autorizarOperacao: new AutorizarOperacao(relogio, hasher),
 
+    abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
     iniciarVenda: new IniciarVenda(unitOfWork, relogio, geradorId),
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),

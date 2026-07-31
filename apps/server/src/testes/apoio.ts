@@ -88,6 +88,7 @@ export function prepararBanco(): void {
 export async function limparBanco(container: Container): Promise<void> {
   await container.prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "vendas_importadas",
       "eventos_outbox", "pagamentos", "venda_itens", "vendas",
       "recebimentos_caixa", "movimentos_caixa", "sessoes_caixa",
       "saldos_estoque", "movimentos_estoque", "embalagens",

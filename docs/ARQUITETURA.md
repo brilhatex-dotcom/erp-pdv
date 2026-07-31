@@ -16,6 +16,7 @@
 | Versão | Data | Mudança |
 |---|---|---|
 | 1.0 | 30/07/2026 | Versão inicial |
+| **1.2** | 31/07/2026 | **ADR-0021**: cache de contingência do PDV passa de SQLite embarcado para **arquivos na estação** (fila append-only + índice em memória). Motivo: SQLite no Electron exige módulo nativo recompilado por ABI, e o custo de suporte de um instalador que compila no cliente supera o ganho, nos volumes do §12.2. Impacta §5.1, §5.2.2 e §12.2. |
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
 | **1.3** | 31/07/2026 | Acrescenta `@erp/cliente-api` ao grafo de §3.3 e à tabela de §3.4: o cliente HTTP e o contexto de sessão saem de `apps/web` para um pacote, porque o PDV precisa dos mesmos. Duplicá-los faria a renovação de token divergir entre as duas aplicações — e divergência em renovação de sessão aparece como "o PDV desloga sozinho". |
 
@@ -193,7 +194,7 @@ graph TB
 
         subgraph EST1["🖥️ Estação PDV 1 (balcão)"]
             PDV1["<b>erp-pdv</b><br/>Electron + React"]
-            LOCAL1[("Cache de contingência<br/>SQLite embarcado<br/><i>somente catálogo + fila</i>")]
+            LOCAL1[("Cache de contingência<br/>arquivos na estação<br/><i>somente catálogo + fila</i>")]
             HW1["Ponte de Hardware<br/>impressora, gaveta,<br/>balança, SAT"]
             PDV1 --- LOCAL1
             PDV1 --- HW1
@@ -697,7 +698,7 @@ apps/pdv/src/
 │   │   ├── leitor.ts                 # HID (emula teclado)
 │   │   └── sat.ts                    # DLL do equipamento SAT (SP)
 │   ├── armazenamento-local/
-│   │   ├── replica-catalogo.ts       # SQLite embarcado — busca offline
+│   │   ├── replica-catalogo.ts       # índice em memória — busca offline
 │   │   └── fila-vendas.ts            # 🔑 vendas pendentes de sincronização
 │   ├── sincronizacao/
 │   │   ├── sincronizador.ts
@@ -779,7 +780,7 @@ packages/fiscal/src/
 | API | **Fastify** | 5.x | Express, NestJS | 2× mais rápido que Express; validação por schema nativa; NestJS traz peso desnecessário |
 | ORM | **Prisma** | 6.x | Drizzle, TypeORM | Migrations confiáveis, tipagem excelente, `migrate diff` para reversão |
 | **Banco** | **PostgreSQL** (embarcado) | 17 | SQLite, Firebird | Único banco em dev/teste/produção; integridade, MVCC, PITR, roles |
-| Cache local do PDV | **SQLite** (embarcado no Electron) | 3.4x | IndexedDB | Apenas catálogo replicado + fila offline — **não** é sistema de registro |
+| Cache local do PDV | **Arquivos na estação** (NDJSON + índice em memória) | — | SQLite, IndexedDB | Apenas catálogo replicado + fila offline — **não** é sistema de registro ([ADR-0021](adr/0021-contingencia-do-pdv-em-arquivo.md)) |
 | UI | **React** | 19 | Vue, Svelte | Maior ecossistema; contratação mais fácil |
 | Build do front | **Vite** | 8.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
 | Estilo | **Tailwind CSS** | 4.x | CSS Modules | Consistência via tokens; sem CSS órfão |
@@ -850,11 +851,14 @@ máquina. **O que ganhamos:** paridade exata entre teste e produção, uma únic
 migration, ferramental de backup e diagnóstico maduro, e nenhuma migração futura por
 cliente. Para um produto comercial, essa troca é claramente favorável.
 
-**O SQLite permanece no projeto — em outro papel.** O cache de contingência do PDV
-(catálogo replicado + fila de vendas offline, §12.2) continua em SQLite embarcado no
-Electron. Isso **não** reintroduz o problema: é um esquema pequeno, próprio, descartável e
-reconstruível a partir do servidor — não é sistema de registro e não compartilha migrations
-com o domínio.
+**O SQLite saiu do projeto por inteiro** ([ADR-0021](adr/0021-contingencia-do-pdv-em-arquivo.md)).
+O cache de contingência do PDV (catálogo replicado + fila de vendas offline, §12.2) usa
+**arquivos na própria estação**: fila append-only gravada com `fsync` e catálogo carregado
+num índice de memória. A razão não é o banco — é a embalagem: SQLite no Electron exige
+módulo nativo recompilado para cada ABI do runtime, e isso põe no instalador exatamente o
+risco que o produto recusou na impressora térmica. Nos volumes reais do §12.2 — dezenas de
+vendas na fila, ~50 mil SKUs no catálogo — o arquivo entrega o mesmo e é legível no suporte
+sem ferramenta nenhuma.
 
 #### 5.2.2 Electron no PDV — o custo de 150 MB vale o quê
 
@@ -864,7 +868,7 @@ com o domínio.
 | Abrir gaveta de dinheiro | ❌ | ✅ |
 | Ler balança (porta serial) | ⚠️ Web Serial: Chrome, com permissão manual toda vez | ✅ |
 | Acionar equipamento SAT (DLL) | ❌ | ✅ |
-| Armazenar catálogo offline com busca rápida | ⚠️ IndexedDB, lento em 50k SKUs | ✅ SQLite embarcado (cache) |
+| Armazenar catálogo offline com busca rápida | ⚠️ IndexedDB, lento em 50k SKUs | ✅ índice em memória (cache) |
 | Auto-atualização controlada | ❌ | ✅ |
 | Modo quiosque, sem barra de endereço | ⚠️ | ✅ |
 

@@ -175,7 +175,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | Decisão | Valor | Referência |
 |---|---|---|
 | **Banco de dados** | **PostgreSQL 17 único**, embarcado no instalador como serviço. Sem SQLite como sistema de registro | ADR-0013 · §5.2.1 |
-| Cache de contingência do PDV | SQLite embarcado no Electron — **somente** catálogo replicado e fila offline | §12.2 |
+| Cache de contingência do PDV | **Arquivos na estação** (fila append-only + catálogo em índice de memória) — **somente** catálogo replicado e fila offline | **ADR-0021** · §12.2 |
 | Topologia | Servidor local na loja + contingência na estação | ADR-0001 · §2.2 |
 | Emissão fiscal | Assíncrona via Outbox, nunca bloqueando a venda | ADR-0006 · §15 |
 | **Comunicação fiscal** | **Via API fiscal externa, atrás da porta `ProvedorFiscal`. Sem SEFAZ direto.** O ERP nunca conhece o fornecedor | **ADR-0015** · `docs/fiscal/ARQUITETURA-FISCAL.md` |

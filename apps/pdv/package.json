@@ -20,7 +20,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "@erp/printing": "workspace:*",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "@erp/utils": "workspace:*"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",
