@@ -1,0 +1,11 @@
+{
+  // Configuração de raiz usada por ferramentas que analisam o monorepo inteiro
+  // (dependency-cruiser, editores). A compilação real acontece por pacote,
+  // cada um com seu próprio tsconfig.json.
+  "extends": "@erp/config/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "files": [],
+  "include": []
+}

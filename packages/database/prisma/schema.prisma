@@ -1,0 +1,484 @@
+// Schema de persistência do ERP/PDV.
+//
+// Decisões que valem registro:
+//
+// • Dinheiro é BigInt de CENTAVOS, nunca Decimal ou Float. `Decimal` do Prisma
+//   volta como objeto de biblioteca, e `Float` é o bug do fechamento de caixa.
+//   BigInt mapeia direto para `int8` e casa com o `Dinheiro` do domínio.
+// • Quantidade é BigInt de MILÉSIMOS, pelo mesmo motivo.
+// • Chave primária é UUIDv7 gerado no cliente (ADR-0008): permite criar venda
+//   offline e preserva localidade de índice, porque v7 começa pelo tempo.
+// • Tabelas em snake_case plural; colunas em snake_case (CLAUDE.md §6).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/gerado"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Catálogo
+// ─────────────────────────────────────────────────────────────────────────
+
+enum TipoProduto {
+  UNITARIO
+  PESAVEL
+}
+
+model Produto {
+  id             String      @id @db.Uuid
+  sku            String      @unique
+  descricao      String      @db.VarChar(120)
+  descricaoPdv   String      @map("descricao_pdv") @db.VarChar(40)
+  /// Forma normalizada (sem acento, minúscula) usada na busca do balcão.
+  descricaoBusca String      @map("descricao_busca")
+  tipo           TipoProduto
+  unidadeBase    String      @map("unidade_base") @db.VarChar(6)
+  /// Centavos.
+  precoVenda     BigInt      @map("preco_venda")
+  /// Centavos. Zero significa "não informado", não "de graça".
+  custo          BigInt      @default(0)
+  codigoBarras   String?     @unique @map("codigo_barras") @db.VarChar(14)
+  /// Código do produto na balança, quando pesável.
+  codigoBalanca  String?     @unique @map("codigo_balanca") @db.VarChar(7)
+  categoriaId    String?     @map("categoria_id") @db.Uuid
+  /// Opcional por decisão de arquitetura: com o módulo fiscal desligado o
+  /// produto não tem tributação, e nada fora do fiscal depende disso (ADR-0016).
+  perfilTributarioId String? @map("perfil_tributario_id") @db.Uuid
+  ativo          Boolean     @default(true)
+  criadoEm       DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm   DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  referencias ReferenciaProduto[]
+  embalagens  Embalagem[]
+  movimentos  MovimentoEstoque[]
+  saldo       SaldoEstoque?
+  itensVenda  VendaItem[]
+
+  // Só produtos ativos aparecem na busca do PDV; o índice parcial mantém a
+  // estrutura pequena e o plano previsível (RNF-02).
+  @@index([descricaoBusca], map: "idx_produtos_busca")
+  @@index([ativo], map: "idx_produtos_ativo")
+  @@map("produtos")
+}
+
+enum TipoReferencia {
+  EAN
+  FABRICANTE
+  ORIGINAL
+  SIMILAR
+  INTERNO
+  FORNECEDOR
+}
+
+/// Códigos alternativos: fabricante, original, similar. Essencial em autopeças,
+/// onde o cliente traz o código escrito num papel.
+model ReferenciaProduto {
+  produtoId   String         @map("produto_id") @db.Uuid
+  tipo        TipoReferencia
+  valor       String         @db.VarChar(60)
+  /// Sem separadores nem acento — é por aqui que a busca compara.
+  normalizado String
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  // Chave natural: a referência só existe dentro do produto e não tem
+  // identidade própria. Evita inventar UUID para linha filha — e o problema
+  // de mantê-lo estável entre regravações.
+  @@id([produtoId, tipo, normalizado])
+  @@index([normalizado], map: "idx_referencias_normalizado")
+  @@map("referencias_produto")
+}
+
+/// Fardo, caixa, palete — com o fator de conversão para a unidade base.
+model Embalagem {
+  produtoId    String  @map("produto_id") @db.Uuid
+  unidade      String  @db.VarChar(6)
+  /// Quantas unidades base a embalagem contém.
+  fator        BigInt
+  codigoBarras String? @map("codigo_barras") @db.VarChar(14)
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@id([produtoId, unidade])
+  @@map("embalagens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Estoque
+// ─────────────────────────────────────────────────────────────────────────
+
+enum TipoMovimentoEstoque {
+  ENTRADA
+  DEVOLUCAO_CLIENTE
+  AJUSTE_POSITIVO
+  TRANSFERENCIA_ENTRADA
+  SAIDA
+  PERDA
+  DEVOLUCAO_FORNECEDOR
+  AJUSTE_NEGATIVO
+  TRANSFERENCIA_SAIDA
+}
+
+enum OrigemMovimentoEstoque {
+  VENDA
+  COMPRA
+  INVENTARIO
+  TRANSFERENCIA
+  MANUAL
+}
+
+/// Fato imutável. **Append-only**: correção gera movimento novo, nunca UPDATE.
+model MovimentoEstoque {
+  id            String                 @id @db.Uuid
+  produtoId     String                 @map("produto_id") @db.Uuid
+  tipo          TipoMovimentoEstoque
+  /// Milésimos, sempre positivo. O sinal vem do tipo.
+  quantidade    BigInt
+  unidade       String                 @db.VarChar(6)
+  origemTipo    OrigemMovimentoEstoque @map("origem_tipo")
+  origemDocumentoId String?            @map("origem_documento_id") @db.Uuid
+  usuarioId     String                 @map("usuario_id") @db.Uuid
+  /// Centavos. Só preenchido em entrada de compra.
+  custoUnitario BigInt?                @map("custo_unitario")
+  lote          String?                @db.VarChar(30)
+  observacao    String?
+  ocorridoEm    DateTime               @map("ocorrido_em") @db.Timestamptz(3)
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  // Consulta do extrato: movimentos de um produto em ordem cronológica.
+  @@index([produtoId, ocorridoEm], map: "idx_movimentos_produto_data")
+  @@index([origemDocumentoId], map: "idx_movimentos_origem")
+  @@map("movimentos_estoque")
+}
+
+/// Projeção do saldo — **derivada**, nunca a fonte da verdade.
+///
+/// Materializada porque somar milhões de movimentos a cada bipada não caberia
+/// no orçamento de 100 ms (RNF-02). Pode ser reconstruída a qualquer momento a
+/// partir de `movimentos_estoque`.
+model SaldoEstoque {
+  produtoId  String   @id @map("produto_id") @db.Uuid
+  /// Milésimos, com sinal. Negativo é possível e não é erro.
+  milesimos  BigInt   @default(0)
+  unidade    String   @db.VarChar(6)
+  /// Centavos — custo médio ponderado móvel.
+  custoMedio BigInt   @default(0) @map("custo_medio")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@map("saldos_estoque")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Caixa
+// ─────────────────────────────────────────────────────────────────────────
+
+enum StatusCaixa {
+  ABERTA
+  FECHADA
+}
+
+model SessaoCaixa {
+  id           String      @id @db.Uuid
+  estacaoId    String      @map("estacao_id") @db.Uuid
+  operadorId   String      @map("operador_id") @db.Uuid
+  /// Centavos.
+  fundoTroco   BigInt      @map("fundo_troco")
+  status       StatusCaixa @default(ABERTA)
+  abertaEm     DateTime    @map("aberta_em") @db.Timestamptz(3)
+  fechadaEm    DateTime?   @map("fechada_em") @db.Timestamptz(3)
+  /// Centavos, informado no fechamento.
+  contadoEmDinheiro BigInt? @map("contado_em_dinheiro")
+
+  // Acumuladores da sessão. São derivados das vendas, mas ficam materializados
+  // aqui pelo mesmo motivo de `saldos_estoque`: reabrir a gaveta não pode
+  // depender de somar as 2.000 vendas do dia (RNF-01).
+  /// Centavos — troco devolvido acumulado.
+  trocoDevolvido   BigInt @default(0) @map("troco_devolvido")
+  /// Centavos — total vendido na sessão.
+  totalVendido     BigInt @default(0) @map("total_vendido")
+  quantidadeVendas Int    @default(0) @map("quantidade_vendas")
+
+  movimentos MovimentoCaixa[]
+  recebidos  RecebimentoCaixa[]
+  vendas     Venda[]
+
+  // Só pode existir uma sessão aberta por estação — garantido por índice
+  // parcial na migração, porque o Prisma não expressa índice condicional.
+  @@index([estacaoId, status], map: "idx_sessoes_estacao_status")
+  @@map("sessoes_caixa")
+}
+
+enum TipoMovimentoCaixa {
+  SANGRIA
+  SUPRIMENTO
+}
+
+model MovimentoCaixa {
+  id             String             @id @db.Uuid
+  sessaoCaixaId  String             @map("sessao_caixa_id") @db.Uuid
+  tipo           TipoMovimentoCaixa
+  /// Centavos.
+  valor          BigInt
+  motivo         String
+  usuarioId      String             @map("usuario_id") @db.Uuid
+  autorizadoPorId String?           @map("autorizado_por_id") @db.Uuid
+  ocorridoEm     DateTime           @map("ocorrido_em") @db.Timestamptz(3)
+
+  sessao SessaoCaixa @relation(fields: [sessaoCaixaId], references: [id])
+
+  @@index([sessaoCaixaId], map: "idx_movimentos_caixa_sessao")
+  @@map("movimentos_caixa")
+}
+
+/// Total recebido por forma de pagamento numa sessão.
+///
+/// A sessão guarda **totais**, não a lista de vendas: carregar 2.000 vendas
+/// para abrir a gaveta quebraria a meta de resposta do PDV.
+model RecebimentoCaixa {
+  sessaoCaixaId String @map("sessao_caixa_id") @db.Uuid
+  forma         String @db.VarChar(20)
+  /// Centavos.
+  valor         BigInt @default(0)
+
+  sessao SessaoCaixa @relation(fields: [sessaoCaixaId], references: [id])
+
+  @@id([sessaoCaixaId, forma])
+  @@map("recebimentos_caixa")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Vendas
+// ─────────────────────────────────────────────────────────────────────────
+
+enum StatusVenda {
+  ABERTA
+  FINALIZADA
+  CANCELADA
+}
+
+model Venda {
+  id            String      @id @db.Uuid
+  /// Sequencial dentro da série da estação.
+  numero        Int
+  sessaoCaixaId String      @map("sessao_caixa_id") @db.Uuid
+  operadorId    String      @map("operador_id") @db.Uuid
+  estacaoId     String      @map("estacao_id") @db.Uuid
+  clienteId     String?     @map("cliente_id") @db.Uuid
+  status        StatusVenda @default(ABERTA)
+  /// Centavos — desconto concedido sobre a venda inteira.
+  descontoVenda BigInt      @default(0) @map("desconto_venda")
+  /// Centavos — trocoDevolvido, gravado para conferência do caixa.
+  troco         BigInt      @default(0)
+  abertaEm      DateTime    @map("aberta_em") @db.Timestamptz(3)
+  finalizadaEm  DateTime?   @map("finalizada_em") @db.Timestamptz(3)
+
+  sessao     SessaoCaixa @relation(fields: [sessaoCaixaId], references: [id])
+  itens      VendaItem[]
+  pagamentos Pagamento[]
+
+  // Numeração fiscal é sequencial e sem lacuna POR ESTAÇÃO (uma série por PDV).
+  @@unique([estacaoId, numero], map: "uq_vendas_estacao_numero")
+  @@index([sessaoCaixaId], map: "idx_vendas_sessao")
+  @@index([finalizadaEm], map: "idx_vendas_finalizada")
+  @@map("vendas")
+}
+
+model VendaItem {
+  vendaId         String @map("venda_id") @db.Uuid
+  /// Sequencial dentro da venda. Vira `nItem` no XML fiscal.
+  numero          Int
+  produtoId       String @map("produto_id") @db.Uuid
+  /// Congelada no momento da venda — não referencia o cadastro.
+  descricao       String @db.VarChar(120)
+  /// Milésimos.
+  quantidade      BigInt
+  unidade         String @db.VarChar(6)
+  /// Centavos — congelado no momento da venda.
+  precoUnitario   BigInt @map("preco_unitario")
+  /// Centavos — desconto dado neste item.
+  desconto        BigInt @default(0)
+  /// Centavos — parcela do desconto da venda que coube a este item.
+  descontoRateado BigInt @default(0) @map("desconto_rateado")
+
+  venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@id([vendaId, numero])
+  @@index([produtoId], map: "idx_itens_produto")
+  @@map("venda_itens")
+}
+
+model Pagamento {
+  vendaId     String  @map("venda_id") @db.Uuid
+  /// Ordem em que foi registrado — o PDV remove pelo índice.
+  ordem       Int
+  forma       String  @db.VarChar(20)
+  /// Centavos.
+  valor       BigInt
+  autorizacao String? @db.VarChar(40)
+  parcelas    Int     @default(1)
+
+  venda Venda @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+
+  @@id([vendaId, ordem])
+  @@map("pagamentos")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Outbox
+// ─────────────────────────────────────────────────────────────────────────
+
+enum StatusOutbox {
+  PENDENTE
+  PROCESSANDO
+  ENTREGUE
+  FALHOU
+}
+
+/// Eventos a entregar, gravados na MESMA transação do dado que os originou.
+///
+/// É o que impede o pior defeito do fluxo de venda: a venda gravar e o evento
+/// se perder, ou nota fiscal ser emitida para venda que a transação reverteu.
+model EventoOutbox {
+  id          String       @id @db.Uuid
+  tipo        String       @db.VarChar(60)
+  agregadoId  String       @map("agregado_id") @db.Uuid
+  /// Corpo do evento em JSON. BigInt vai como texto, para não perder precisão.
+  payload     Json
+  status      StatusOutbox @default(PENDENTE)
+  tentativas  Int          @default(0)
+  ocorridoEm  DateTime     @map("ocorrido_em") @db.Timestamptz(3)
+  processadoEm DateTime?   @map("processado_em") @db.Timestamptz(3)
+  ultimoErro  String?      @map("ultimo_erro")
+
+  // O worker busca pendentes em ordem de ocorrência.
+  @@index([status, ocorridoEm], map: "idx_outbox_pendentes")
+  @@map("eventos_outbox")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Identidade e acesso
+// ─────────────────────────────────────────────────────────────────────────
+
+model Papel {
+  id     String  @id @db.Uuid
+  codigo String  @unique @db.VarChar(40)
+  nome   String  @db.VarChar(60)
+  /// Papel de fábrica: pode ser copiado, não excluído.
+  padrao Boolean @default(false)
+
+  // Limites por valor. Percentual em PONTOS-BASE (500 = 5%), pelo mesmo motivo
+  // que dinheiro é centavo. NULL significa SEM TETO, e não zero — confundir os
+  // dois liberaria a gaveta para quem não deveria.
+  descontoMaximoItemBps    Int?    @map("desconto_maximo_item_bps")
+  descontoMaximoVendaBps   Int?    @map("desconto_maximo_venda_bps")
+  /// Centavos.
+  valorMaximoSangria       BigInt? @map("valor_maximo_sangria")
+  minutosParaCancelarVenda Int?    @map("minutos_para_cancelar_venda")
+  /// Centavos.
+  estornoMaximoEmDinheiro  BigInt? @map("estorno_maximo_em_dinheiro")
+
+  permissoes PermissaoPapel[]
+  usuarios   Usuario[]
+
+  @@map("papeis")
+}
+
+/// Permissão concedida a um papel, no formato `recurso:acao`.
+model PermissaoPapel {
+  papelId   String @map("papel_id") @db.Uuid
+  permissao String @db.VarChar(40)
+
+  papel Papel @relation(fields: [papelId], references: [id], onDelete: Cascade)
+
+  // Chave natural, como as demais tabelas filhas (ADR-0017).
+  @@id([papelId, permissao])
+  @@map("permissoes_papel")
+}
+
+model Usuario {
+  id        String @id @db.Uuid
+  /// Só dígitos, normalizada sem zeros à esquerda.
+  matricula String @unique @db.VarChar(6)
+  nome      String @db.VarChar(80)
+  papelId   String @map("papel_id") @db.Uuid
+
+  /// Hash Argon2id do PIN do balcão. NULL em quem não opera caixa.
+  hashPin        String? @map("hash_pin")
+  algoritmoPin   String? @map("algoritmo_pin") @db.VarChar(20)
+  /// Hash Argon2id da senha da retaguarda. NULL em quem só opera o PDV.
+  hashSenha      String? @map("hash_senha")
+  algoritmoSenha String? @map("algoritmo_senha") @db.VarChar(20)
+  /// Nunca existe senha padrão de fábrica: usuário novo nasce com `true`.
+  precisaTrocarCredencial Boolean @default(true) @map("precisa_trocar_credencial")
+  ativo                   Boolean @default(true)
+
+  // Estado do bloqueio progressivo. Persistido para que reiniciar o servidor
+  // não zere a proteção — seria a forma mais fácil de contorná-la.
+  tentativasFalhas      Int       @default(0) @map("tentativas_falhas")
+  bloqueadoAte          DateTime? @map("bloqueado_ate") @db.Timestamptz(3)
+  bloqueiosConsecutivos Int       @default(0) @map("bloqueios_consecutivos")
+  ultimoAcessoEm        DateTime? @map("ultimo_acesso_em") @db.Timestamptz(3)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  papel    Papel              @relation(fields: [papelId], references: [id])
+  estacoes EstacaoPermitida[]
+  sessoes  SessaoAcesso[]
+
+  @@index([papelId], map: "idx_usuarios_papel")
+  @@map("usuarios")
+}
+
+/// Restrição de estação. Ausência de linhas significa **todas** as estações.
+model EstacaoPermitida {
+  usuarioId String @map("usuario_id") @db.Uuid
+  estacaoId String @map("estacao_id") @db.Uuid
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, estacaoId])
+  @@map("estacoes_permitidas")
+}
+
+enum ContextoSessao {
+  PDV
+  RETAGUARDA
+}
+
+/// Sessão de acesso. Guarda apenas o HASH do refresh — vazamento do banco não
+/// entrega sessão ativa, porque hash não é aceito na renovação.
+model SessaoAcesso {
+  id            String         @id @db.Uuid
+  usuarioId     String         @map("usuario_id") @db.Uuid
+  /// Cadeia de renovações do mesmo login. É por ela que se revoga tudo de uma vez.
+  familiaId     String         @map("familia_id") @db.Uuid
+  dispositivoId String         @map("dispositivo_id") @db.Uuid
+  contexto      ContextoSessao
+  hashRefresh   String         @map("hash_refresh")
+  algoritmoRefresh String      @map("algoritmo_refresh") @db.VarChar(20)
+  criadaEm      DateTime       @map("criada_em") @db.Timestamptz(3)
+  expiraEm      DateTime       @map("expira_em") @db.Timestamptz(3)
+  revogadaEm    DateTime?      @map("revogada_em") @db.Timestamptz(3)
+  /// Quando o refresh foi gasto. Reaparecer depois disto é reúso.
+  usadaEm       DateTime?      @map("usada_em") @db.Timestamptz(3)
+  sucessoraId   String?        @map("sucessora_id") @db.Uuid
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Revogar a família inteira é uma operação só, e precisa de índice.
+  @@index([familiaId], map: "idx_sessoes_familia")
+  @@index([usuarioId], map: "idx_sessoes_usuario")
+  // O worker de limpeza remove as vencidas.
+  @@index([expiraEm], map: "idx_sessoes_expiracao")
+  @@map("sessoes_acesso")
+}

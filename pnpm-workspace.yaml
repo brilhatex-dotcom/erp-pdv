@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Dependências que podem executar scripts de instalação.
+# Lista explícita: qualquer pacote novo que peça build script precisa ser
+# aprovado conscientemente (defesa contra supply chain — CLAUDE.md §1, papel 5).
+onlyBuiltDependencies:
+  - esbuild
