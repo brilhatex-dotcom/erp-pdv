@@ -1,0 +1,30 @@
+{
+  "name": "@erp/printing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Comandos ESC/POS e layouts de cupom — puro, sem acesso a hardware",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -19,6 +19,12 @@ export default mergeConfig(base, {
         "src/**/*.test.{ts,tsx}",
         // Ponto de entrada: monta o React na página e não decide nada.
         "src/main.tsx",
+        // Composição do Electron: monta a janela, lê o arquivo de configuração
+        // e liga os canais. Não roda fora do Electron, e um teste que o
+        // simulasse mediria o simulador. A lógica que valia testar saiu daqui
+        // para `configuracao.ts` e `ponte-ipc.ts`, ambos cobertos.
+        "src/principal/main.ts",
+        "src/ponte/preload.ts",
         "src/testes/**",
       ],
     },

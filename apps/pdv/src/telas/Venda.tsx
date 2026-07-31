@@ -1,4 +1,6 @@
 import { mensagemDe, useSessao } from "@erp/cliente-api";
+
+import { imprimirCupomDaVenda } from "../balcao.js";
 import {
   Botao,
   CampoTexto,
@@ -71,6 +73,7 @@ export function Venda(): ReactNode {
   const [forma, setForma] = useState<string>("DINHEIRO");
   const [valor, setValor] = useState("");
   const [troco, setTroco] = useState("0");
+  const [avisoImpressao, setAvisoImpressao] = useState<string | undefined>(undefined);
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [ocupado, setOcupado] = useState(false);
 
@@ -124,6 +127,8 @@ export function Venda(): ReactNode {
     const centavos = valor.replace(/\D/g, "");
     if (centavos === "" || centavos === "0") return;
 
+    const valorEmCentavos = centavos;
+
     setErro(undefined);
     setOcupado(true);
 
@@ -143,6 +148,39 @@ export function Venda(): ReactNode {
 
         setTroco(finalizada.troco);
         setFase("CONCLUIDA");
+
+        // O cupom sai **depois** de a venda estar gravada, e nunca antes.
+        // Imprimir primeiro e gravar depois produz o pior defeito deste tipo de
+        // sistema: o cliente sai da loja com o cupom de uma venda que o caixa
+        // não registrou.
+        //
+        // Falha de impressão vira aviso na tela, jamais erro — o dinheiro já
+        // entrou, e dizer "falhou" faria o operador refazer a venda.
+        const problema = await imprimirCupomDaVenda({
+          cupom: {
+            loja: { nome: "" },
+            numero: venda.numero,
+            emitidoEm: new Date(),
+            operador: usuario?.nome ?? "",
+            itens: venda.itens.map((item) => ({
+              numero: item.numero,
+              descricao: item.descricao,
+              quantidade: item.quantidade.milesimos,
+              unidade: item.quantidade.unidade,
+              precoUnitario: item.precoUnitario,
+              total: item.total,
+            })),
+            subtotal: venda.total,
+            descontoTotal: "0",
+            total: venda.total,
+            pagamentos: [{ descricao: rotuloDaForma(forma), valor: valorEmCentavos }],
+            troco: finalizada.troco,
+            semValorFiscal: true,
+          },
+          houveDinheiro: forma === "DINHEIRO",
+        });
+
+        setAvisoImpressao(problema);
         return;
       }
 
@@ -175,6 +213,7 @@ export function Venda(): ReactNode {
   if (fase === "CONCLUIDA") {
     return (
       <Concluida
+        aviso={avisoImpressao}
         troco={troco}
         aoSeguir={novaVenda}
         numero={venda?.numero ?? 0}
@@ -371,7 +410,13 @@ function Pagamento(props: PropsPagamento): ReactNode {
   );
 }
 
+/** Rótulo da forma como ele sai no cupom. */
+function rotuloDaForma(codigo: string): string {
+  return FORMAS.find((atual) => atual.codigo === codigo)?.rotulo ?? codigo;
+}
+
 function Concluida(props: {
+  readonly aviso?: string | undefined;
   readonly troco: string;
   readonly numero: number;
   readonly total: string;
@@ -401,6 +446,18 @@ function Concluida(props: {
           {formatarDinheiro(props.troco)}
         </strong>
       </div>
+
+      {props.aviso !== undefined && (
+        // Aviso, não erro: a venda aconteceu e o dinheiro entrou. Pintar isto
+        // de vermelho de falha faria o operador refazer a venda — que é como se
+        // cobra o cliente duas vezes.
+        <p
+          role="status"
+          className="rounded-md border border-atencao bg-atencao-suave px-4 py-2 text-center text-tinta"
+        >
+          {props.aviso}
+        </p>
+      )}
 
       <Botao tamanho="grande" autoFocus onClick={props.aoSeguir}>
         Nova venda (Enter)

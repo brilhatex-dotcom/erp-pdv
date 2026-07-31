@@ -2,7 +2,7 @@ import { ClienteApi, ProvedorSessao, Sessao } from "@erp/cliente-api";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App.js";
 
@@ -648,5 +648,120 @@ describe("estação", () => {
 
     expect(estacao).toMatch(/^[0-9a-f-]{36}$/);
     expect(globalThis.localStorage.getItem("erp.estacao")).toBe(estacao);
+  });
+});
+
+describe("cupom no fechamento da venda", () => {
+  const VENDENDO_CUPOM: Rotas = {
+    "/api/acesso/eu": () => json(200, OPERADOR),
+    "/api/vendas": () => json(201, VENDA_VAZIA),
+    [`/api/vendas/${VENDA_VAZIA.id}/itens`]: () =>
+      json(201, { item: ITEM, venda: VENDA_COM_ITEM }),
+    [`/api/vendas/${VENDA_VAZIA.id}/pagamentos`]: () =>
+      json(201, { forma: "DINHEIRO", valor: "1000", faltaPagar: "0", troco: "10" }),
+    [`/api/vendas/${VENDA_VAZIA.id}/finalizar`]: () =>
+      json(200, { ...VENDA_COM_ITEM, status: "FINALIZADA", troco: "10" }),
+  };
+
+  function instalarPonte(imprimirCupom: ReturnType<typeof vi.fn>): void {
+    Object.defineProperty(globalThis.window, "balcao", {
+      value: { imprimirCupom, abrirGaveta: vi.fn(), configuracao: vi.fn() },
+      configurable: true,
+    });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis.window, "balcao");
+  });
+
+  async function venderAtePagar(): Promise<void> {
+    await userEvent.type(await esperarCampoDeCodigo(), "7891000315507{Enter}");
+    await waitFor(() => {
+      expect(screen.getByText("REFRI COLA 2L")).toBeVisible();
+    });
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Pagamento" })).toBeVisible();
+    });
+    await userEvent.keyboard("1000{Enter}");
+  }
+
+  it("🔑 o cupom sai com os dados da venda, e a gaveta abre no dinheiro", async () => {
+    const imprimirCupom = vi.fn().mockResolvedValue({ tipo: "IMPRESSO" });
+    instalarPonte(imprimirCupom);
+
+    montar(VENDENDO_CUPOM);
+    await venderAtePagar();
+
+    await waitFor(() => {
+      expect(screen.getByText("Troco")).toBeVisible();
+    });
+
+    expect(imprimirCupom).toHaveBeenCalledTimes(1);
+
+    const enviado = imprimirCupom.mock.calls[0]?.[0] as {
+      houveDinheiro: boolean;
+      cupom: { operador: string; troco: string; pagamentos: { descricao: string }[] };
+    };
+
+    expect(enviado.houveDinheiro).toBe(true);
+    expect(enviado.cupom.operador).toBe(OPERADOR.nome);
+    expect(enviado.cupom.troco).toBe("10");
+    expect(enviado.cupom.pagamentos[0]?.descricao).toBe("Dinheiro");
+  });
+
+  it("🔑 o cupom sai DEPOIS de a venda estar gravada", async () => {
+    // Imprimir antes e gravar depois produz o pior defeito deste tipo de
+    // sistema: o cliente sai da loja com o cupom de uma venda que o caixa não
+    // registrou.
+    const ordem: string[] = [];
+    const imprimirCupom = vi.fn().mockImplementation(() => {
+      ordem.push("imprimiu");
+      return Promise.resolve({ tipo: "IMPRESSO" });
+    });
+    instalarPonte(imprimirCupom);
+
+    const { chamadas } = montar(VENDENDO_CUPOM);
+    await venderAtePagar();
+
+    await waitFor(() => {
+      expect(ordem).toContain("imprimiu");
+    });
+
+    expect(chamadas.some((c) => c.url.endsWith("/finalizar"))).toBe(true);
+  });
+
+  it("🔑 impressora sem papel vira aviso, não erro — a venda já aconteceu", async () => {
+    // "Falhou" seria falso e faria o operador refazer a venda, que é como se
+    // cobra o cliente duas vezes.
+    instalarPonte(
+      vi.fn().mockResolvedValue({
+        tipo: "NAO_IMPRESSO",
+        mensagem: "Cupom não impresso. A venda foi registrada normalmente.",
+      }),
+    );
+
+    montar(VENDENDO_CUPOM);
+    await venderAtePagar();
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "A venda foi registrada normalmente",
+      );
+    });
+
+    // O troco continua na tela: é o que o operador precisa conferir na mão.
+    expect(screen.getByText("Troco")).toBeVisible();
+  });
+
+  it("sem ponte instalada, a venda fecha sem aviso nenhum", async () => {
+    montar(VENDENDO_CUPOM);
+    await venderAtePagar();
+
+    await waitFor(() => {
+      expect(screen.getByText("Troco")).toBeVisible();
+    });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

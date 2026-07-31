@@ -34,7 +34,9 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 8b — Correções e persistência dos cadastros** | ✅ **Concluída** — login do balcão, abertura de caixa, e categoria/cliente/fornecedor no Postgres. 1.490 testes |
 | **Etapa 8c — Cadastros ponta a ponta** | ✅ **Concluída** — rotas HTTP, permissões e tela de clientes na retaguarda. 1.537 testes |
 | **Etapa 8d — Fornecedores e categorias** | ✅ **Concluída** — as três telas de cadastro, com abas por permissão. 1.555 testes |
-| Etapa 9 — PDV: casca Electron, impressora e gaveta | ⬜ Próxima |
+| **Etapa 9a — Cupom, gaveta e casca Electron** | ✅ **Concluída** — `@erp/printing`, ponte de hardware e impressão que nunca trava a venda. 1.647 testes |
+| Etapa 9b — PDV offline: cache SQLite, fila de vendas e sincronização | ⬜ Próxima |
+| Etapa 10 — Instalador, auto-update e backup | ⬜ |
 
 ## Requisitos
 
@@ -96,6 +98,7 @@ packages/
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
   cliente-api/ cliente HTTP e sessão, usados pela retaguarda e pelo PDV
   ui/          design system: tokens, componentes e estados de tela
+  printing/    comandos ESC/POS e layout de cupom — puro, sem hardware
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
   web/         retaguarda: SPA React + Vite

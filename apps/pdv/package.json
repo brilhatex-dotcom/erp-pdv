@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Frente de caixa — venda no balcão, teclado-first",
+  "description": "Frente de caixa \u2014 venda no balc\u00e3o, teclado-first",
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit && vite build",
     "typecheck": "tsc --noEmit",
@@ -11,13 +11,16 @@
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:electron": "tsc -p tsconfig.electron.json"
   },
   "dependencies": {
     "@erp/cliente-api": "workspace:*",
     "@erp/ui": "workspace:*",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@erp/printing": "workspace:*",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",
@@ -28,10 +31,12 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.5",
+    "electron": "^33.4.11",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.2",
     "vite": "^8.2.0",
     "vitest": "^3.2.4"
-  }
+  },
+  "main": "dist-electron/principal/main.js"
 }
