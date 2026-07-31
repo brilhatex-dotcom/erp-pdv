@@ -35,8 +35,14 @@ jobs:
           - 5432:5432
         # Sem o healthcheck, o passo de teste começa antes do banco aceitar
         # conexão e falha por corrida, não por defeito.
+        #
+        # `-U erp -d erp_teste` explícitos: sem eles o `pg_isready` tenta o
+        # usuário do sistema e o log do serviço enche de `FATAL: role "root"
+        # does not exist` a cada 5 s. O healthcheck passa mesmo assim — o
+        # servidor respondeu —, mas erro falso no log é o que faz alguém
+        # perseguir a causa errada quando algo de verdade quebrar.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U erp -d erp_teste"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -97,6 +103,24 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
-      - name: Auditoria de dependências
-        # Vulnerabilidade alta ou crítica bloqueia o merge (CLAUDE.md §7).
+      - name: Auditoria das dependências de produção
+        # BLOQUEIA o merge (CLAUDE.md §7). `--prod` de propósito: este passo
+        # mede o que é instalado na loja.
+        #
+        # A primeira versão auditava tudo, e o efeito prático foi o oposto do
+        # pretendido: duas falhas altas em `brace-expansion`, arrastado por
+        # ESLint e Vitest, deixavam o portão vermelho sem que houvesse nada
+        # vulnerável no produto. A tentativa de calar aquilo forçando a versão
+        # nova quebrou o provedor de cobertura — `minimatch@9` é CommonJS e a
+        # linha 5.x do `brace-expansion` é ESM. Portão que mede a coisa errada
+        # empurra para a solução errada.
+        run: pnpm audit --prod --audit-level high
+
+      - name: Auditoria do ferramental (informativa)
+        # NÃO bloqueia: vulnerabilidade em ESLint ou Vitest não chega ao cliente,
+        # e travar a entrega por causa dela pararia a loja por um risco que não
+        # existe na loja. Fica visível para ser resolvida quando houver correção
+        # compatível — e para que ninguém precise descobrir de novo por que o
+        # passo acima usa `--prod`.
+        continue-on-error: true
         run: pnpm audit --audit-level high

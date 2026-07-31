@@ -7,16 +7,3 @@ packages:
 # aprovado conscientemente (defesa contra supply chain — CLAUDE.md §1, papel 5).
 onlyBuiltDependencies:
   - esbuild
-
-# Versão forçada em dependência transitiva.
-#
-# `brace-expansion` até 5.0.7 tem negação de serviço por expansão sem limite
-# (GHSA-mh99-v99m-4gvg), e a correção saiu só na 5.0.8 — sem retroporte para as
-# linhas 1.x e 2.x que o ESLint e o Vitest arrastam. Sem esta trava, o portão de
-# segurança do CI (`pnpm audit --audit-level high`, CLAUDE.md §7) fica vermelho
-# de forma permanente, e portão que vive vermelho para de ser lido.
-#
-# O alcance é ferramental de desenvolvimento, não código embarcado no cliente —
-# mas travar é mais honesto que baixar o nível do portão para o produto todo.
-overrides:
-  brace-expansion: "^5.0.9"

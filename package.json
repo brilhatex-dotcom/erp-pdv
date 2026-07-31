@@ -19,7 +19,7 @@
     "arch": "depcruise packages apps --config .dependency-cruiser.cjs",
     "serve": "pnpm --filter @erp/server start",
     "serve:dev": "pnpm --filter @erp/server dev",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm arch && pnpm test",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm arch && pnpm test:cov && pnpm audit --prod --audit-level high",
     "db:migrate": "pnpm --filter @erp/database db:migrate",
     "db:deploy": "pnpm --filter @erp/database db:deploy",
     "db:up": "docker compose up -d",

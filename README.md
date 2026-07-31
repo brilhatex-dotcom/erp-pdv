@@ -52,8 +52,14 @@ entre casos, e fazer isso no banco de desenvolvimento apagaria o cadastro que
 você estava usando para conferir algo na tela.
 
 `pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
-arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
-passa no CI.
+arquitetura** → testes **com cobertura** → auditoria das dependências de
+produção. É o mesmo conjunto que o CI aplica, com os mesmos comandos — se passar
+localmente, passa no CI.
+
+> A cobertura faz parte do `verify` de propósito. Rodar `pnpm test` localmente e
+> `pnpm test:cov` no CI parece equivalente e não é: o provedor de cobertura tem
+> as suas próprias dependências, e já houve uma quebra que só aparecia com
+> `--coverage`. Portão local que não é o portão do CI dá falsa confiança.
 
 ### Comandos
 
