@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ClienteApi, ErroDaApi, mensagemDe, Sessao } from "../api/cliente.js";
+import { ClienteApi, ErroDaApi, mensagemDe, Sessao } from "./cliente.js";
 
 /** Constrói uma resposta como o `fetch` devolveria. */
 function resposta(status: number, corpo?: unknown): Response {

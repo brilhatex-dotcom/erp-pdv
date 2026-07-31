@@ -1,25 +1,23 @@
+import { mensagemDe, useSessao } from "@erp/cliente-api";
 import { Botao, CampoTexto } from "@erp/ui";
-import { type SyntheticEvent, type ReactNode, useRef, useState } from "react";
-
-import { mensagemDe } from "@erp/cliente-api";
-import { useSessao } from "@erp/cliente-api";
+import { type ReactNode, type SyntheticEvent, useRef, useState } from "react";
 
 /**
- * Tela de entrada da retaguarda.
+ * Entrada no balcão — matrícula e PIN.
  *
- * Aqui a credencial é **senha longa**, não PIN: a retaguarda expõe dados
- * financeiros e fiscais, e o ataque não exige presença física na loja
- * (ARQUITETURA.md §8.1). O PIN de seis dígitos é do balcão, onde o contexto de
- * ameaça é outro.
+ * A credencial aqui é **PIN numérico**, não senha longa (ADR-0011): a troca de
+ * operador acontece com fila esperando, e senha de doze caracteres nesse
+ * contexto tem uma consequência previsível — a equipe passa a compartilhar um
+ * login, e a auditoria deixa de valer. O PIN é seguro no balcão porque o ataque
+ * exige presença física, e o bloqueio progressivo cobre o resto.
  *
- * O formulário é `<form>` de verdade, com `type="submit"`: Enter no campo de
- * senha entra, que é como todo mundo espera e como o gerenciador de senhas do
- * navegador reconhece a tela.
+ * Os dois campos são numéricos e o foco começa na matrícula: dá para entrar sem
+ * tirar a mão do teclado numérico, terminando em Enter.
  */
 export function Login(): ReactNode {
   const { entrar } = useSessao();
   const [matricula, setMatricula] = useState("");
-  const [senha, setSenha] = useState("");
+  const [pin, setPin] = useState("");
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [enviando, setEnviando] = useState(false);
   const campoMatricula = useRef<HTMLInputElement>(null);
@@ -30,12 +28,11 @@ export function Login(): ReactNode {
     setEnviando(true);
 
     try {
-      await entrar(matricula, senha);
+      await entrar(matricula, pin);
     } catch (causa) {
       setErro(mensagemDe(causa));
-      // A senha some, a matrícula fica: quem errou a senha vai redigitar só
-      // ela, e quem errou a matrícula a corrige sem apagar tudo.
-      setSenha("");
+      // O PIN some, a matrícula fica: quem errou o PIN redigita só ele.
+      setPin("");
       campoMatricula.current?.focus();
     } finally {
       setEnviando(false);
@@ -47,13 +44,11 @@ export function Login(): ReactNode {
       <form
         onSubmit={(evento) => void aoEnviar(evento)}
         className="flex w-full max-w-sm flex-col gap-5 rounded-lg border border-borda bg-papel p-6 shadow-cartao"
-        // `noValidate`: as mensagens nativas do navegador são genéricas e não
-        // seguem o idioma da loja. As nossas vêm do domínio.
         noValidate
       >
         <header className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-tinta">Retaguarda</h1>
-          <p className="text-sm text-tinta-suave">Entre com sua matrícula e senha.</p>
+          <h1 className="text-2xl font-semibold text-tinta">Caixa</h1>
+          <p className="text-sm text-tinta-suave">Matrícula e PIN para começar.</p>
         </header>
 
         {erro !== undefined && (
@@ -78,13 +73,14 @@ export function Login(): ReactNode {
         />
 
         <CampoTexto
-          rotulo="Senha"
+          rotulo="PIN"
           type="password"
+          numerico
           required
-          autoComplete="current-password"
-          value={senha}
+          autoComplete="off"
+          value={pin}
           onChange={(evento) => {
-            setSenha(evento.target.value);
+            setPin(evento.target.value);
           }}
         />
 

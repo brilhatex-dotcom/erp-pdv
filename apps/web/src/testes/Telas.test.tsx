@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ClienteApi, Sessao } from "../api/cliente.js";
+import { ClienteApi, ProvedorSessao, Sessao } from "@erp/cliente-api";
+
 import { App } from "../App.js";
-import { ProvedorSessao } from "../sessao/ContextoSessao.js";
 
 /** Respostas indexadas por caminho, como o servidor devolveria. */
 type Rotas = Record<string, () => Response>;

@@ -1,9 +1,9 @@
 {
-  "name": "@erp/web",
+  "name": "@erp/pdv",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Retaguarda — SPA de administração da loja",
+  "description": "Frente de caixa — venda no balcão, teclado-first",
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit && vite build",
     "typecheck": "tsc --noEmit",
@@ -16,7 +16,6 @@
   "dependencies": {
     "@erp/cliente-api": "workspace:*",
     "@erp/ui": "workspace:*",
-    "@tanstack/react-query": "^5.101.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

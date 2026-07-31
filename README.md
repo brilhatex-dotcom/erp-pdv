@@ -24,7 +24,10 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
 | **Etapa 6b — Servidor HTTP** | ✅ **Concluída** — Fastify, container, login com Argon2id, sessão rotativa e autorização no servidor. 1.121 testes |
 | **Etapa 7a — Design system e retaguarda** | ✅ **Concluída** — tokens calibrados para o balcão, primitivos acessíveis, login e consulta de produto. 1.187 testes |
-| Etapa 7b — PDV (Electron, teclado-first) | ⬜ Próxima |
+| **Etapa 7b — Rotas de venda** | ✅ **Concluída** — carrinho, pagamento e fechamento pela API, com o operador vindo do token. 1.219 testes |
+| **Etapa 7c — `@erp/cliente-api`** | ✅ **Concluída** — cliente HTTP e sessão extraídos de `apps/web` para o PDV reusar. 1.223 testes |
+| **Etapa 8 — PDV: tela de venda** | ✅ **Concluída** — bipagem, carrinho, pagamento e troco, a venda inteira sem mouse. 1.243 testes |
+| Etapa 9 — PDV: casca Electron, impressora e gaveta | ⬜ Próxima |
 
 ## Requisitos
 
@@ -48,8 +51,13 @@ cadastro que você estava usando para conferir algo na tela, e as duas suítes,
 que o Turbo roda em paralelo, derrubariam os dados uma da outra.
 
 `pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
-arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
-passa no CI.
+arquitetura** → testes **com cobertura** → auditoria das dependências de
+produção. É o mesmo conjunto que o CI aplica, com os mesmos comandos — se passar
+localmente, passa no CI.
+
+> A cobertura faz parte do `verify` de propósito. Rodar `pnpm test` localmente e
+> `pnpm test:cov` no CI parece equivalente e não é: o provedor de cobertura tem
+> dependências próprias, e já houve uma quebra que só aparecia com `--coverage`.
 
 ### Comandos
 
@@ -68,6 +76,7 @@ passa no CI.
 | `pnpm db:deploy` | Aplica migrações já existentes (é o que roda na instalação) |
 | `pnpm --filter @erp/server start` | Sobe a API (exige `SEGREDO_TOKEN` e `DATABASE_URL`) |
 | `pnpm --filter @erp/web dev` | Abre a retaguarda em `localhost:5173` (proxy para a API) |
+| `pnpm --filter @erp/pdv dev` | Abre o PDV em `localhost:5174` (proxy para a API) |
 
 ## Estrutura
 
@@ -78,10 +87,12 @@ packages/
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
+  cliente-api/ cliente HTTP e sessão, usados pela retaguarda e pelo PDV
   ui/          design system: tokens, componentes e estados de tela
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
   web/         retaguarda: SPA React + Vite
+  pdv/         frente de caixa: venda por teclado (React + Vite)
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio

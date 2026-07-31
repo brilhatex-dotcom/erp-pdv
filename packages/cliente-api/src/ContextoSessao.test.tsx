@@ -1,8 +1,8 @@
-import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ClienteApi, Sessao } from "../api/cliente.js";
+import { ClienteApi, Sessao } from "./cliente.js";
 import {
   identificadorDoDispositivo,
   ProvedorSessao,
@@ -126,6 +126,99 @@ describe("restauração ao montar", () => {
     await new Promise((resolver) => setTimeout(resolver, 0));
 
     // Continua sem usuário: a resposta que chegou tarde foi descartada.
+    expect(result.current.usuario).toBeUndefined();
+  });
+});
+
+describe("entrar", () => {
+  it("guarda o token e o usuário devolvidos pelo servidor", async () => {
+    const { result } = renderHook(() => useSessao(), {
+      wrapper: envolver(
+        montarCliente({
+          ...SEM_SESSAO,
+          "/api/acesso/login": () => json(200, { token: "abc", usuario: USUARIO }),
+        }),
+      ),
+    });
+
+    await waitFor(() => {
+      expect(result.current.restaurando).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.entrar("1", "cavalo bateria grampo");
+    });
+
+    expect(result.current.usuario?.matricula).toBe("1");
+    expect(result.current.cliente.sessao.token).toBe("abc");
+  });
+
+  it("🔑 propaga a recusa em vez de engolir", async () => {
+    // A tela precisa do erro para mostrar a mensagem do servidor. Engolir aqui
+    // faria o botão "Entrar" parecer que funcionou e nada acontecer.
+    const { result } = renderHook(() => useSessao(), {
+      wrapper: envolver(
+        montarCliente({
+          ...SEM_SESSAO,
+          "/api/acesso/login": () =>
+            json(401, {
+              erro: {
+                codigo: "CREDENCIAL_INVALIDA",
+                mensagem: "Matrícula ou senha incorreta.",
+              },
+            }),
+        }),
+      ),
+    });
+
+    await waitFor(() => {
+      expect(result.current.restaurando).toBe(false);
+    });
+
+    await expect(result.current.entrar("1", "errada")).rejects.toThrow(
+      /Matrícula ou senha incorreta/,
+    );
+    expect(result.current.usuario).toBeUndefined();
+  });
+});
+
+describe("sair", () => {
+  it("derruba a sessão local e avisa o servidor", async () => {
+    const cliente = montarCliente({
+      ...COM_SESSAO,
+      "/api/acesso/sair": () => json(204, {}),
+    });
+
+    const { result } = renderHook(() => useSessao(), { wrapper: envolver(cliente) });
+
+    await waitFor(() => {
+      expect(result.current.usuario).toBeDefined();
+    });
+
+    await act(async () => {
+      await result.current.sair();
+    });
+
+    expect(result.current.usuario).toBeUndefined();
+    expect(cliente.sessao.token).toBeUndefined();
+  });
+
+  it("🔑 a sessão local cai mesmo se o servidor não responder", async () => {
+    // Deixar o usuário "logado" numa tela cuja sessão já não vale é pior do que
+    // pedir o login de novo: toda ação seguinte voltaria 401 sem explicação. O
+    // servidor limpa a sessão órfã na expiração.
+    const cliente = montarCliente(COM_SESSAO);
+
+    const { result } = renderHook(() => useSessao(), { wrapper: envolver(cliente) });
+
+    await waitFor(() => {
+      expect(result.current.usuario).toBeDefined();
+    });
+
+    await act(async () => {
+      await result.current.sair();
+    });
+
     expect(result.current.usuario).toBeUndefined();
   });
 });

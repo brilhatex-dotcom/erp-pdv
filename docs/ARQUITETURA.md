@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.2 |
+| **Versão do documento** | 1.3 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -17,6 +17,7 @@
 |---|---|---|
 | 1.0 | 30/07/2026 | Versão inicial |
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
+| **1.3** | 31/07/2026 | Acrescenta `@erp/cliente-api` ao grafo de §3.3 e à tabela de §3.4: o cliente HTTP e o contexto de sessão saem de `apps/web` para um pacote, porque o PDV precisa dos mesmos. Duplicá-los faria a renovação de token divergir entre as duas aplicações — e divergência em renovação de sessão aparece como "o PDV desloga sozinho". |
 
 ---
 
@@ -433,6 +434,7 @@ O grafo abaixo é **lei**. Qualquer seta que não exista aqui é proibida e queb
 graph BT
     DOMAIN["<b>@erp/domain</b><br/>Entidades, VOs, regras<br/>❌ zero dependências"]
     CONTRACTS["<b>@erp/contracts</b><br/>DTOs + schemas Zod"]
+    CLIENTE["<b>@erp/cliente-api</b><br/>Cliente HTTP + sessão"]
     APP["<b>@erp/application</b><br/>Casos de uso + Portas"]
     DB["<b>@erp/database</b><br/>Prisma + Repositórios"]
     FISCAL["<b>@erp/fiscal</b><br/>NFC-e, NF-e, SAT"]
@@ -455,6 +457,8 @@ graph BT
     APP --> FISCAL
     CONTRACTS --> PDV
     CONTRACTS --> WEB
+    CLIENTE --> PDV
+    CLIENTE --> WEB
     UI --> PDV
     UI --> WEB
     PRINT --> PDV
@@ -482,6 +486,7 @@ graph BT
 | `@erp/fiscal` | Geração/assinatura/transmissão de XML, adapters SEFAZ/SAT, cálculo tributário aplicado | Acesso a banco |
 | `@erp/printing` | Comandos ESC/POS, layouts de cupom/DANFE, descoberta de impressoras | Regra de negócio |
 | `@erp/ui` | Design system: componentes, tokens, temas, acessibilidade | Chamadas de API |
+| `@erp/cliente-api` | Cliente HTTP, renovação de token e contexto de sessão, compartilhados pelo PDV e pela retaguarda | Regra de negócio; qualquer decisão que o servidor deva tomar |
 | `@erp/utils` | Validadores (CPF/CNPJ/IE), formatadores, datas, `Result`, ULID/UUIDv7 | Qualquer dependência do projeto |
 | `@erp/config` | Configurações compartilhadas de TS, ESLint, Prettier, Vitest | — |
 | `apps/server` | Composição: HTTP, injeção de dependências, jobs, autenticação | Regra de negócio nova |

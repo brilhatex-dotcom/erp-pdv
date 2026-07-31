@@ -81,6 +81,21 @@ module.exports = {
       },
     },
 
+    {
+      name: "cliente-api-so-transporte",
+      comment:
+        "@erp/cliente-api é transporte: fala HTTP e sessão, em DTO. Depender do " +
+        "domínio faria a regra de negócio ser avaliada no navegador — onde um " +
+        "cliente adulterado a contorna (ARQUITETURA.md §9.5). Depender de " +
+        "database ou fiscal seria pior ainda: código de servidor no pacote que " +
+        "o PDV embarca.",
+      severity: "error",
+      from: { path: "^packages/cliente-api/src" },
+      to: {
+        path: "^packages/(domain|application|database|fiscal|printing|ui)",
+      },
+    },
+
     // ── Fronteira pacotes × aplicações ────────────────────────────────────
     {
       name: "pacote-nao-depende-de-app",

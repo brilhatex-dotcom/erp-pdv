@@ -1,7 +1,7 @@
 import { Botao, Carregando } from "@erp/ui";
 import type { ReactNode } from "react";
 
-import { useSessao } from "./sessao/ContextoSessao.js";
+import { useSessao } from "@erp/cliente-api";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Login } from "./telas/Login.js";
 
