@@ -1,4 +1,9 @@
 import type {
+  PapelRepository,
+  SessaoAcessoRepository,
+  UsuarioRepository,
+} from "./RepositoriosAcesso.js";
+import type {
   CodigoUnidade,
   DomainEvent,
   Identificador,
@@ -71,4 +76,7 @@ export interface Repositorios {
   readonly estoque: EstoqueRepository;
   readonly caixas: CaixaRepository;
   readonly outbox: OutboxRepository;
+  readonly usuarios: UsuarioRepository;
+  readonly papeis: PapelRepository;
+  readonly sessoes: SessaoAcessoRepository;
 }

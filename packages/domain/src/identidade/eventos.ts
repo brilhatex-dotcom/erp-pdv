@@ -92,4 +92,36 @@ export function operacaoAutorizadaPorSupervisor(
 }
 
 export type EventoIdentidade =
-  TentativaRecusada | CredencialBloqueada | OperacaoAutorizadaPorSupervisor;
+  | TentativaRecusada
+  | CredencialBloqueada
+  | OperacaoAutorizadaPorSupervisor
+  | FamiliaDeSessaoRevogada;
+
+/**
+ * Família de sessão revogada por reúso de refresh token.
+ *
+ * Um refresh já gasto que reaparece só tem duas explicações — roubo ou clone —
+ * e nas duas a resposta é derrubar a cadeia inteira. Este é o sinal mais forte
+ * de credencial comprometida que o sistema consegue produzir, e por isso vira
+ * alerta na retaguarda, não só linha de log.
+ */
+export interface FamiliaDeSessaoRevogada extends DomainEvent {
+  readonly tipo: "FamiliaDeSessaoRevogada";
+  readonly usuarioId: Identificador;
+  readonly familiaId: Identificador;
+}
+
+export function familiaDeSessaoRevogada(
+  sessaoId: Identificador,
+  usuarioId: Identificador,
+  familiaId: Identificador,
+  ocorridoEm: Date,
+): FamiliaDeSessaoRevogada {
+  return {
+    tipo: "FamiliaDeSessaoRevogada",
+    agregadoId: sessaoId,
+    usuarioId,
+    familiaId,
+    ocorridoEm,
+  };
+}

@@ -22,7 +22,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
 | **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
 | **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
-| Etapa 6b — Servidor HTTP (`apps/server`) | ⬜ Próxima |
+| **Etapa 6b — Servidor HTTP** | ✅ **Concluída** — Fastify, container, login com Argon2id, sessão rotativa e autorização no servidor. 1.121 testes |
+| Etapa 7 — Retaguarda web e PDV | ⬜ Próxima |
 
 ## Requisitos
 
@@ -39,10 +40,11 @@ pnpm db:migrate       # aplica as migrações no banco de desenvolvimento
 pnpm verify           # roda TODOS os portões de qualidade
 ```
 
-O `db:up` cria dois bancos: `erp_pdv` para desenvolvimento e `erp_teste` para a
-suíte de integração. São separados de propósito — os testes truncam as tabelas
-entre casos, e fazer isso no banco de desenvolvimento apagaria o cadastro que
-você estava usando para conferir algo na tela.
+O `db:up` cria três bancos: `erp_pdv` para desenvolvimento, `erp_teste` para a
+suíte de persistência e `erp_teste_api` para a do servidor. São separados de
+propósito — os testes truncam as tabelas entre casos. Um só banco apagaria o
+cadastro que você estava usando para conferir algo na tela, e as duas suítes,
+que o Turbo roda em paralelo, derrubariam os dados uma da outra.
 
 `pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
 arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
@@ -63,17 +65,19 @@ passa no CI.
 | `pnpm db:up` / `db:down` | Sobe / derruba o PostgreSQL de desenvolvimento |
 | `pnpm db:migrate` | Cria e aplica migrações a partir do schema Prisma |
 | `pnpm db:deploy` | Aplica migrações já existentes (é o que roda na instalação) |
+| `pnpm --filter @erp/server start` | Sobe a API (exige `SEGREDO_TOKEN` e `DATABASE_URL`) |
 
 ## Estrutura
 
 ```
-apps/          aplicações executáveis (criadas nas suas etapas)
 packages/
   config/      configurações compartilhadas de TS, ESLint e Vitest
   utils/       validadores e formatadores puros (CPF, CNPJ, texto)
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
+apps/
+  server/      API HTTP: composição, autenticação, autorização e rotas
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
@@ -94,6 +98,10 @@ CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões
   trocá-lo é escrever um adapter ([ADR-0015](docs/adr/0015-emissao-fiscal-via-provedor-externo.md)).
   O módulo pode ser desligado por empresa ([ADR-0016](docs/adr/0016-modulo-fiscal-opcional-por-empresa.md)).
 - **Dinheiro em centavos**, sempre inteiro.
+- **Autorização sempre no servidor.** A interface esconde o que o usuário não pode
+  fazer — isso é experiência, não segurança. Acima do limite, o sistema **pede
+  supervisor** em vez de bloquear, e registra quem pediu e quem autorizou
+  ([ADR-0018](docs/adr/0018-um-papel-por-usuario.md), `ARQUITETURA.md` §9).
 
 Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 

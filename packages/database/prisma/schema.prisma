@@ -363,3 +363,122 @@ model EventoOutbox {
   @@index([status, ocorridoEm], map: "idx_outbox_pendentes")
   @@map("eventos_outbox")
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Identidade e acesso
+// ─────────────────────────────────────────────────────────────────────────
+
+model Papel {
+  id     String  @id @db.Uuid
+  codigo String  @unique @db.VarChar(40)
+  nome   String  @db.VarChar(60)
+  /// Papel de fábrica: pode ser copiado, não excluído.
+  padrao Boolean @default(false)
+
+  // Limites por valor. Percentual em PONTOS-BASE (500 = 5%), pelo mesmo motivo
+  // que dinheiro é centavo. NULL significa SEM TETO, e não zero — confundir os
+  // dois liberaria a gaveta para quem não deveria.
+  descontoMaximoItemBps    Int?    @map("desconto_maximo_item_bps")
+  descontoMaximoVendaBps   Int?    @map("desconto_maximo_venda_bps")
+  /// Centavos.
+  valorMaximoSangria       BigInt? @map("valor_maximo_sangria")
+  minutosParaCancelarVenda Int?    @map("minutos_para_cancelar_venda")
+  /// Centavos.
+  estornoMaximoEmDinheiro  BigInt? @map("estorno_maximo_em_dinheiro")
+
+  permissoes PermissaoPapel[]
+  usuarios   Usuario[]
+
+  @@map("papeis")
+}
+
+/// Permissão concedida a um papel, no formato `recurso:acao`.
+model PermissaoPapel {
+  papelId   String @map("papel_id") @db.Uuid
+  permissao String @db.VarChar(40)
+
+  papel Papel @relation(fields: [papelId], references: [id], onDelete: Cascade)
+
+  // Chave natural, como as demais tabelas filhas (ADR-0017).
+  @@id([papelId, permissao])
+  @@map("permissoes_papel")
+}
+
+model Usuario {
+  id        String @id @db.Uuid
+  /// Só dígitos, normalizada sem zeros à esquerda.
+  matricula String @unique @db.VarChar(6)
+  nome      String @db.VarChar(80)
+  papelId   String @map("papel_id") @db.Uuid
+
+  /// Hash Argon2id do PIN do balcão. NULL em quem não opera caixa.
+  hashPin        String? @map("hash_pin")
+  algoritmoPin   String? @map("algoritmo_pin") @db.VarChar(20)
+  /// Hash Argon2id da senha da retaguarda. NULL em quem só opera o PDV.
+  hashSenha      String? @map("hash_senha")
+  algoritmoSenha String? @map("algoritmo_senha") @db.VarChar(20)
+  /// Nunca existe senha padrão de fábrica: usuário novo nasce com `true`.
+  precisaTrocarCredencial Boolean @default(true) @map("precisa_trocar_credencial")
+  ativo                   Boolean @default(true)
+
+  // Estado do bloqueio progressivo. Persistido para que reiniciar o servidor
+  // não zere a proteção — seria a forma mais fácil de contorná-la.
+  tentativasFalhas      Int       @default(0) @map("tentativas_falhas")
+  bloqueadoAte          DateTime? @map("bloqueado_ate") @db.Timestamptz(3)
+  bloqueiosConsecutivos Int       @default(0) @map("bloqueios_consecutivos")
+  ultimoAcessoEm        DateTime? @map("ultimo_acesso_em") @db.Timestamptz(3)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  papel    Papel              @relation(fields: [papelId], references: [id])
+  estacoes EstacaoPermitida[]
+  sessoes  SessaoAcesso[]
+
+  @@index([papelId], map: "idx_usuarios_papel")
+  @@map("usuarios")
+}
+
+/// Restrição de estação. Ausência de linhas significa **todas** as estações.
+model EstacaoPermitida {
+  usuarioId String @map("usuario_id") @db.Uuid
+  estacaoId String @map("estacao_id") @db.Uuid
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, estacaoId])
+  @@map("estacoes_permitidas")
+}
+
+enum ContextoSessao {
+  PDV
+  RETAGUARDA
+}
+
+/// Sessão de acesso. Guarda apenas o HASH do refresh — vazamento do banco não
+/// entrega sessão ativa, porque hash não é aceito na renovação.
+model SessaoAcesso {
+  id            String         @id @db.Uuid
+  usuarioId     String         @map("usuario_id") @db.Uuid
+  /// Cadeia de renovações do mesmo login. É por ela que se revoga tudo de uma vez.
+  familiaId     String         @map("familia_id") @db.Uuid
+  dispositivoId String         @map("dispositivo_id") @db.Uuid
+  contexto      ContextoSessao
+  hashRefresh   String         @map("hash_refresh")
+  algoritmoRefresh String      @map("algoritmo_refresh") @db.VarChar(20)
+  criadaEm      DateTime       @map("criada_em") @db.Timestamptz(3)
+  expiraEm      DateTime       @map("expira_em") @db.Timestamptz(3)
+  revogadaEm    DateTime?      @map("revogada_em") @db.Timestamptz(3)
+  /// Quando o refresh foi gasto. Reaparecer depois disto é reúso.
+  usadaEm       DateTime?      @map("usada_em") @db.Timestamptz(3)
+  sucessoraId   String?        @map("sucessora_id") @db.Uuid
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Revogar a família inteira é uma operação só, e precisa de índice.
+  @@index([familiaId], map: "idx_sessoes_familia")
+  @@index([usuarioId], map: "idx_sessoes_usuario")
+  // O worker de limpeza remove as vencidas.
+  @@index([expiraEm], map: "idx_sessoes_expiracao")
+  @@map("sessoes_acesso")
+}

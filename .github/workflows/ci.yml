@@ -43,6 +43,7 @@ jobs:
 
     env:
       DATABASE_URL_TESTE: postgresql://erp:erp@localhost:5432/erp_teste
+      DATABASE_URL_TESTE_API: postgresql://erp:erp@localhost:5432/erp_teste_api
 
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +54,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      - name: Criar bancos de teste
+        # Um por suíte: o Turbo roda os pacotes em paralelo, e duas suítes
+        # truncando as mesmas tabelas dariam falha intermitente.
+        run: |
+          PGPASSWORD=erp psql -h localhost -U erp -d erp_teste -c "SELECT 1" >/dev/null
+          PGPASSWORD=erp createdb -h localhost -U erp erp_teste_api
 
       - name: Instalar dependências
         # --frozen-lockfile: o CI nunca resolve versão diferente da do

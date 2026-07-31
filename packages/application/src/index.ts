@@ -33,3 +33,29 @@ export {
   RegistrarPagamento,
   type SaidaRegistrarPagamento,
 } from "./casos-de-uso/vendas/RegistrarPagamento.js";
+
+// ── Acesso ──────────────────────────────────────────────────────────────
+export type { Hasher } from "./portas/infraestrutura/Hasher.js";
+export type {
+  PapelRepository,
+  SessaoAcessoRepository,
+  UsuarioRepository,
+} from "./portas/repositorios/RepositoriosAcesso.js";
+export {
+  Autenticar,
+  type EntradaAutenticar,
+  HORAS_SESSAO_PDV,
+  HORAS_SESSAO_RETAGUARDA,
+  type SaidaAutenticar,
+  vencimento,
+} from "./casos-de-uso/acesso/Autenticar.js";
+export {
+  AutorizarOperacao,
+  type CredencialSupervisor,
+  type EntradaAutorizar,
+} from "./casos-de-uso/acesso/AutorizarOperacao.js";
+export {
+  type EntradaRenovarSessao,
+  RenovarSessao,
+  type SaidaRenovarSessao,
+} from "./casos-de-uso/acesso/RenovarSessao.js";

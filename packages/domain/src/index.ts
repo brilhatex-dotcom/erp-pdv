@@ -123,6 +123,8 @@ export {
   type CredencialBloqueada,
   credencialBloqueada,
   type EventoIdentidade,
+  type FamiliaDeSessaoRevogada,
+  familiaDeSessaoRevogada,
   type OperacaoAutorizadaPorSupervisor,
   operacaoAutorizadaPorSupervisor,
   type TentativaRecusada,
@@ -149,6 +151,12 @@ export {
   podeAutorizar,
 } from "./identidade/PoliticaAutorizacao.js";
 export { Senha, TAMANHO_MINIMO_SENHA } from "./identidade/Senha.js";
+export {
+  type ContextoSessao,
+  type DadosReconstituicaoSessao,
+  type DadosSessaoAcesso,
+  SessaoAcesso,
+} from "./identidade/SessaoAcesso.js";
 export {
   type DadosReconstituicaoUsuario,
   type DadosUsuario,

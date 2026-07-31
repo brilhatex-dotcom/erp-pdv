@@ -1,20 +1,26 @@
 import {
   type CodigoUnidade,
+  CredencialHash,
   type DomainError,
   type DomainEvent,
   err,
   type Identificador,
+  type Matricula,
   montarUuidV7,
   type MovimentoEstoque,
+  type Papel,
   type Produto,
   type Result,
   SaldoEstoque,
+  type SessaoAcesso,
   type SessaoCaixa,
+  type Usuario,
   type Venda,
 } from "@erp/domain";
 
 import { ErroInfraestrutura } from "../erros/ErroInfraestrutura.js";
 import type { GeradorId } from "../portas/infraestrutura/GeradorId.js";
+import type { Hasher } from "../portas/infraestrutura/Hasher.js";
 import type { Relogio } from "../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../portas/infraestrutura/UnitOfWork.js";
 import type {
@@ -25,6 +31,11 @@ import type {
   Repositorios,
   VendaRepository,
 } from "../portas/repositorios/Repositorios.js";
+import type {
+  PapelRepository,
+  SessaoAcessoRepository,
+  UsuarioRepository,
+} from "../portas/repositorios/RepositoriosAcesso.js";
 
 /**
  * Dublês em memória das portas.
@@ -178,6 +189,8 @@ export class OutboxEmMemoria implements OutboxRepository {
 export class UnitOfWorkEmMemoria implements UnitOfWork {
   falharAoConfirmar = false;
   transacoes = 0;
+  /** Transações desfeitas por erro devolvido pelo trabalho. */
+  desfeitas = 0;
 
   constructor(readonly repositorios: Repositorios) {}
 
@@ -191,10 +204,124 @@ export class UnitOfWorkEmMemoria implements UnitOfWork {
     }
 
     try {
-      return await trabalho(this.repositorios);
+      const resultado = await trabalho(this.repositorios);
+
+      // Não desfaz os dados — os dublês guardam referências, não cópias —, mas
+      // **conta** o rollback. É o que permite um teste afirmar que uma
+      // gravação que precisa sobreviver não está sendo devolvida com `err`.
+      if (resultado.isErr()) this.desfeitas += 1;
+
+      return resultado;
     } catch (causa) {
       return err(ErroInfraestrutura.de(causa));
     }
+  }
+}
+
+export class UsuarioRepositorioEmMemoria implements UsuarioRepository {
+  readonly itens = new Map<string, Usuario>();
+
+  adicionar(usuario: Usuario): void {
+    this.itens.set(usuario.id.valor, usuario);
+  }
+
+  porId(id: Identificador): Promise<Usuario | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porMatricula(matricula: Matricula): Promise<Usuario | undefined> {
+    for (const usuario of this.itens.values()) {
+      if (usuario.matricula.equals(matricula)) return Promise.resolve(usuario);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  salvar(usuario: Usuario): Promise<void> {
+    this.itens.set(usuario.id.valor, usuario);
+    return Promise.resolve();
+  }
+}
+
+export class PapelRepositorioEmMemoria implements PapelRepository {
+  readonly itens = new Map<string, Papel>();
+
+  adicionar(papel: Papel): void {
+    this.itens.set(papel.id.valor, papel);
+  }
+
+  porId(id: Identificador): Promise<Papel | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porCodigo(codigo: string): Promise<Papel | undefined> {
+    for (const papel of this.itens.values()) {
+      if (papel.codigo === codigo.trim().toUpperCase()) return Promise.resolve(papel);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  todos(): Promise<readonly Papel[]> {
+    return Promise.resolve([...this.itens.values()]);
+  }
+
+  salvar(papel: Papel): Promise<void> {
+    this.itens.set(papel.id.valor, papel);
+    return Promise.resolve();
+  }
+}
+
+export class SessaoAcessoRepositorioEmMemoria implements SessaoAcessoRepository {
+  readonly itens = new Map<string, SessaoAcesso>();
+
+  porId(id: Identificador): Promise<SessaoAcesso | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  salvar(sessao: SessaoAcesso): Promise<void> {
+    this.itens.set(sessao.id.valor, sessao);
+    return Promise.resolve();
+  }
+
+  revogarFamilia(familiaId: Identificador, agora: Date): Promise<void> {
+    for (const sessao of this.itens.values()) {
+      if (sessao.familiaId.equals(familiaId)) sessao.revogar(agora);
+    }
+    return Promise.resolve();
+  }
+
+  revogarDoUsuario(usuarioId: Identificador, agora: Date): Promise<void> {
+    for (const sessao of this.itens.values()) {
+      if (sessao.usuarioId.equals(usuarioId)) sessao.revogar(agora);
+    }
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Hasher falso — reversível e instantâneo.
+ *
+ * Não usa Argon2id de propósito: o custo dele é deliberadamente alto, e uma
+ * suíte que o chamasse a cada teste passaria a ser medida em minutos. O que se
+ * testa aqui é o **fluxo**, não a criptografia.
+ */
+export class HasherFalso implements Hasher {
+  readonly algoritmo = "falso";
+  /** Quantas vezes o tempo foi gasto sem conferir nada. */
+  tempoGastoEmVao = 0;
+
+  hash(textoEmClaro: string): Promise<CredencialHash> {
+    return Promise.resolve(
+      CredencialHash.criar(`falso:${textoEmClaro}`, this.algoritmo).unwrap(),
+    );
+  }
+
+  confere(textoEmClaro: string, hash: CredencialHash): Promise<boolean> {
+    return Promise.resolve(hash.valor === `falso:${textoEmClaro}`);
+  }
+
+  gastarTempoEquivalente(): Promise<void> {
+    this.tempoGastoEmVao += 1;
+    return Promise.resolve();
   }
 }
 
@@ -205,6 +332,10 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly estoque: EstoqueRepositorioEmMemoria;
   readonly caixas: CaixaRepositorioEmMemoria;
   readonly outbox: OutboxEmMemoria;
+  readonly usuarios: UsuarioRepositorioEmMemoria;
+  readonly papeis: PapelRepositorioEmMemoria;
+  readonly sessoes: SessaoAcessoRepositorioEmMemoria;
+  readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
   readonly geradorId: GeradorIdSequencial;
@@ -214,6 +345,9 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const estoque = new EstoqueRepositorioEmMemoria();
   const caixas = new CaixaRepositorioEmMemoria();
   const outbox = new OutboxEmMemoria();
+  const usuarios = new UsuarioRepositorioEmMemoria();
+  const papeis = new PapelRepositorioEmMemoria();
+  const sessoes = new SessaoAcessoRepositorioEmMemoria();
 
   return {
     produtos,
@@ -221,7 +355,20 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     estoque,
     caixas,
     outbox,
-    unitOfWork: new UnitOfWorkEmMemoria({ produtos, vendas, estoque, caixas, outbox }),
+    usuarios,
+    papeis,
+    sessoes,
+    hasher: new HasherFalso(),
+    unitOfWork: new UnitOfWorkEmMemoria({
+      produtos,
+      vendas,
+      estoque,
+      caixas,
+      outbox,
+      usuarios,
+      papeis,
+      sessoes,
+    }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),
   };

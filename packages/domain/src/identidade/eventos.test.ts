@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Identificador } from "../shared/Identificador.js";
 import {
   credencialBloqueada,
+  familiaDeSessaoRevogada,
   operacaoAutorizadaPorSupervisor,
   tentativaRecusada,
 } from "./eventos.js";
@@ -61,5 +62,20 @@ describe("Eventos de identidade", () => {
     );
 
     expect(evento.agregadoId.equals(OPERADOR)).toBe(true);
+  });
+});
+
+describe("Revogação de família por reúso", () => {
+  it("🔑 aponta para a família, não só para a sessão que foi flagrada", () => {
+    // Revogar só o token que o ladrão usou não adiantaria: ele já teria o
+    // próximo em mãos. É a cadeia inteira que precisa cair.
+    const familia = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4fd003").unwrap();
+    const evento = familiaDeSessaoRevogada(OPERADOR, SUPERVISOR, familia, AGORA);
+
+    expect(evento.tipo).toBe("FamiliaDeSessaoRevogada");
+    expect(evento.agregadoId.equals(OPERADOR)).toBe(true);
+    expect(evento.usuarioId.equals(SUPERVISOR)).toBe(true);
+    expect(evento.familiaId.equals(familia)).toBe(true);
+    expect(evento.ocorridoEm).toBe(AGORA);
   });
 });
