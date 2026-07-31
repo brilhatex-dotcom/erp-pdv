@@ -116,3 +116,46 @@ export {
   SessaoCaixa,
   type StatusCaixa,
 } from "./caixa/SessaoCaixa.js";
+
+// ── Acesso ──────────────────────────────────────────────────────────────
+export {
+  ALCADA_SIMPLES,
+  type Alcada,
+  type Decisao,
+  decidir,
+  type Pedido,
+  podeAutorizar,
+} from "./acesso/autorizacao.js";
+export {
+  type AcessoAutorizado,
+  acessoAutorizado,
+  type AcessoRecusado,
+  acessoRecusado,
+  type EventoAcesso,
+  type MeioDeAcesso,
+  type UsuarioBloqueado,
+  usuarioBloqueado,
+} from "./acesso/eventos.js";
+export { HashCredencial } from "./acesso/HashCredencial.js";
+export {
+  type DadosLimites,
+  ILIMITADO,
+  type LimiteDinheiro,
+  type LimiteMinutos,
+  LimitesPapel,
+  PERCENTUAL_TOTAL,
+} from "./acesso/LimitesPapel.js";
+export { Matricula } from "./acesso/Matricula.js";
+export { type DadosPapel, Papel, papeisDeFabrica } from "./acesso/Papel.js";
+export { ehPermissao, type Permissao, PERMISSOES } from "./acesso/Permissao.js";
+export { Pin } from "./acesso/Pin.js";
+export { Senha } from "./acesso/Senha.js";
+export {
+  BLOQUEIO_INICIAL_MINUTOS,
+  BLOQUEIO_MAXIMO_MINUTOS,
+  type DadosReconstituicaoUsuario,
+  type DadosUsuario,
+  type MotivoImpedimento,
+  TENTATIVAS_ATE_BLOQUEIO,
+  Usuario,
+} from "./acesso/Usuario.js";
