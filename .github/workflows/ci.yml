@@ -1,8 +1,18 @@
 name: CI
 
+# Quando o CI roda.
+#
+# `claude/**` está aqui por causa de um defeito de processo, não de gosto: com o
+# gatilho restrito a `main` e `pull_request`, a branch de trabalho ficava **sem
+# CI nenhum** entre o merge de um PR e a abertura do próximo. Foi nessa janela
+# que quatro defeitos atravessaram o repositório sem serem vistos — entre eles um
+# pacote que publicava `dist` sem o cliente do Prisma e um portão de cobertura
+# que dependia de variável de ambiente.
+#
+# Portão que só existe quando alguém lembra de abrir um PR não é portão.
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "claude/**"]
   pull_request:
   workflow_dispatch:
 
