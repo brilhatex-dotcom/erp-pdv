@@ -16,7 +16,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 
 | ADR | Decisão | Status |
 |---|---|---|
-| [0001](0001-topologia-local-first.md) | Servidor local com contingência no cliente | Aceito |
+| 0001 | Servidor local com contingência no cliente | Aceito |
 | 0002 | SQLite como banco padrão | ❌ **Superseado por [0013](0013-postgresql-unico-embarcado.md)** |
 | 0003 | Monorepo com pnpm + Turborepo | Aceito |
 | 0004 | Arquitetura hexagonal com domínio puro | Aceito |
