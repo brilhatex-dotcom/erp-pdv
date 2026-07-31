@@ -1,7 +1,7 @@
 import { ErroInfraestrutura, type Repositorios, type UnitOfWork } from "@erp/application";
 import { type DomainError, err, type Result } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "./gerado/index.js";
+import type { Prisma, PrismaClient } from "../gerado/index.js";
 import { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
 import { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 import { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";

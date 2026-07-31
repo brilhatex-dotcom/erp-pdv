@@ -21,7 +21,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
 | **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
 | **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
-| Etapa 6 — Servidor HTTP (`apps/server`) | ⬜ Próxima |
+| **Etapa 6 — Fundação HTTP** | ✅ **Concluída** — `@erp/contracts`, Fastify, tradução de erro, correlação, saúde e prontidão. 962 testes |
+| Etapa 7 — Autenticação, papéis e permissões | ⬜ Próxima — as rotas de negócio entram junto, já protegidas ([ADR-0018](docs/adr/0018-fronteira-http-erro-traduzido-e-autenticacao-obrigatoria.md)) |
 
 ## Requisitos
 
@@ -36,7 +37,14 @@ pnpm install          # instala as dependências do monorepo
 pnpm db:up            # sobe o PostgreSQL 17 (porta 55432)
 pnpm db:migrate       # aplica as migrações no banco de desenvolvimento
 pnpm verify           # roda TODOS os portões de qualidade
+pnpm serve            # sobe o servidor da loja em http://127.0.0.1:3000
 ```
+
+Com o servidor no ar, `curl http://127.0.0.1:3000/pronto` diz se ele consegue
+atender — é a mesma consulta que o instalador faz ao final e que o PDV usa para
+decidir entrar em contingência. Copie `apps/server/.env.example` para
+`apps/server/.env` antes: o servidor recusa subir sem `DATABASE_URL`, e recusa
+dizendo qual variável falta.
 
 O `db:up` cria dois bancos: `erp_pdv` para desenvolvimento e `erp_teste` para a
 suíte de integração. São separados de propósito — os testes truncam as tabelas
@@ -53,6 +61,8 @@ passa no CI.
 |---|---|
 | `pnpm verify` | Todos os portões de qualidade (use antes de commitar) |
 | `pnpm build` | Compila todos os pacotes |
+| `pnpm serve` | Sobe o servidor da loja (exige `build` antes) |
+| `pnpm serve:dev` | Sobe o servidor relendo o código a cada alteração |
 | `pnpm test` | Testes |
 | `pnpm test:cov` | Testes com cobertura (mínimo 90% no domínio) |
 | `pnpm typecheck` | Verificação de tipos |
@@ -66,12 +76,14 @@ passa no CI.
 ## Estrutura
 
 ```
-apps/          aplicações executáveis (criadas nas suas etapas)
+apps/
+  server/      servidor da loja: HTTP, composição de dependências e jobs
 packages/
   config/      configurações compartilhadas de TS, ESLint e Vitest
   utils/       validadores e formatadores puros (CPF, CNPJ, texto)
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
+  contracts/   schemas Zod da API — fonte única do formato que trafega
   database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)

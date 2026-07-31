@@ -40,4 +40,4 @@ npm-debug.log*
 packages/database/.env
 
 # Cliente do Prisma: gerado por `prisma generate` no build, nunca versionado.
-packages/database/src/gerado/
+packages/database/gerado/

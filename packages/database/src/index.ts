@@ -1,6 +1,6 @@
 // ── Cliente ─────────────────────────────────────────────────────────────
 export { criarPrismaClient, type OpcoesPrisma } from "./cliente.js";
-export { PrismaClient } from "./gerado/index.js";
+export { PrismaClient } from "../gerado/index.js";
 
 // ── Unidade de trabalho ─────────────────────────────────────────────────
 export {

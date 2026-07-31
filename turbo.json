@@ -1,26 +1,49 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "stream",
+
+  // O Turborepo 2 roda as tarefas em ambiente **estrito**: só as variáveis
+  // declaradas aqui chegam ao processo filho. Não declarar é como o CI falha de
+  // um jeito difícil de entender — a suíte de integração não recebe a URL do
+  // banco de teste, cai no valor padrão de desenvolvimento e acusa "banco fora
+  // do ar" numa máquina onde o banco está no ar.
+  "globalEnv": ["NODE_ENV"],
+
+  // Repassadas sem entrar no hash: dizem **como** alcançar a rede, não o que
+  // construir. Sem elas, o `prisma generate` atrás de proxy corporativo falha na
+  // verificação de certificado — e mudar de rede não deve invalidar o cache.
+  "globalPassThroughEnv": [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "NODE_EXTRA_CA_CERTS"
+  ],
+
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", "gerado/**"],
+      "env": ["DATABASE_URL"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL"]
     },
     "lint": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL"]
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL", "DATABASE_URL_TESTE"]
     },
     "test:cov": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "env": ["DATABASE_URL", "DATABASE_URL_TESTE"]
     }
   }
 }

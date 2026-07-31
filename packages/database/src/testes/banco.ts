@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { PrismaClient } from "../gerado/index.js";
+import { PrismaClient } from "../../gerado/index.js";
 
 /**
  * Banco de teste.

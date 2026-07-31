@@ -6,7 +6,7 @@ import {
   SaldoEstoque,
 } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "../gerado/index.js";
+import type { Prisma, PrismaClient } from "../../gerado/index.js";
 import { paraDinheiro, paraId, paraUnidade } from "../mapeadores/comuns.js";
 
 type ClientePrisma = PrismaClient | Prisma.TransactionClient;

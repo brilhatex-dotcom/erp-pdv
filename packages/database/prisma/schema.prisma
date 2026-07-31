@@ -12,7 +12,12 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/gerado"
+  // Na raiz do pacote, e não em `src/`: o cliente gerado é JavaScript, e o
+  // `tsc` não copia JavaScript para `dist/`. Com ele dentro de `src/`, o pacote
+  // compilado ficava sem o cliente e só quebrava para quem o importasse de
+  // fora — defeito invisível enquanto `@erp/database` era testado a partir do
+  // próprio `src/`. Na raiz, `../gerado` resolve igual de `src/` e de `dist/`.
+  output   = "../gerado"
 }
 
 datasource db {

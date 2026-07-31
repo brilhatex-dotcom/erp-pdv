@@ -159,7 +159,7 @@ module.exports = {
         "\\.(config|base)\\.(ts|mts|cts|mjs|cjs|js)$",
         // Cliente gerado pelo Prisma. O grafo descreve decisões de arquitetura
         // nossas; código que a ferramenta reescreve a cada migração não é uma.
-        "src/gerado",
+        "(^|/)gerado/",
       ],
     },
     tsPreCompilationDeps: true,

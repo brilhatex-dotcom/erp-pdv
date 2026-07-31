@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.2 |
+| **Versão do documento** | 1.3 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -17,6 +17,8 @@
 |---|---|---|
 | 1.0 | 30/07/2026 | Versão inicial |
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
+| **1.2** | 30/07/2026 | **ADR-0014, ADR-0015 e ADR-0016**: escopo restrito a varejo (serviços e NFS-e fora do produto), emissão fiscal via provedor externo atrás da porta `ProvedorFiscal` e módulo fiscal opcional por empresa. Impacta §1.4, §5 e §15. |
+| **1.3** | 31/07/2026 | **ADR-0018 e ADR-0019**: fronteira HTTP com envelope de erro único e nenhuma rota de negócio sem autenticação; dinheiro e quantidade trafegam como texto inteiro no JSON. Acrescenta a seta `@erp/contracts → apps/server` ao grafo de §3.3, que o texto de §2.6 já exigia. |
 
 ---
 
@@ -448,6 +450,7 @@ graph BT
     DOMAIN --> APP
     UTILS --> DOMAIN
     CONTRACTS --> APP
+    CONTRACTS --> SERVER
     APP --> SERVER
     DB --> SERVER
     FISCAL --> SERVER
@@ -467,6 +470,7 @@ graph BT
 
 **Leitura das regras críticas:**
 - `@erp/domain` não depende de **nada** (exceto `@erp/utils`, que também é puro).
+- `@erp/contracts` é usado **pelo servidor e pelos clientes**: é o servidor que valida a requisição em runtime com o mesmo schema de que o cliente derivou o tipo (§2.6). Essa seta faltava no grafo até a versão 1.3 deste documento, embora o texto de §2.6 já a exigisse.
 - `@erp/database` e `@erp/fiscal` implementam portas de `@erp/application` — a seta aponta para dentro.
 - `apps/pdv` importa `@erp/domain` para calcular carrinho **localmente** (sem servidor) — é isso que permite o modo offline.
 - Nenhum `app` importa outro `app`.

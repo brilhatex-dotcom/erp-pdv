@@ -5,7 +5,7 @@ import {
   type SessaoCaixa,
 } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "../gerado/index.js";
+import type { Prisma, PrismaClient } from "../../gerado/index.js";
 import {
   movimentosParaLinhas,
   paraDominio,

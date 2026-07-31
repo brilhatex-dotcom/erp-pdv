@@ -2,7 +2,7 @@ import type { ProdutoRepository } from "@erp/application";
 import type { Identificador, Produto } from "@erp/domain";
 import { normalizarParaBusca } from "@erp/utils";
 
-import type { Prisma, PrismaClient } from "../gerado/index.js";
+import type { Prisma, PrismaClient } from "../../gerado/index.js";
 import { paraDominio, paraLinha } from "../mapeadores/produtoMapeador.js";
 
 type ClientePrisma = PrismaClient | Prisma.TransactionClient;

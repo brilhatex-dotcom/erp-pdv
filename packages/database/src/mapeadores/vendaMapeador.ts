@@ -4,7 +4,7 @@ import type {
   Pagamento as PagamentoLinha,
   Venda as VendaLinha,
   VendaItem as ItemLinha,
-} from "../gerado/index.js";
+} from "../../gerado/index.js";
 import {
   ouNulo,
   paraDinheiro,

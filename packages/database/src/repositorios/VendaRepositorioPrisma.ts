@@ -1,7 +1,7 @@
 import type { VendaRepository } from "@erp/application";
 import type { Identificador, Venda } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "../gerado/index.js";
+import type { Prisma, PrismaClient } from "../../gerado/index.js";
 import {
   itensParaLinhas,
   pagamentosParaLinhas,

@@ -1,0 +1,33 @@
+{
+  "name": "@erp/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor da loja — HTTP, composição de dependências e jobs",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "start": "node --enable-source-maps --env-file-if-exists=.env dist/main.js",
+    "dev": "node --experimental-strip-types --watch --env-file-if-exists=.env src/main.ts"
+  },
+  "dependencies": {
+    "@erp/application": "workspace:*",
+    "@erp/contracts": "workspace:*",
+    "@erp/database": "workspace:*",
+    "@erp/domain": "workspace:*",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "fastify": "^5.6.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "@types/node": "^22.18.6",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
