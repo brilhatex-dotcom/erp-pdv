@@ -1,4 +1,5 @@
 // ── Erros ───────────────────────────────────────────────────────────────
+export { agregarErros } from "./erros/agregarErros.js";
 export { ErroInfraestrutura } from "./erros/ErroInfraestrutura.js";
 
 // ── Portas ──────────────────────────────────────────────────────────────
@@ -59,3 +60,35 @@ export {
   RenovarSessao,
   type SaidaRenovarSessao,
 } from "./casos-de-uso/acesso/RenovarSessao.js";
+
+// ── Cadastros ───────────────────────────────────────────────────────────
+export type {
+  CategoriaRepository,
+  ClienteRepository,
+  FiltroBusca,
+  FornecedorRepository,
+} from "./portas/repositorios/RepositoriosCadastros.js";
+export {
+  AlterarCategoria,
+  type EntradaAlterarCategoria,
+} from "./casos-de-uso/cadastros/AlterarCategoria.js";
+export {
+  AlterarCliente,
+  type EntradaAlterarCliente,
+} from "./casos-de-uso/cadastros/AlterarCliente.js";
+export {
+  AlterarFornecedor,
+  type EntradaAlterarFornecedor,
+} from "./casos-de-uso/cadastros/AlterarFornecedor.js";
+export {
+  CadastrarCategoria,
+  type EntradaCadastrarCategoria,
+} from "./casos-de-uso/cadastros/CadastrarCategoria.js";
+export {
+  CadastrarCliente,
+  type EntradaCadastrarCliente,
+} from "./casos-de-uso/cadastros/CadastrarCliente.js";
+export {
+  CadastrarFornecedor,
+  type EntradaCadastrarFornecedor,
+} from "./casos-de-uso/cadastros/CadastrarFornecedor.js";

@@ -23,6 +23,18 @@ export function normalizarParaBusca(valor: string): string {
     .trim();
 }
 
+/**
+ * Normaliza um campo opcional: ausente e vazio significam a mesma coisa.
+ *
+ * Sem isto, um formulário que envia `""` para "não informado" grava string
+ * vazia no banco, e a consulta `WHERE apelido IS NULL` deixa de encontrar
+ * justamente os registros sem apelido.
+ */
+export function textoOpcional(bruto: string | undefined): string | undefined {
+  const valor = bruto?.trim();
+  return valor === undefined || valor === "" ? undefined : valor;
+}
+
 /** Repete `caractere` à esquerda até `valor` atingir `tamanho`. */
 export function preencherEsquerda(
   valor: string,

@@ -5,6 +5,7 @@ import {
   apenasDigitos,
   normalizarParaBusca,
   preencherEsquerda,
+  textoOpcional,
 } from "./texto.js";
 
 describe("apenasDigitos", () => {
@@ -68,5 +69,22 @@ describe("preencherEsquerda", () => {
 
   it("não trunca quando é maior que o tamanho", () => {
     expect(preencherEsquerda("12345", 3, "0")).toBe("12345");
+  });
+});
+
+describe("textoOpcional", () => {
+  it("devolve o texto sem espaço em volta", () => {
+    expect(textoOpcional("  Dona Maria  ")).toBe("Dona Maria");
+  });
+
+  it("trata ausente como não informado", () => {
+    expect(textoOpcional(undefined)).toBeUndefined();
+  });
+
+  it("🔑 trata vazio e só-espaço como não informado", () => {
+    // O formulário envia `""` para campo em branco; gravar string vazia faria
+    // `WHERE apelido IS NULL` deixar de encontrar quem não tem apelido.
+    expect(textoOpcional("")).toBeUndefined();
+    expect(textoOpcional("   ")).toBeUndefined();
   });
 });

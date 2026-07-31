@@ -23,7 +23,19 @@ export type { ValueObject } from "./shared/ValueObject.js";
 export { CNPJ } from "./valores/CNPJ.js";
 export { CPF } from "./valores/CPF.js";
 export { Dinheiro } from "./valores/Dinheiro.js";
+export { Documento, type TipoDocumento } from "./valores/Documento.js";
+export { Email } from "./valores/Email.js";
+export { type DadosEndereco, Endereco } from "./valores/Endereco.js";
+export { InscricaoEstadual } from "./valores/InscricaoEstadual.js";
 export { CASAS_DECIMAIS, Quantidade } from "./valores/Quantidade.js";
+export { Telefone } from "./valores/Telefone.js";
+export {
+  ehSiglaUF,
+  obterUF,
+  type SiglaUF,
+  UFS,
+  type UnidadeFederativa,
+} from "./valores/UF.js";
 export {
   type CodigoUnidade,
   ehCodigoUnidade,
@@ -31,6 +43,11 @@ export {
   UNIDADES,
   type UnidadeMedida,
 } from "./valores/UnidadeMedida.js";
+
+// ── Cadastros ───────────────────────────────────────────────────────────
+export { Categoria, type DadosCategoria } from "./cadastros/Categoria.js";
+export { Cliente, type DadosCliente, type TipoPessoa } from "./cadastros/Cliente.js";
+export { type DadosFornecedor, Fornecedor } from "./cadastros/Fornecedor.js";
 
 // ── Catálogo ────────────────────────────────────────────────────────────
 export {

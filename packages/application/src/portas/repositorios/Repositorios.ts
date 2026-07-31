@@ -1,4 +1,9 @@
 import type {
+  CategoriaRepository,
+  ClienteRepository,
+  FornecedorRepository,
+} from "./RepositoriosCadastros.js";
+import type {
   PapelRepository,
   SessaoAcessoRepository,
   UsuarioRepository,
@@ -79,4 +84,7 @@ export interface Repositorios {
   readonly usuarios: UsuarioRepository;
   readonly papeis: PapelRepository;
   readonly sessoes: SessaoAcessoRepository;
+  readonly categorias: CategoriaRepository;
+  readonly clientes: ClienteRepository;
+  readonly fornecedores: FornecedorRepository;
 }

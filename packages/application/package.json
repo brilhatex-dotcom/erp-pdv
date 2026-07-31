@@ -23,7 +23,8 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@erp/domain": "workspace:*"
+    "@erp/domain": "workspace:*",
+    "@erp/utils": "workspace:*"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",
