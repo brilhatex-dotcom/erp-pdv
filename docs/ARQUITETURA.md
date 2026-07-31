@@ -1081,7 +1081,7 @@ Papel puro não basta para um ERP. "Pode dar desconto" precisa responder **quant
 
 ```mermaid
 graph LR
-    U[Usuário] -->|possui| P[Papéis]
+    U[Usuário] -->|possui **um**| P[Papel]
     P -->|concede| PERM[Permissões<br/>recurso:ação]
     U -->|restrito a| ESC[Escopo<br/>loja / estação]
     P -->|limitado por| LIM[Limites<br/>desconto máx., valor máx.]
@@ -1106,6 +1106,8 @@ graph LR
 | **ADMIN** | Configuração total, usuários, fiscal, integrações | — (todas as ações auditadas) |
 
 Papéis são **personalizáveis**: a empresa cria papéis próprios combinando permissões. Os acima são o padrão de fábrica.
+
+**Cada usuário tem exatamente um papel.** Papel múltiplo por usuário obrigaria a explicar composição de permissões a quem não tem equipe de TI, e a resposta a "por que o João consegue isso?" passaria a exigir somar conjuntos mentalmente — custo de suporte que ninguém paga. A necessidade real ("um funcionário que vende **e** repõe estoque") já é atendida criando um papel com as duas coisas, que é uma configuração que o dono da loja entende olhando.
 
 ### 9.3 Nomenclatura de permissões
 

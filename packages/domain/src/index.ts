@@ -116,3 +116,45 @@ export {
   SessaoCaixa,
   type StatusCaixa,
 } from "./caixa/SessaoCaixa.js";
+
+// ── Identidade ──────────────────────────────────────────────────────────
+export { CredencialHash } from "./identidade/CredencialHash.js";
+export {
+  type CredencialBloqueada,
+  credencialBloqueada,
+  type EventoIdentidade,
+  type OperacaoAutorizadaPorSupervisor,
+  operacaoAutorizadaPorSupervisor,
+  type TentativaRecusada,
+  tentativaRecusada,
+} from "./identidade/eventos.js";
+export { Matricula } from "./identidade/Matricula.js";
+export {
+  BASE_PERCENTUAL,
+  type DadosPapel,
+  type LimitesPapel,
+  Papel,
+} from "./identidade/Papel.js";
+export {
+  type CodigoPapelPadrao,
+  MODELOS_PAPEL_PADRAO,
+  papelPadrao,
+} from "./identidade/papeisPadrao.js";
+export { ehPermissao, type Permissao, PERMISSOES } from "./identidade/Permissao.js";
+export { Pin, TAMANHO_PIN } from "./identidade/Pin.js";
+export {
+  type AcaoSolicitada,
+  avaliar,
+  type Decisao,
+  podeAutorizar,
+} from "./identidade/PoliticaAutorizacao.js";
+export { Senha, TAMANHO_MINIMO_SENHA } from "./identidade/Senha.js";
+export {
+  type DadosReconstituicaoUsuario,
+  type DadosUsuario,
+  type ErroUsuario,
+  MINUTOS_BLOQUEIO_MAXIMO,
+  MINUTOS_PRIMEIRO_BLOQUEIO,
+  TENTATIVAS_ATE_BLOQUEIO,
+  Usuario,
+} from "./identidade/Usuario.js";

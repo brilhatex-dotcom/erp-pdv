@@ -21,7 +21,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
 | **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
 | **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
-| Etapa 6 — Servidor HTTP (`apps/server`) | ⬜ Próxima |
+| **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
+| Etapa 6b — Servidor HTTP (`apps/server`) | ⬜ Próxima |
 
 ## Requisitos
 
