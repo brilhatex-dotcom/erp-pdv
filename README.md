@@ -33,6 +33,7 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 8 — PDV: tela de venda** | ✅ **Concluída** — bipagem, carrinho, pagamento e troco, a venda inteira sem mouse. 1.243 testes |
 | **Etapa 8b — Correções e persistência dos cadastros** | ✅ **Concluída** — login do balcão, abertura de caixa, e categoria/cliente/fornecedor no Postgres. 1.490 testes |
 | **Etapa 8c — Cadastros ponta a ponta** | ✅ **Concluída** — rotas HTTP, permissões e tela de clientes na retaguarda. 1.537 testes |
+| **Etapa 8d — Fornecedores e categorias** | ✅ **Concluída** — as três telas de cadastro, com abas por permissão. 1.555 testes |
 | Etapa 9 — PDV: casca Electron, impressora e gaveta | ⬜ Próxima |
 
 ## Requisitos

@@ -2,7 +2,9 @@ import { Botao, Carregando } from "@erp/ui";
 import { type ReactNode, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
+import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
+import { Fornecedores } from "./telas/Fornecedores.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Login } from "./telas/Login.js";
 
@@ -30,10 +32,20 @@ export function App(): ReactNode {
   return <Retaguarda />;
 }
 
-/** Telas da retaguarda. Lista curta de propósito — cresce por etapa. */
+/**
+ * Telas da retaguarda.
+ *
+ * Cada seção declara a permissão que a habilita. Mostrar uma aba que só
+ * responde "sem permissão" ao ser clicada é pior do que escondê-la: o usuário
+ * tenta, falha e abre chamado perguntando o que está quebrado.
+ *
+ * `undefined` significa "basta estar autenticado".
+ */
 const SECOES = [
-  { chave: "PRODUTOS", rotulo: "Produtos" },
-  { chave: "CLIENTES", rotulo: "Clientes" },
+  { chave: "PRODUTOS", rotulo: "Produtos", permissao: undefined },
+  { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
+  { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
+  { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -42,10 +54,8 @@ function Retaguarda(): ReactNode {
   const { usuario, sair, pode } = useSessao();
   const [secao, setSecao] = useState<Secao>("PRODUTOS");
 
-  // O operador de caixa que abre a retaguarda não deve ver uma aba que só
-  // devolve "sem permissão" ao ser clicada.
   const visiveis = SECOES.filter(
-    (atual) => atual.chave !== "CLIENTES" || pode("cliente:consultar"),
+    (atual) => atual.permissao === undefined || pode(atual.permissao),
   );
 
   return (
@@ -79,8 +89,21 @@ function Retaguarda(): ReactNode {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        {secao === "PRODUTOS" ? <ConsultarProduto /> : <Clientes />}
+        <Conteudo secao={secao} />
       </main>
     </div>
   );
+}
+
+function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
+  switch (secao) {
+    case "CLIENTES":
+      return <Clientes />;
+    case "FORNECEDORES":
+      return <Fornecedores />;
+    case "CATEGORIAS":
+      return <Categorias />;
+    default:
+      return <ConsultarProduto />;
+  }
 }

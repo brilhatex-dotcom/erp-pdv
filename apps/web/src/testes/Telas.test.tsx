@@ -902,3 +902,502 @@ describe("Edição de cliente", () => {
     });
   });
 });
+
+const FORNECEDOR = {
+  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0004",
+  razaoSocial: "Distribuidora Bebidas Boas Ltda",
+  nomeFantasia: "Bebidas Boas",
+  exibicao: "Bebidas Boas",
+  documento: "11222333000181",
+  telefone: "1938887766",
+  prazoEntregaDias: 7,
+  ativo: true,
+};
+
+const CATEGORIA = {
+  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0005",
+  nome: "Bebidas",
+  ativa: true,
+};
+
+const ESTOQUISTA = {
+  ...USUARIO_GERENTE,
+  nome: "Carlos Estoquista",
+  papel: "ESTOQUISTA",
+  permissoes: [
+    "produto:criar",
+    "categoria:gerenciar",
+    "fornecedor:consultar",
+    "fornecedor:cadastrar",
+    "fornecedor:editar",
+  ],
+};
+
+async function irPara(aba: string): Promise<void> {
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: aba })).toBeVisible();
+  });
+  await userEvent.click(screen.getByRole("button", { name: aba }));
+}
+
+describe("Cadastro de fornecedores", () => {
+  it("lista com documento e prazo de entrega", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [FORNECEDOR] }),
+    });
+
+    await irPara("Fornecedores");
+
+    await waitFor(() => {
+      expect(screen.getByText("Bebidas Boas")).toBeVisible();
+    });
+    expect(screen.getByText("11222333000181")).toBeVisible();
+    expect(screen.getByText("7 dias")).toBeVisible();
+  });
+
+  it("🔑 documento é obrigatório e o tamanho é conferido antes da rede", async () => {
+    // Fornecedor sem documento é cadastro que não fecha com nota nenhuma, e a
+    // divergência só aparece no inventário.
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [] }),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo fornecedor" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo fornecedor" }));
+
+    await userEvent.type(screen.getByLabelText(/Razão social/), "Distribuidora X Ltda");
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("CPF (11 dígitos)");
+    });
+    expect(corpos).toHaveLength(antes);
+
+    // Documento pela metade também não vai.
+    await userEvent.type(screen.getByLabelText(/CPF ou CNPJ/), "112223330");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("🔑 aceita CPF — o hortifruti compra do sitiante da região", async () => {
+    // Exigir CNPJ deixaria de fora o fornecedor principal de um segmento
+    // inteiro: produtor rural e MEI de bairro fornecem como pessoa física.
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [] }),
+      "POST /api/fornecedores": () => json(201, FORNECEDOR),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo fornecedor" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo fornecedor" }));
+
+    await userEvent.type(screen.getByLabelText(/Razão social/), "João da Silva Produtor");
+    await userEvent.type(screen.getByLabelText(/CPF ou CNPJ/), "52998224725");
+    await userEvent.type(screen.getByLabelText(/Prazo de entrega/), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      razaoSocial: "João da Silva Produtor",
+      documento: "52998224725",
+      prazoEntregaDias: 3,
+    });
+  });
+
+  it("editar traz o preenchido e permite desativar", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [FORNECEDOR] }),
+      "PUT /api/fornecedores/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0004": () =>
+        json(200, FORNECEDOR),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    expect(screen.getByLabelText(/Razão social/)).toHaveValue(
+      "Distribuidora Bebidas Boas Ltda",
+    );
+    expect(screen.getByLabelText(/Nome fantasia/)).toHaveValue("Bebidas Boas");
+
+    await userEvent.click(screen.getByLabelText("Fornecedor ativo"));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({ ativo: false });
+  });
+
+  it("recusa do servidor aparece sem perder o formulário", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [] }),
+      "POST /api/fornecedores": () =>
+        json(409, {
+          erro: { codigo: "X", mensagem: "Já existe fornecedor com este documento." },
+        }),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo fornecedor" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo fornecedor" }));
+
+    await userEvent.type(screen.getByLabelText(/Razão social/), "Distribuidora X Ltda");
+    await userEvent.type(screen.getByLabelText(/CPF ou CNPJ/), "11222333000181");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Já existe fornecedor");
+    });
+    expect(screen.getByLabelText(/Razão social/)).toHaveValue("Distribuidora X Ltda");
+  });
+
+  it("estados de vazio, busca sem resultado e falha", async () => {
+    let falhar = true;
+
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () =>
+        falhar
+          ? json(500, { erro: { codigo: "X", mensagem: "Servidor indisponível." } })
+          : json(200, { itens: [] }),
+    });
+
+    await irPara("Fornecedores");
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Servidor indisponível.");
+    });
+
+    falhar = false;
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ainda não há fornecedores/)).toBeVisible();
+    });
+
+    await userEvent.type(
+      screen.getByLabelText(/Procurar por razão social/),
+      "zzz{Enter}",
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nada para "zzz"/)).toBeVisible();
+    });
+  });
+
+  it("fornecedor sem prazo e inativo aparecem marcados", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () =>
+        json(200, {
+          itens: [
+            {
+              ...FORNECEDOR,
+              nomeFantasia: undefined,
+              prazoEntregaDias: undefined,
+              ativo: false,
+            },
+          ],
+        }),
+    });
+
+    await irPara("Fornecedores");
+
+    await waitFor(() => {
+      expect(screen.getByText("Inativo")).toBeVisible();
+    });
+    expect(screen.getByText("—")).toBeVisible();
+  });
+});
+
+describe("Categorias", () => {
+  it("🔑 cadastra na própria lista, sem abrir outra tela", async () => {
+    // Categoria tem um campo. Abrir tela para preencher um campo e voltar são
+    // três cliques onde cabe um.
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
+      "POST /api/categorias": () => json(201, CATEGORIA),
+    });
+
+    await irPara("Categorias");
+
+    await waitFor(() => {
+      expect(screen.getByText("Bebidas")).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Nova categoria/), "Hortifruti");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      nome: "Hortifruti",
+    });
+
+    // O campo esvazia e o foco volta: quem cria uma categoria cria três.
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Nova categoria/)).toHaveValue("");
+    });
+    expect(screen.getByLabelText(/Nova categoria/)).toHaveFocus();
+  });
+
+  it("renomeia na própria linha", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
+      "PUT /api/categorias/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0005": () =>
+        json(200, CATEGORIA),
+    });
+
+    await irPara("Categorias");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Renomear" }));
+
+    const campo = screen.getByLabelText(/Novo nome de Bebidas/);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, "Bebidas e sucos{Enter}");
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({
+      nome: "Bebidas e sucos",
+      ativa: true,
+    });
+  });
+
+  it("🔑 desativa em vez de apagar, para não deixar relatório antigo órfão", async () => {
+    // A categoria está referenciada por produtos e por relatórios de meses
+    // passados. Apagá-la quebraria a comparação com o ano anterior.
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
+      "PUT /api/categorias/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0005": () =>
+        json(200, { ...CATEGORIA, ativa: false }),
+    });
+
+    await irPara("Categorias");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Desativar" })).toBeVisible();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: /Apagar|Excluir/ }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Desativar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({ ativa: false });
+  });
+
+  it("categoria inativa é marcada e pode ser reativada", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [{ ...CATEGORIA, ativa: false }] }),
+    });
+
+    await irPara("Categorias");
+
+    await waitFor(() => {
+      expect(screen.getByText("Inativa")).toBeVisible();
+    });
+    expect(screen.getByRole("button", { name: "Reativar" })).toBeVisible();
+  });
+
+  it("nome vazio é recusado antes da rede; nome repetido mostra o motivo", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [] }),
+      "POST /api/categorias": () =>
+        json(409, {
+          erro: { codigo: "X", mensagem: "Já existe categoria com este nome." },
+        }),
+    });
+
+    await irPara("Categorias");
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Nova categoria/)).toBeVisible();
+    });
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Informe o nome da categoria");
+    });
+    expect(corpos).toHaveLength(antes);
+
+    await userEvent.type(screen.getByLabelText(/Nova categoria/), "Bebidas");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Já existe categoria");
+    });
+  });
+
+  it("cancelar a renomeação volta a linha ao normal", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
+    });
+
+    await irPara("Categorias");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Renomear" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+    });
+  });
+
+  it("lista vazia e falha ao carregar", async () => {
+    let falhar = true;
+
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () =>
+        falhar
+          ? json(500, { erro: { codigo: "X", mensagem: "Servidor indisponível." } })
+          : json(200, { itens: [] }),
+    });
+
+    await irPara("Categorias");
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Servidor indisponível.");
+    });
+
+    falhar = false;
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhuma categoria")).toBeVisible();
+    });
+  });
+});
+
+describe("Abas da retaguarda", () => {
+  it("🔑 cada aba aparece só para quem tem a permissão dela", async () => {
+    // Aba que só responde "sem permissão" ao ser clicada é pior que aba
+    // escondida: o usuário tenta, falha e abre chamado.
+    montarApp({ "/api/acesso/eu": () => json(200, ESTOQUISTA) });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Produtos" })).toBeVisible();
+    });
+
+    expect(screen.getByRole("button", { name: "Fornecedores" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Categorias" })).toBeVisible();
+    // Estoquista não tem `cliente:consultar`.
+    expect(screen.queryByRole("button", { name: "Clientes" })).not.toBeInTheDocument();
+  });
+
+  it("a aba ativa é anunciada para o leitor de tela", async () => {
+    montarApp({ "/api/acesso/eu": () => json(200, ESTOQUISTA) });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Produtos" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Categorias" }));
+
+    expect(screen.getByRole("button", { name: "Categorias" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+});
+
+describe("Formulário de fornecedor — campos opcionais", () => {
+  it("nome fantasia, telefone e e-mail vão junto quando preenchidos", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [] }),
+      "POST /api/fornecedores": () => json(201, FORNECEDOR),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo fornecedor" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo fornecedor" }));
+
+    await userEvent.type(
+      screen.getByLabelText(/Razão social/),
+      "Distribuidora Bebidas Boas Ltda",
+    );
+    await userEvent.type(screen.getByLabelText(/Nome fantasia/), "Bebidas Boas");
+    await userEvent.type(screen.getByLabelText(/CPF ou CNPJ/), "11222333000181");
+    await userEvent.type(screen.getByLabelText(/Telefone/), "1938887766");
+    await userEvent.type(screen.getByLabelText(/E-mail/), "compras@bebidasboas.com.br");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      nomeFantasia: "Bebidas Boas",
+      telefone: "1938887766",
+      email: "compras@bebidasboas.com.br",
+    });
+  });
+
+  it("cancelar volta para a lista sem gravar nada", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/fornecedores": () => json(200, { itens: [] }),
+    });
+
+    await irPara("Fornecedores");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo fornecedor" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo fornecedor" }));
+
+    await userEvent.type(screen.getByLabelText(/Razão social/), "Desisti Ltda");
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Procurar por razão social/)).toBeVisible();
+    });
+    expect(corpos).toHaveLength(antes);
+  });
+});
