@@ -8,6 +8,7 @@ import { tratadorDeErro } from "./http/erros.js";
 import { rotasDeAcesso } from "./rotas/acesso.js";
 import { rotasDeProdutos } from "./rotas/produtos.js";
 import { rotasDeSaude } from "./rotas/saude.js";
+import { rotasDeVendas } from "./rotas/vendas.js";
 
 /**
  * Monta o servidor HTTP.
@@ -64,6 +65,7 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   rotasDeSaude(servidor, container);
   rotasDeAcesso(servidor, container);
   rotasDeProdutos(servidor, container);
+  rotasDeVendas(servidor, container);
 
   return servidor;
 }
