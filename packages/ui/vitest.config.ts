@@ -11,7 +11,10 @@ export default mergeConfig(base, {
     globals: true,
     setupFiles: ["./src/testes/preparo.ts"],
     coverage: {
-      exclude: ["src/**/*.test.tsx", "src/index.ts", "src/testes/**"],
+      // A base mede só `.ts`, e componente é `.tsx`. Sem isto o design system
+      // inteiro ficava fora do portão.
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/index.ts", "src/testes/**"],
     },
   },
 });

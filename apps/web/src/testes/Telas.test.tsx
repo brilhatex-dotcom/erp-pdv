@@ -321,6 +321,53 @@ describe("Consulta de produto", () => {
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
   });
 
+  it("🔑 o botão de repetir busca de novo, sem redigitar o código", async () => {
+    // O caminho de mouse da tela de falha. Oferecer "Tentar de novo" e não
+    // repetir a busca é pior que não oferecer: o operador clica, nada muda, e
+    // ele conclui que o sistema travou. O código bipado continua no campo, e é
+    // ele que a segunda tentativa usa.
+    let tentativas = 0;
+
+    await entrarComo(USUARIO_GERENTE, {
+      "/api/produtos/buscar": () => {
+        tentativas += 1;
+        return tentativas === 1
+          ? json(500, { erro: { codigo: "FALHA_INTERNA", mensagem: "Falhou." } })
+          : json(200, PRODUTO);
+      },
+    });
+
+    await userEvent.type(screen.getByLabelText("Código do produto"), "REF001");
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(tentativas).toBe(2);
+  });
+
+  it("identifica o pesável, que é vendido por peso e não por unidade", async () => {
+    // Confundir pesável com unitário no balcão significa cobrar o preço do
+    // quilo por uma peça — ou o contrário.
+    await entrarComo(USUARIO_GERENTE, {
+      "/api/produtos/buscar": () =>
+        json(200, { ...PRODUTO, tipo: "PESAVEL", unidade: "KG" }),
+    });
+
+    await userEvent.type(screen.getByLabelText("Código do produto"), "REF001");
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pesável/)).toBeVisible();
+    });
+  });
+
   it("marca produto inativo com texto, não só com cor", async () => {
     await entrarComo(USUARIO_GERENTE, {
       "/api/produtos/buscar": () => json(200, { ...PRODUTO, ativo: false }),

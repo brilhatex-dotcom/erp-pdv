@@ -7,6 +7,11 @@
   // um jeito difícil de entender — a suíte de integração não recebe a URL do
   // banco de teste, cai no valor padrão de desenvolvimento e acusa "banco fora
   // do ar" numa máquina onde o banco está no ar.
+  //
+  // **Suíte nova com banco próprio precisa declarar a variável dela aqui.**
+  // O `apps/server` usa `DATABASE_URL_TESTE_API`, e esquecê-la custou uma
+  // reprovação de CI: no desenvolvimento o valor padrão aponta para a porta
+  // certa e nada acusa; no CI, a porta é outra e a suíte não alcança o banco.
   "globalEnv": ["NODE_ENV"],
 
   // Repassadas sem entrar no hash: dizem **como** alcançar a rede, não o que
@@ -38,12 +43,12 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "env": ["DATABASE_URL", "DATABASE_URL_TESTE"]
+      "env": ["DATABASE_URL", "DATABASE_URL_TESTE", "DATABASE_URL_TESTE_API"]
     },
     "test:cov": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["DATABASE_URL", "DATABASE_URL_TESTE"]
+      "env": ["DATABASE_URL", "DATABASE_URL_TESTE", "DATABASE_URL_TESTE_API"]
     }
   }
 }
