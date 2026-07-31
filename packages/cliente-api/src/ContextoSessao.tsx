@@ -50,9 +50,21 @@ interface RespostaLogin {
 }
 
 export interface PropsProvedorSessao {
+  /**
+   * De onde o login está partindo — e, por consequência, **qual credencial o
+   * servidor vai exigir**: PIN de seis dígitos no balcão, senha longa na
+   * retaguarda (ADR-0011).
+   *
+   * Quem decide é o servidor, que compara contra o hash certo. Este campo
+   * apenas informa a origem; ele não afrouxa exigência nenhuma, porque a
+   * retaguarda que recebesse `"PDV"` continuaria precisando do PIN cadastrado.
+   */
+  readonly contexto: ContextoDeAcesso;
   readonly cliente?: ClienteApi;
   readonly children: ReactNode;
 }
+
+export type ContextoDeAcesso = "PDV" | "RETAGUARDA";
 
 /**
  * Provedor de sessão.
@@ -62,7 +74,11 @@ export interface PropsProvedorSessao {
  * refresh vive num cookie `httpOnly` que sobrevive ao recarregamento, mesmo
  * com o token de acesso guardado só em memória.
  */
-export function ProvedorSessao({ cliente, children }: PropsProvedorSessao): ReactNode {
+export function ProvedorSessao({
+  contexto,
+  cliente,
+  children,
+}: PropsProvedorSessao): ReactNode {
   const api = useMemo(() => cliente ?? new ClienteApi(new Sessao()), [cliente]);
   const [usuario, setUsuario] = useState<UsuarioLogado | undefined>(undefined);
   const [restaurando, setRestaurando] = useState(true);
@@ -105,7 +121,7 @@ export function ProvedorSessao({ cliente, children }: PropsProvedorSessao): Reac
         corpo: {
           matricula,
           segredo,
-          contexto: "RETAGUARDA",
+          contexto,
           dispositivoId: identificadorDoDispositivo(),
         },
       });
@@ -113,7 +129,7 @@ export function ProvedorSessao({ cliente, children }: PropsProvedorSessao): Reac
       api.sessao.definir(resposta.token);
       setUsuario(resposta.usuario);
     },
-    [api],
+    [api, contexto],
   );
 
   const sair = useCallback(async (): Promise<void> => {

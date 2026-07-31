@@ -19,6 +19,7 @@ export {
 export {
   identificadorDoDispositivo,
   ProvedorSessao,
+  type ContextoDeAcesso,
   type PropsProvedorSessao,
   useSessao,
   type UsuarioLogado,

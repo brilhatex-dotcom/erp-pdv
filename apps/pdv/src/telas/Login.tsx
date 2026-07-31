@@ -2,6 +2,9 @@ import { mensagemDe, useSessao } from "@erp/cliente-api";
 import { Botao, CampoTexto } from "@erp/ui";
 import { type ReactNode, type SyntheticEvent, useRef, useState } from "react";
 
+/** O PIN do balcão tem seis dígitos (ADR-0011). */
+const TAMANHO_PIN = 6;
+
 /**
  * Entrada no balcão — matrícula e PIN.
  *
@@ -21,9 +24,28 @@ export function Login(): ReactNode {
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [enviando, setEnviando] = useState(false);
   const campoMatricula = useRef<HTMLInputElement>(null);
+  const campoPin = useRef<HTMLInputElement>(null);
 
   async function aoEnviar(evento: SyntheticEvent): Promise<void> {
     evento.preventDefault();
+
+    // Tentativa que já se sabe inválida **não vai ao servidor**. O bloqueio
+    // progressivo conta poucas tentativas por hora: gastar uma delas com um
+    // campo pela metade travaria o operador no meio do movimento, por engano
+    // dele mesmo e sem ter errado o PIN uma vez. Isto é conveniência — quem
+    // decide continua sendo o servidor.
+    if (matricula.trim() === "") {
+      setErro("Informe a matrícula.");
+      campoMatricula.current?.focus();
+      return;
+    }
+
+    if (pin.length < TAMANHO_PIN) {
+      setErro(`O PIN tem ${String(TAMANHO_PIN)} números.`);
+      campoPin.current?.focus();
+      return;
+    }
+
     setErro(undefined);
     setEnviando(true);
 
@@ -73,6 +95,7 @@ export function Login(): ReactNode {
         />
 
         <CampoTexto
+          ref={campoPin}
           rotulo="PIN"
           type="password"
           numerico

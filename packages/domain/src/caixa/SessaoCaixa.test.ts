@@ -477,7 +477,20 @@ describe("SessaoCaixa — fechamento", () => {
     const caixa = abrir();
     caixa.fechar(reais("100,00"), AGORA);
 
-    expect(caixa.eventos[0]?.tipo).toBe("CaixaFechado");
+    expect(caixa.eventos.map((evento) => evento.tipo)).toEqual([
+      "CaixaAberto",
+      "CaixaFechado",
+    ]);
+  });
+
+  it("🔑 a abertura também é fato auditável", () => {
+    // "Quem abriu este caixa e declarou este fundo de troco?" é a primeira
+    // pergunta quando a gaveta não bate no fim do dia. Sem o evento, não tem
+    // resposta.
+    const caixa = abrir();
+
+    expect(caixa.eventos[0]?.tipo).toBe("CaixaAberto");
+    expect(caixa.eventos[0]?.agregadoId.equals(caixa.id)).toBe(true);
   });
 
   it("guarda a conferência para consulta posterior", () => {
