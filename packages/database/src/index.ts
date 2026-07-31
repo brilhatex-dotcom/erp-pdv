@@ -19,6 +19,11 @@ export {
   UsuarioRepositorioPrisma,
 } from "./repositorios/AcessoRepositorioPrisma.js";
 export { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
+export {
+  CategoriaRepositorioPrisma,
+  ClienteRepositorioPrisma,
+  FornecedorRepositorioPrisma,
+} from "./repositorios/CadastroRepositorioPrisma.js";
 export { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 export { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 export { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";

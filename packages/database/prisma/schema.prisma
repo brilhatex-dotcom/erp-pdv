@@ -30,28 +30,28 @@ enum TipoProduto {
 }
 
 model Produto {
-  id             String      @id @db.Uuid
-  sku            String      @unique
-  descricao      String      @db.VarChar(120)
-  descricaoPdv   String      @map("descricao_pdv") @db.VarChar(40)
+  id                 String      @id @db.Uuid
+  sku                String      @unique
+  descricao          String      @db.VarChar(120)
+  descricaoPdv       String      @map("descricao_pdv") @db.VarChar(40)
   /// Forma normalizada (sem acento, minúscula) usada na busca do balcão.
-  descricaoBusca String      @map("descricao_busca")
-  tipo           TipoProduto
-  unidadeBase    String      @map("unidade_base") @db.VarChar(6)
+  descricaoBusca     String      @map("descricao_busca")
+  tipo               TipoProduto
+  unidadeBase        String      @map("unidade_base") @db.VarChar(6)
   /// Centavos.
-  precoVenda     BigInt      @map("preco_venda")
+  precoVenda         BigInt      @map("preco_venda")
   /// Centavos. Zero significa "não informado", não "de graça".
-  custo          BigInt      @default(0)
-  codigoBarras   String?     @unique @map("codigo_barras") @db.VarChar(14)
+  custo              BigInt      @default(0)
+  codigoBarras       String?     @unique @map("codigo_barras") @db.VarChar(14)
   /// Código do produto na balança, quando pesável.
-  codigoBalanca  String?     @unique @map("codigo_balanca") @db.VarChar(7)
-  categoriaId    String?     @map("categoria_id") @db.Uuid
+  codigoBalanca      String?     @unique @map("codigo_balanca") @db.VarChar(7)
+  categoriaId        String?     @map("categoria_id") @db.Uuid
   /// Opcional por decisão de arquitetura: com o módulo fiscal desligado o
   /// produto não tem tributação, e nada fora do fiscal depende disso (ADR-0016).
-  perfilTributarioId String? @map("perfil_tributario_id") @db.Uuid
-  ativo          Boolean     @default(true)
-  criadoEm       DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
-  atualizadoEm   DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+  perfilTributarioId String?     @map("perfil_tributario_id") @db.Uuid
+  ativo              Boolean     @default(true)
+  criadoEm           DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm       DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
   referencias ReferenciaProduto[]
   embalagens  Embalagem[]
@@ -134,20 +134,20 @@ enum OrigemMovimentoEstoque {
 
 /// Fato imutável. **Append-only**: correção gera movimento novo, nunca UPDATE.
 model MovimentoEstoque {
-  id            String                 @id @db.Uuid
-  produtoId     String                 @map("produto_id") @db.Uuid
-  tipo          TipoMovimentoEstoque
+  id                String                 @id @db.Uuid
+  produtoId         String                 @map("produto_id") @db.Uuid
+  tipo              TipoMovimentoEstoque
   /// Milésimos, sempre positivo. O sinal vem do tipo.
-  quantidade    BigInt
-  unidade       String                 @db.VarChar(6)
-  origemTipo    OrigemMovimentoEstoque @map("origem_tipo")
-  origemDocumentoId String?            @map("origem_documento_id") @db.Uuid
-  usuarioId     String                 @map("usuario_id") @db.Uuid
+  quantidade        BigInt
+  unidade           String                 @db.VarChar(6)
+  origemTipo        OrigemMovimentoEstoque @map("origem_tipo")
+  origemDocumentoId String?                @map("origem_documento_id") @db.Uuid
+  usuarioId         String                 @map("usuario_id") @db.Uuid
   /// Centavos. Só preenchido em entrada de compra.
-  custoUnitario BigInt?                @map("custo_unitario")
-  lote          String?                @db.VarChar(30)
-  observacao    String?
-  ocorridoEm    DateTime               @map("ocorrido_em") @db.Timestamptz(3)
+  custoUnitario     BigInt?                @map("custo_unitario")
+  lote              String?                @db.VarChar(30)
+  observacao        String?
+  ocorridoEm        DateTime               @map("ocorrido_em") @db.Timestamptz(3)
 
   produto Produto @relation(fields: [produtoId], references: [id])
 
@@ -163,12 +163,12 @@ model MovimentoEstoque {
 /// no orçamento de 100 ms (RNF-02). Pode ser reconstruída a qualquer momento a
 /// partir de `movimentos_estoque`.
 model SaldoEstoque {
-  produtoId  String   @id @map("produto_id") @db.Uuid
+  produtoId    String   @id @map("produto_id") @db.Uuid
   /// Milésimos, com sinal. Negativo é possível e não é erro.
-  milesimos  BigInt   @default(0)
-  unidade    String   @db.VarChar(6)
+  milesimos    BigInt   @default(0)
+  unidade      String   @db.VarChar(6)
   /// Centavos — custo médio ponderado móvel.
-  custoMedio BigInt   @default(0) @map("custo_medio")
+  custoMedio   BigInt   @default(0) @map("custo_medio")
   atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
@@ -186,16 +186,16 @@ enum StatusCaixa {
 }
 
 model SessaoCaixa {
-  id           String      @id @db.Uuid
-  estacaoId    String      @map("estacao_id") @db.Uuid
-  operadorId   String      @map("operador_id") @db.Uuid
+  id                String      @id @db.Uuid
+  estacaoId         String      @map("estacao_id") @db.Uuid
+  operadorId        String      @map("operador_id") @db.Uuid
   /// Centavos.
-  fundoTroco   BigInt      @map("fundo_troco")
-  status       StatusCaixa @default(ABERTA)
-  abertaEm     DateTime    @map("aberta_em") @db.Timestamptz(3)
-  fechadaEm    DateTime?   @map("fechada_em") @db.Timestamptz(3)
+  fundoTroco        BigInt      @map("fundo_troco")
+  status            StatusCaixa @default(ABERTA)
+  abertaEm          DateTime    @map("aberta_em") @db.Timestamptz(3)
+  fechadaEm         DateTime?   @map("fechada_em") @db.Timestamptz(3)
   /// Centavos, informado no fechamento.
-  contadoEmDinheiro BigInt? @map("contado_em_dinheiro")
+  contadoEmDinheiro BigInt?     @map("contado_em_dinheiro")
 
   // Acumuladores da sessão. São derivados das vendas, mas ficam materializados
   // aqui pelo mesmo motivo de `saldos_estoque`: reabrir a gaveta não pode
@@ -222,15 +222,15 @@ enum TipoMovimentoCaixa {
 }
 
 model MovimentoCaixa {
-  id             String             @id @db.Uuid
-  sessaoCaixaId  String             @map("sessao_caixa_id") @db.Uuid
-  tipo           TipoMovimentoCaixa
+  id              String             @id @db.Uuid
+  sessaoCaixaId   String             @map("sessao_caixa_id") @db.Uuid
+  tipo            TipoMovimentoCaixa
   /// Centavos.
-  valor          BigInt
-  motivo         String
-  usuarioId      String             @map("usuario_id") @db.Uuid
-  autorizadoPorId String?           @map("autorizado_por_id") @db.Uuid
-  ocorridoEm     DateTime           @map("ocorrido_em") @db.Timestamptz(3)
+  valor           BigInt
+  motivo          String
+  usuarioId       String             @map("usuario_id") @db.Uuid
+  autorizadoPorId String?            @map("autorizado_por_id") @db.Uuid
+  ocorridoEm      DateTime           @map("ocorrido_em") @db.Timestamptz(3)
 
   sessao SessaoCaixa @relation(fields: [sessaoCaixaId], references: [id])
 
@@ -348,16 +348,16 @@ enum StatusOutbox {
 /// É o que impede o pior defeito do fluxo de venda: a venda gravar e o evento
 /// se perder, ou nota fiscal ser emitida para venda que a transação reverteu.
 model EventoOutbox {
-  id          String       @id @db.Uuid
-  tipo        String       @db.VarChar(60)
-  agregadoId  String       @map("agregado_id") @db.Uuid
+  id           String       @id @db.Uuid
+  tipo         String       @db.VarChar(60)
+  agregadoId   String       @map("agregado_id") @db.Uuid
   /// Corpo do evento em JSON. BigInt vai como texto, para não perder precisão.
-  payload     Json
-  status      StatusOutbox @default(PENDENTE)
-  tentativas  Int          @default(0)
-  ocorridoEm  DateTime     @map("ocorrido_em") @db.Timestamptz(3)
-  processadoEm DateTime?   @map("processado_em") @db.Timestamptz(3)
-  ultimoErro  String?      @map("ultimo_erro")
+  payload      Json
+  status       StatusOutbox @default(PENDENTE)
+  tentativas   Int          @default(0)
+  ocorridoEm   DateTime     @map("ocorrido_em") @db.Timestamptz(3)
+  processadoEm DateTime?    @map("processado_em") @db.Timestamptz(3)
+  ultimoErro   String?      @map("ultimo_erro")
 
   // O worker busca pendentes em ordem de ocorrência.
   @@index([status, ocorridoEm], map: "idx_outbox_pendentes")
@@ -412,11 +412,11 @@ model Usuario {
   papelId   String @map("papel_id") @db.Uuid
 
   /// Hash Argon2id do PIN do balcão. NULL em quem não opera caixa.
-  hashPin        String? @map("hash_pin")
-  algoritmoPin   String? @map("algoritmo_pin") @db.VarChar(20)
+  hashPin                 String? @map("hash_pin")
+  algoritmoPin            String? @map("algoritmo_pin") @db.VarChar(20)
   /// Hash Argon2id da senha da retaguarda. NULL em quem só opera o PDV.
-  hashSenha      String? @map("hash_senha")
-  algoritmoSenha String? @map("algoritmo_senha") @db.VarChar(20)
+  hashSenha               String? @map("hash_senha")
+  algoritmoSenha          String? @map("algoritmo_senha") @db.VarChar(20)
   /// Nunca existe senha padrão de fábrica: usuário novo nasce com `true`.
   precisaTrocarCredencial Boolean @default(true) @map("precisa_trocar_credencial")
   ativo                   Boolean @default(true)
@@ -458,20 +458,20 @@ enum ContextoSessao {
 /// Sessão de acesso. Guarda apenas o HASH do refresh — vazamento do banco não
 /// entrega sessão ativa, porque hash não é aceito na renovação.
 model SessaoAcesso {
-  id            String         @id @db.Uuid
-  usuarioId     String         @map("usuario_id") @db.Uuid
+  id               String         @id @db.Uuid
+  usuarioId        String         @map("usuario_id") @db.Uuid
   /// Cadeia de renovações do mesmo login. É por ela que se revoga tudo de uma vez.
-  familiaId     String         @map("familia_id") @db.Uuid
-  dispositivoId String         @map("dispositivo_id") @db.Uuid
-  contexto      ContextoSessao
-  hashRefresh   String         @map("hash_refresh")
-  algoritmoRefresh String      @map("algoritmo_refresh") @db.VarChar(20)
-  criadaEm      DateTime       @map("criada_em") @db.Timestamptz(3)
-  expiraEm      DateTime       @map("expira_em") @db.Timestamptz(3)
-  revogadaEm    DateTime?      @map("revogada_em") @db.Timestamptz(3)
+  familiaId        String         @map("familia_id") @db.Uuid
+  dispositivoId    String         @map("dispositivo_id") @db.Uuid
+  contexto         ContextoSessao
+  hashRefresh      String         @map("hash_refresh")
+  algoritmoRefresh String         @map("algoritmo_refresh") @db.VarChar(20)
+  criadaEm         DateTime       @map("criada_em") @db.Timestamptz(3)
+  expiraEm         DateTime       @map("expira_em") @db.Timestamptz(3)
+  revogadaEm       DateTime?      @map("revogada_em") @db.Timestamptz(3)
   /// Quando o refresh foi gasto. Reaparecer depois disto é reúso.
-  usadaEm       DateTime?      @map("usada_em") @db.Timestamptz(3)
-  sucessoraId   String?        @map("sucessora_id") @db.Uuid
+  usadaEm          DateTime?      @map("usada_em") @db.Timestamptz(3)
+  sucessoraId      String?        @map("sucessora_id") @db.Uuid
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -481,4 +481,87 @@ model SessaoAcesso {
   // O worker de limpeza remove as vencidas.
   @@index([expiraEm], map: "idx_sessoes_expiracao")
   @@map("sessoes_acesso")
+}
+
+// ── Cadastros de apoio ───────────────────────────────────────────────────
+
+/// Categoria de produto. Plana de propósito (sem grupo/subgrupo).
+model Categoria {
+  id           String   @id @db.Uuid
+  nome         String   @db.VarChar(60)
+  /// Forma normalizada (sem acento, minúscula). É por aqui que a unicidade é
+  /// garantida: "Bebidas" e "bebidas " dividiriam o faturamento em duas linhas
+  /// do relatório sem que ninguém percebesse na tela.
+  nomeBusca    String   @unique @map("nome_busca")
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@map("categorias")
+}
+
+model Cliente {
+  id                String  @id @db.Uuid
+  nome              String  @db.VarChar(120)
+  apelido           String? @db.VarChar(60)
+  nomeBusca         String  @map("nome_busca")
+  tipoPessoa        String  @map("tipo_pessoa") @db.VarChar(10)
+  /// Só os dígitos. Opcional por minimização da LGPD: a padaria que anota o
+  /// fiado não precisa do CPF de quem compra.
+  documento         String? @unique @db.VarChar(14)
+  inscricaoEstadual String? @map("inscricao_estadual") @db.VarChar(20)
+  telefone          String? @db.VarChar(11)
+  email             String? @db.VarChar(160)
+  /// Centavos. Zero significa "não vende a prazo".
+  limiteCredito     BigInt  @default(0) @map("limite_credito")
+  observacao        String? @db.VarChar(500)
+  ativo             Boolean @default(true)
+
+  logradouro          String? @db.VarChar(120)
+  numero              String? @db.VarChar(10)
+  complemento         String? @db.VarChar(60)
+  bairro              String? @db.VarChar(60)
+  municipio           String? @db.VarChar(60)
+  codigoMunicipioIbge String? @map("codigo_municipio_ibge") @db.VarChar(7)
+  uf                  String? @db.VarChar(2)
+  cep                 String? @db.VarChar(8)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  // A busca da retaguarda filtra por ativo e ordena por nome; sem o índice
+  // parcial, uma loja com dez mil clientes varre a tabela a cada tecla.
+  @@index([nomeBusca(ops: raw("text_pattern_ops"))], map: "ix_cliente_nome_busca", type: BTree)
+  @@map("clientes")
+}
+
+model Fornecedor {
+  id                String  @id @db.Uuid
+  razaoSocial       String  @map("razao_social") @db.VarChar(120)
+  nomeFantasia      String? @map("nome_fantasia") @db.VarChar(60)
+  razaoSocialBusca  String  @map("razao_social_busca")
+  /// **Obrigatório**, ao contrário do cliente: toda entrada de mercadoria chega
+  /// com nota, e a nota traz o documento do emitente.
+  documento         String  @unique @db.VarChar(14)
+  inscricaoEstadual String? @map("inscricao_estadual") @db.VarChar(20)
+  telefone          String? @db.VarChar(11)
+  email             String? @db.VarChar(160)
+  prazoEntregaDias  Int?    @map("prazo_entrega_dias")
+  observacao        String? @db.VarChar(500)
+  ativo             Boolean @default(true)
+
+  logradouro          String? @db.VarChar(120)
+  numero              String? @db.VarChar(10)
+  complemento         String? @db.VarChar(60)
+  bairro              String? @db.VarChar(60)
+  municipio           String? @db.VarChar(60)
+  codigoMunicipioIbge String? @map("codigo_municipio_ibge") @db.VarChar(7)
+  uf                  String? @db.VarChar(2)
+  cep                 String? @db.VarChar(8)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@index([razaoSocialBusca(ops: raw("text_pattern_ops"))], map: "ix_fornecedor_razao_busca", type: BTree)
+  @@map("fornecedores")
 }
