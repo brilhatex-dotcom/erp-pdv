@@ -78,6 +78,7 @@ export {
 // ── Vendas ──────────────────────────────────────────────────────────────
 export {
   type CodigoFormaPagamento,
+  CODIGOS_FORMA_PAGAMENTO,
   ehCodigoFormaPagamento,
   type FormaPagamento,
   FORMAS_PAGAMENTO,
@@ -90,7 +91,12 @@ export {
   type VendaCancelada,
   type VendaFinalizada,
 } from "./vendas/eventos.js";
-export { type DadosVenda, type StatusVenda, Venda } from "./vendas/Venda.js";
+export {
+  type DadosReconstituicaoVenda,
+  type DadosVenda,
+  type StatusVenda,
+  Venda,
+} from "./vendas/Venda.js";
 export { type DadosItemVenda, VendaItem } from "./vendas/VendaItem.js";
 
 // ── Caixa ───────────────────────────────────────────────────────────────
@@ -102,6 +108,7 @@ export {
 export {
   type ConferenciaCaixa,
   type ConferenciaForma,
+  type DadosReconstituicaoCaixa,
   type DadosSessaoCaixa,
   type ErroCaixa,
   type PagamentoResumido,

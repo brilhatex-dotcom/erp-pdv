@@ -52,6 +52,7 @@ function picanha(): Produto {
     tipo: "PESAVEL",
     unidadeBase: "KG",
     precoVenda: reais("79,90"),
+    codigoBalanca: "012345",
   }).unwrap();
 }
 
@@ -69,7 +70,7 @@ function montar() {
   );
 
   ambiente.produtos.adicionar(refrigerante());
-  ambiente.produtos.adicionar(picanha(), "012345");
+  ambiente.produtos.adicionar(picanha());
 
   return {
     ...ambiente,
@@ -616,8 +617,9 @@ describe("Fluxo de venda — balança com preço embutido", () => {
       tipo: "PESAVEL",
       unidadeBase: "KG",
       precoVenda: Dinheiro.zero(),
+      codigoBalanca: "012345",
     }).unwrap();
-    sistema.produtos.adicionar(semPreco, "012345");
+    sistema.produtos.adicionar(semPreco);
 
     const adicionar = new AdicionarItemPorCodigo(sistema.unitOfWork, LAYOUT_PRECO);
     const venda = (

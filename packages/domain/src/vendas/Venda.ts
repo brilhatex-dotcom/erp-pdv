@@ -21,6 +21,15 @@ export type StatusVenda = "ABERTA" | "FINALIZADA" | "CANCELADA";
  */
 export type ErroVenda = ErroValidacao | ErroRegraNegocio;
 
+/** Estado completo de uma venda vinda do banco. */
+export interface DadosReconstituicaoVenda extends DadosVenda {
+  readonly status: StatusVenda;
+  readonly finalizadaEm: Date | undefined;
+  readonly descontoVenda: Dinheiro;
+  readonly itens: readonly VendaItem[];
+  readonly pagamentos: readonly Pagamento[];
+}
+
 export interface DadosVenda {
   readonly id: Identificador;
   /** Sequencial dentro da série da estação. */
@@ -82,6 +91,28 @@ export class Venda extends AggregateRoot {
     }
 
     return ok(new Venda(dados));
+  }
+
+  /**
+   * Reconstrói uma venda já persistida.
+   *
+   * Uso exclusivo do repositório. Não revalida nem recalcula: os itens voltam
+   * com os descontos que tinham, inclusive o rateado, para que uma venda
+   * finalizada reimpressa mostre exatamente os mesmos valores do cupom
+   * original — inclusive se a regra de rateio mudar depois.
+   */
+  static reconstituir(dados: DadosReconstituicaoVenda): Venda {
+    const venda = new Venda(dados);
+
+    venda.#status = dados.status;
+    venda.#finalizadaEm = dados.finalizadaEm;
+    venda.#descontoVenda = dados.descontoVenda;
+    venda.#itens.push(...dados.itens);
+    venda.#pagamentos.push(...dados.pagamentos);
+    venda.#proximoNumeroItem =
+      dados.itens.reduce((maior, item) => Math.max(maior, item.numero), 0) + 1;
+
+    return venda;
   }
 
   // ── Leitura ────────────────────────────────────────────────────────────

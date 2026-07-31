@@ -18,6 +18,8 @@
     "format:check": "prettier --check .",
     "arch": "depcruise packages apps --config .dependency-cruiser.cjs",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm arch && pnpm test",
+    "db:migrate": "pnpm --filter @erp/database db:migrate",
+    "db:deploy": "pnpm --filter @erp/database db:deploy",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres"

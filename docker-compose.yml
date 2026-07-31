@@ -20,6 +20,9 @@ services:
       - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Cria o banco da suíte de integração na primeira subida, para que rodar
+      # os testes não exija um passo manual que alguém vai esquecer.
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     command:
       - "postgres"
       # Espelha a configuração de produção descrita em ARQUITETURA.md §5.2.1.

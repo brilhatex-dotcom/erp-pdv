@@ -32,6 +32,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0014](0014-escopo-varejo-apenas.md) | Escopo restrito a varejo; serviços fora do produto | Aceito |
 | [0015](0015-emissao-fiscal-via-provedor-externo.md) | Emissão fiscal via provedor externo, atrás de abstração própria | Aceito |
 | [0016](0016-modulo-fiscal-opcional-por-empresa.md) | Módulo fiscal opcional, habilitado por empresa | Aceito |
+| [0017](0017-persistencia-chaves-naturais-e-projecao-travada.md) | Chave natural nas tabelas filhas; trava explícita na projeção de saldo | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo

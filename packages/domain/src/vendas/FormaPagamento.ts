@@ -117,6 +117,16 @@ export const FORMAS_PAGAMENTO = {
   },
 } as const satisfies Record<CodigoFormaPagamento, FormaPagamento>;
 
+/**
+ * Todas as formas, para quem precisa percorrer a lista fechada.
+ *
+ * O fechamento de caixa é o caso: ele confere forma a forma, e o agregado
+ * expõe `recebidoEm(forma)` em vez do mapa interno.
+ */
+export const CODIGOS_FORMA_PAGAMENTO = Object.keys(
+  FORMAS_PAGAMENTO,
+) as readonly CodigoFormaPagamento[];
+
 export function obterFormaPagamento(codigo: CodigoFormaPagamento): FormaPagamento {
   return FORMAS_PAGAMENTO[codigo];
 }

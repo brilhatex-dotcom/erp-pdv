@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   type CodigoFormaPagamento,
+  CODIGOS_FORMA_PAGAMENTO,
   ehCodigoFormaPagamento,
   FORMAS_PAGAMENTO,
   obterFormaPagamento,
@@ -83,5 +84,20 @@ describe("FormaPagamento — registro", () => {
     const codigo: CodigoFormaPagamento = "CARTAO_DEBITO";
 
     expect(obterFormaPagamento(codigo).descricao).toBe("Cartão de débito");
+  });
+});
+
+describe("Lista fechada de formas", () => {
+  // O fechamento de caixa percorre esta lista para conferir forma a forma.
+  it("expõe todos os códigos declarados", () => {
+    expect(CODIGOS_FORMA_PAGAMENTO).toHaveLength(Object.keys(FORMAS_PAGAMENTO).length);
+    expect(CODIGOS_FORMA_PAGAMENTO).toContain("DINHEIRO");
+    expect(CODIGOS_FORMA_PAGAMENTO).toContain("CREDIARIO");
+  });
+
+  it("só devolve códigos que resolvem para uma forma", () => {
+    for (const codigo of CODIGOS_FORMA_PAGAMENTO) {
+      expect(obterFormaPagamento(codigo).codigo).toBe(codigo);
+    }
   });
 });

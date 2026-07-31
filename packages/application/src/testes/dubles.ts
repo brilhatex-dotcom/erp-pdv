@@ -62,13 +62,9 @@ export class GeradorIdSequencial implements GeradorId {
 
 export class ProdutoRepositorioEmMemoria implements ProdutoRepository {
   readonly itens = new Map<string, Produto>();
-  readonly porBalanca = new Map<string, Produto>();
 
-  adicionar(produto: Produto, codigoBalanca?: string): void {
+  adicionar(produto: Produto): void {
     this.itens.set(produto.id.valor, produto);
-    if (codigoBalanca !== undefined) {
-      this.porBalanca.set(codigoBalanca, produto);
-    }
   }
 
   porId(id: Identificador): Promise<Produto | undefined> {
@@ -83,7 +79,10 @@ export class ProdutoRepositorioEmMemoria implements ProdutoRepository {
   }
 
   porCodigoBalanca(codigo: string): Promise<Produto | undefined> {
-    return Promise.resolve(this.porBalanca.get(codigo));
+    for (const produto of this.itens.values()) {
+      if (produto.codigoBalanca === codigo) return Promise.resolve(produto);
+    }
+    return Promise.resolve(undefined);
   }
 
   salvar(produto: Produto): Promise<void> {

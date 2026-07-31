@@ -400,3 +400,41 @@ describe("SaldoEstoque — validação", () => {
     expect(inicial.quantidade.formatar()).toBe("10 un");
   });
 });
+
+describe("SaldoEstoque — reconstituição", () => {
+  // A projeção materializada existe para não somar milhões de movimentos a
+  // cada bipada (RNF-02). Reconstituir é o caminho que torna isso possível.
+  it("volta com quantidade e custo médio exatamente como foram gravados", () => {
+    const saldo = SaldoEstoque.reconstituir(PRODUTO, "UN", 15_000n, reais("3,33"));
+
+    expect(saldo.produtoId.equals(PRODUTO)).toBe(true);
+    expect(saldo.quantidade.formatar()).toBe("15 un");
+    expect(saldo.custoMedio.formatar()).toBe("R$ 3,33");
+  });
+
+  it("aceita saldo negativo — venda lançada antes da nota de compra", () => {
+    const saldo = SaldoEstoque.reconstituir(PRODUTO, "UN", -2000n, Dinheiro.zero());
+
+    expect(saldo.estaNegativo).toBe(true);
+  });
+
+  it("continua somando a partir do saldo reconstituído", () => {
+    const saldo = SaldoEstoque.reconstituir(PRODUTO, "UN", 10_000n, reais("3,00"));
+
+    const atualizado = saldo
+      .aplicar(
+        MovimentoEstoque.criar({
+          id: proximoId(),
+          produtoId: PRODUTO,
+          tipo: "SAIDA",
+          quantidade: Quantidade.de("4", "UN").unwrap(),
+          origem: { tipo: "VENDA" },
+          usuarioId: USUARIO,
+          ocorridoEm: AGORA,
+        }).unwrap(),
+      )
+      .unwrap();
+
+    expect(atualizado.quantidade.formatar()).toBe("6 un");
+  });
+});

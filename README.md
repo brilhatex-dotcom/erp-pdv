@@ -20,7 +20,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 3b — Venda** | ✅ **Concluída** — itens, pagamentos, desconto rateado, crediário. 678 testes |
 | **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
 | **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
-| Etapa 5 — Persistência (Prisma + PostgreSQL) | ⬜ Próxima |
+| **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
+| Etapa 6 — Servidor HTTP (`apps/server`) | ⬜ Próxima |
 
 ## Requisitos
 
@@ -33,8 +34,14 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 ```bash
 pnpm install          # instala as dependências do monorepo
 pnpm db:up            # sobe o PostgreSQL 17 (porta 55432)
+pnpm db:migrate       # aplica as migrações no banco de desenvolvimento
 pnpm verify           # roda TODOS os portões de qualidade
 ```
+
+O `db:up` cria dois bancos: `erp_pdv` para desenvolvimento e `erp_teste` para a
+suíte de integração. São separados de propósito — os testes truncam as tabelas
+entre casos, e fazer isso no banco de desenvolvimento apagaria o cadastro que
+você estava usando para conferir algo na tela.
 
 `pnpm verify` executa, em ordem: formatação → lint → tipagem → **regras de
 arquitetura** → testes. É o mesmo conjunto que o CI aplica; se passar localmente,
@@ -53,6 +60,8 @@ passa no CI.
 | `pnpm arch` | Valida o grafo de dependências entre camadas |
 | `pnpm format` | Formata o código |
 | `pnpm db:up` / `db:down` | Sobe / derruba o PostgreSQL de desenvolvimento |
+| `pnpm db:migrate` | Cria e aplica migrações a partir do schema Prisma |
+| `pnpm db:deploy` | Aplica migrações já existentes (é o que roda na instalação) |
 
 ## Estrutura
 
@@ -63,6 +72,7 @@ packages/
   utils/       validadores e formatadores puros (CPF, CNPJ, texto)
   domain/      núcleo de negócio puro — zero dependências de runtime
   application/ casos de uso e portas — não conhece banco, rede nem UI
+  database/    adapter PostgreSQL: schema, migrações e repositórios Prisma
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio

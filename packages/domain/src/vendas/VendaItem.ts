@@ -80,6 +80,23 @@ export class VendaItem {
     return ok(new VendaItem(numero, dados));
   }
 
+  /**
+   * Reconstrói um item já persistido, com os descontos que ele tinha.
+   *
+   * Uso exclusivo do repositório. Ver `Produto.reconstituir` sobre não revalidar.
+   */
+  static reconstituir(
+    numero: number,
+    dados: DadosItemVenda,
+    desconto: Dinheiro,
+    descontoRateado: Dinheiro,
+  ): VendaItem {
+    const item = new VendaItem(numero, dados);
+    item.#desconto = desconto;
+    item.#descontoRateado = descontoRateado;
+    return item;
+  }
+
   // ── Leitura ────────────────────────────────────────────────────────────
 
   /** Sequencial dentro da venda. Vira `nItem` no XML fiscal. */

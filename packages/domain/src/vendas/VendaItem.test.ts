@@ -178,3 +178,43 @@ describe("VendaItem — alteração de quantidade", () => {
     expect(item.desconto.formatar()).toBe("R$ 5,00");
   });
 });
+
+describe("VendaItem — reconstituição", () => {
+  it("volta com os dois descontos que tinha gravados", () => {
+    const item = VendaItem.reconstituir(
+      3,
+      {
+        produtoId: PRODUTO,
+        descricao: "REFRI COLA 2L",
+        quantidade: un("2"),
+        precoUnitario: reais("9,90"),
+      },
+      reais("0,80"),
+      reais("0,60"),
+    );
+
+    expect(item.numero).toBe(3);
+    expect(item.desconto.formatar()).toBe("R$ 0,80");
+    expect(item.descontoRateado.formatar()).toBe("R$ 0,60");
+    // 19,80 − 0,80 − 0,60
+    expect(item.total.formatar()).toBe("R$ 18,40");
+  });
+
+  it("não revalida — item antigo continua legível se a regra mudar", () => {
+    // Descrição vazia seria recusada por `criar`. Na leitura, recusar tornaria
+    // ilegível uma venda já feita, que é pior do que aceitar o dado velho.
+    const item = VendaItem.reconstituir(
+      1,
+      {
+        produtoId: PRODUTO,
+        descricao: "",
+        quantidade: un("1"),
+        precoUnitario: reais("1,00"),
+      },
+      Dinheiro.zero(),
+      Dinheiro.zero(),
+    );
+
+    expect(item.descricao).toBe("");
+  });
+});

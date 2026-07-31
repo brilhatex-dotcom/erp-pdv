@@ -12,6 +12,10 @@ concurrency:
 
 env:
   NODE_VERSION: "22"
+  # A mesma versão que o instalador embarca (ADR-0013). Testar em versão
+  # diferente da que roda na loja invalida o teste no ponto que mais importa:
+  # plano de execução, tipos e comportamento de transação.
+  POSTGRES_VERSION: "17"
 
 jobs:
   # Portões de qualidade do CLAUDE.md §7. Todos bloqueiam o merge.
@@ -19,6 +23,26 @@ jobs:
     name: Qualidade
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+          POSTGRES_DB: erp_teste
+        ports:
+          - 5432:5432
+        # Sem o healthcheck, o passo de teste começa antes do banco aceitar
+        # conexão e falha por corrida, não por defeito.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL_TESTE: postgresql://erp:erp@localhost:5432/erp_teste
 
     steps:
       - uses: actions/checkout@v4

@@ -62,6 +62,18 @@ export interface ConferenciaCaixa {
   readonly quantidadeVendas: number;
 }
 
+/** Estado completo de uma sessão vinda do banco. */
+export interface DadosReconstituicaoCaixa extends DadosSessaoCaixa {
+  readonly status: StatusCaixa;
+  readonly fechadaEm: Date | undefined;
+  readonly trocoDevolvido: Dinheiro;
+  readonly totalVendido: Dinheiro;
+  readonly quantidadeVendas: number;
+  readonly movimentos: readonly MovimentoCaixa[];
+  /** Totais por forma de pagamento. */
+  readonly recebidos: ReadonlyMap<CodigoFormaPagamento, Dinheiro>;
+}
+
 export interface DadosSessaoCaixa {
   readonly id: Identificador;
   readonly estacaoId: Identificador;
@@ -118,6 +130,30 @@ export class SessaoCaixa extends AggregateRoot {
     }
 
     return ok(new SessaoCaixa(dados));
+  }
+
+  /**
+   * Reconstrói uma sessão já persistida.
+   *
+   * Uso exclusivo do repositório. Recebe os **totais** por forma de pagamento,
+   * não a lista de vendas — que é justamente o que mantém a abertura de caixa
+   * rápida mesmo com milhares de vendas no dia.
+   */
+  static reconstituir(dados: DadosReconstituicaoCaixa): SessaoCaixa {
+    const sessao = new SessaoCaixa(dados);
+
+    sessao.#status = dados.status;
+    sessao.#fechadaEm = dados.fechadaEm;
+    sessao.#trocoDevolvido = dados.trocoDevolvido;
+    sessao.#totalVendido = dados.totalVendido;
+    sessao.#quantidadeVendas = dados.quantidadeVendas;
+    sessao.#movimentos.push(...dados.movimentos);
+
+    for (const [forma, valor] of dados.recebidos) {
+      sessao.#recebidoPorForma.set(forma, valor);
+    }
+
+    return sessao;
   }
 
   // ── Leitura ────────────────────────────────────────────────────────────

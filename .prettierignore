@@ -4,3 +4,6 @@ node_modules/
 .turbo/
 pnpm-lock.yaml
 *.md
+
+# Cliente do Prisma: gerado, reescrito a cada migração.
+packages/database/src/gerado/

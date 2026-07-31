@@ -37,3 +37,7 @@ Thumbs.db
 .idea/
 *.log
 npm-debug.log*
+packages/database/.env
+
+# Cliente do Prisma: gerado por `prisma generate` no build, nunca versionado.
+packages/database/src/gerado/

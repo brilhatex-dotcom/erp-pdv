@@ -157,6 +157,9 @@ module.exports = {
         // Configuração de build não é código de aplicação: o grafo de camadas
         // descreve o que roda em produção, não a ferramenta que o compila.
         "\\.(config|base)\\.(ts|mts|cts|mjs|cjs|js)$",
+        // Cliente gerado pelo Prisma. O grafo descreve decisões de arquitetura
+        // nossas; código que a ferramenta reescreve a cada migração não é uma.
+        "src/gerado",
       ],
     },
     tsPreCompilationDeps: true,

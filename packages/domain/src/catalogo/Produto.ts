@@ -52,6 +52,14 @@ export interface DadosProduto {
   readonly precoVenda: Dinheiro;
   readonly custo?: Dinheiro | undefined;
   readonly codigoBarras?: CodigoBarras | undefined;
+  /**
+   * Código que identifica o produto **dentro da etiqueta da balança**.
+   *
+   * É o miolo do EAN-13 impresso no açougue e no hortifruti (`2` + código +
+   * peso). Fica separado do código de barras porque não é um: a etiqueta muda a
+   * cada pesagem, e só este pedaço identifica o produto.
+   */
+  readonly codigoBalanca?: string | undefined;
   readonly categoriaId?: Identificador | undefined;
   readonly referencias?: readonly ReferenciaProduto[] | undefined;
   readonly embalagens?: readonly Embalagem[] | undefined;
@@ -87,6 +95,7 @@ export class Produto extends AggregateRoot {
   #precoVenda: Dinheiro;
   #custo: Dinheiro;
   #codigoBarras: CodigoBarras | undefined;
+  #codigoBalanca: string | undefined;
   #categoriaId: Identificador | undefined;
   #perfilTributarioId: Identificador | undefined;
   readonly #referencias: ReferenciaProduto[];
@@ -104,6 +113,8 @@ export class Produto extends AggregateRoot {
     this.#precoVenda = dados.precoVenda;
     this.#custo = custo;
     this.#codigoBarras = dados.codigoBarras;
+    this.#codigoBalanca =
+      dados.codigoBalanca?.trim() === "" ? undefined : dados.codigoBalanca?.trim();
     this.#categoriaId = dados.categoriaId;
     this.#perfilTributarioId = dados.perfilTributarioId;
     this.#referencias = [...(dados.referencias ?? [])];
@@ -177,6 +188,32 @@ export class Produto extends AggregateRoot {
       );
     }
 
+    // O código da balança é o miolo da etiqueta, e a balança só imprime dígitos.
+    // Letra ou separador aqui produz uma etiqueta que nenhum leitor encontra —
+    // e o operador descobre no balcão, com fila.
+    const codigoBalanca = dados.codigoBalanca?.trim();
+    if (codigoBalanca !== undefined && codigoBalanca !== "") {
+      if (!/^\d+$/.test(codigoBalanca)) {
+        erros.push(
+          new ErroValidacao(
+            "PRODUTO_CODIGO_BALANCA_INVALIDO",
+            "O código da balança deve conter apenas números.",
+            { codigoBalanca },
+          ),
+        );
+      }
+
+      if (dados.tipo !== "PESAVEL") {
+        erros.push(
+          new ErroValidacao(
+            "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
+            "Só produto pesável tem código de balança.",
+            { tipo: dados.tipo },
+          ),
+        );
+      }
+    }
+
     const custo = dados.custo ?? Dinheiro.zero();
     if (custo.ehNegativo()) {
       erros.push(
@@ -235,6 +272,20 @@ export class Produto extends AggregateRoot {
     return ok(new Produto(dados, descricaoPdv, custo));
   }
 
+  /**
+   * Reconstrói um produto já persistido.
+   *
+   * **Não revalida.** O dado foi validado quando foi gravado, e revalidar na
+   * leitura tem dois problemas concretos: gasta trabalho no caminho quente do
+   * PDV, e — pior — tornaria ilegível um cadastro antigo se uma regra mudasse
+   * depois. Regra nova vale para dado novo; dado velho continua carregando.
+   *
+   * Uso exclusivo do repositório.
+   */
+  static reconstituir(dados: DadosProduto & { readonly descricaoPdv: string }): Produto {
+    return new Produto(dados, dados.descricaoPdv, dados.custo ?? Dinheiro.zero());
+  }
+
   // ── Leitura ────────────────────────────────────────────────────────────
 
   get sku(): string {
@@ -277,6 +328,11 @@ export class Produto extends AggregateRoot {
 
   get codigoBarras(): CodigoBarras | undefined {
     return this.#codigoBarras;
+  }
+
+  /** Código do produto na etiqueta da balança, quando pesável. */
+  get codigoBalanca(): string | undefined {
+    return this.#codigoBalanca;
   }
 
   get categoriaId(): Identificador | undefined {

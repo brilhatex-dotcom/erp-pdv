@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import { Identificador } from "../shared/Identificador.js";
 import { Dinheiro } from "../valores/Dinheiro.js";
 import { Quantidade } from "../valores/Quantidade.js";
+import { Pagamento } from "./Pagamento.js";
 import { type DadosVenda, Venda } from "./Venda.js";
-import type { DadosItemVenda } from "./VendaItem.js";
+import { type DadosItemVenda, VendaItem } from "./VendaItem.js";
 
 const VENDA_ID = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5a01").unwrap();
 const CAIXA = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5a02").unwrap();
@@ -699,5 +700,155 @@ describe("Venda — cancelamento", () => {
     if (resultado.isErr()) {
       expect(resultado.error.mensagem).toBe("Esta venda foi cancelada.");
     }
+  });
+});
+
+describe("Venda — reconstituição", () => {
+  // Reimpressão de cupom e consulta de venda passam por aqui. O que se cobra
+  // é fidelidade: os mesmos valores do cupom original, inclusive se a regra de
+  // rateio tiver mudado desde então.
+  const item = (
+    numero: number,
+    dados: DadosItemVenda,
+    desconto: string,
+    rateado: string,
+  ) => VendaItem.reconstituir(numero, dados, reais(desconto), reais(rateado));
+
+  function reconstituida(): Venda {
+    return Venda.reconstituir({
+      id: VENDA_ID,
+      numero: 42,
+      sessaoCaixaId: CAIXA,
+      operadorId: OPERADOR,
+      estacaoId: ESTACAO,
+      clienteId: CLIENTE,
+      abertaEm: AGORA,
+      status: "FINALIZADA",
+      finalizadaEm: new Date("2026-07-30T12:05:00.000Z"),
+      descontoVenda: reais("1,00"),
+      itens: [
+        item(
+          1,
+          {
+            produtoId: PRODUTO_A,
+            descricao: "REFRI",
+            quantidade: un("2"),
+            precoUnitario: reais("9,90"),
+          },
+          "0,00",
+          "0,60",
+        ),
+        item(
+          2,
+          {
+            produtoId: PRODUTO_B,
+            descricao: "PAO",
+            quantidade: kg("0,500"),
+            precoUnitario: reais("26,00"),
+          },
+          "0,00",
+          "0,40",
+        ),
+      ],
+      pagamentos: [Pagamento.criar("DINHEIRO", reais("31,40")).unwrap()],
+    });
+  }
+
+  it("volta com status, número e cliente", () => {
+    const venda = reconstituida();
+
+    expect(venda.numero).toBe(42);
+    expect(venda.status).toBe("FINALIZADA");
+    expect(venda.estaAberta).toBe(false);
+    expect(venda.clienteId?.equals(CLIENTE)).toBe(true);
+    expect(venda.finalizadaEm?.toISOString()).toBe("2026-07-30T12:05:00.000Z");
+  });
+
+  it("🔑 devolve exatamente o total do cupom original", () => {
+    const venda = reconstituida();
+
+    // 19,80 + 13,00 = 32,80, menos 1,00 de desconto na venda.
+    expect(venda.subtotal.formatar()).toBe("R$ 32,80");
+    expect(venda.descontoVenda.formatar()).toBe("R$ 1,00");
+    expect(venda.total.formatar()).toBe("R$ 31,80");
+  });
+
+  it("preserva o desconto rateado item a item — é o que a SEFAZ conferiu", () => {
+    const venda = reconstituida();
+
+    expect(venda.itens[0]?.descontoRateado.formatar()).toBe("R$ 0,60");
+    expect(venda.itens[1]?.descontoRateado.formatar()).toBe("R$ 0,40");
+  });
+
+  it("não registra evento algum — reconstituir não é um fato novo", () => {
+    expect(reconstituida().eventos).toHaveLength(0);
+  });
+
+  it("continua a numeração de itens de onde parou", () => {
+    const venda = Venda.reconstituir({
+      id: VENDA_ID,
+      numero: 7,
+      sessaoCaixaId: CAIXA,
+      operadorId: OPERADOR,
+      estacaoId: ESTACAO,
+      clienteId: undefined,
+      abertaEm: AGORA,
+      status: "ABERTA",
+      finalizadaEm: undefined,
+      descontoVenda: Dinheiro.zero(),
+      itens: [
+        item(
+          1,
+          {
+            produtoId: PRODUTO_A,
+            descricao: "REFRI",
+            quantidade: un("1"),
+            precoUnitario: reais("9,90"),
+          },
+          "0,00",
+          "0,00",
+        ),
+      ],
+      pagamentos: [],
+    });
+
+    const novo = venda
+      .adicionarItem({
+        produtoId: PRODUTO_B,
+        descricao: "PAO",
+        quantidade: un("1"),
+        precoUnitario: reais("2,00"),
+      })
+      .unwrap();
+
+    expect(novo.numero).toBe(2);
+  });
+
+  it("venda vazia reconstituída começa a numerar do primeiro item", () => {
+    const venda = Venda.reconstituir({
+      id: VENDA_ID,
+      numero: 8,
+      sessaoCaixaId: CAIXA,
+      operadorId: OPERADOR,
+      estacaoId: ESTACAO,
+      clienteId: undefined,
+      abertaEm: AGORA,
+      status: "ABERTA",
+      finalizadaEm: undefined,
+      descontoVenda: Dinheiro.zero(),
+      itens: [],
+      pagamentos: [],
+    });
+
+    const novo = venda
+      .adicionarItem({
+        produtoId: PRODUTO_A,
+        descricao: "REFRI",
+        quantidade: un("1"),
+        precoUnitario: reais("9,90"),
+      })
+      .unwrap();
+
+    expect(novo.numero).toBe(1);
   });
 });

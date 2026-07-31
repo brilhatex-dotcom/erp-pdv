@@ -44,6 +44,22 @@ export class SaldoEstoque {
   }
 
   /**
+   * Reconstrói um saldo já materializado.
+   *
+   * Uso exclusivo do repositório. É o atalho que torna a projeção útil: sem
+   * ele, ler o saldo exigiria somar todos os movimentos do produto, que é
+   * exatamente o custo que a materialização existe para evitar (RNF-02).
+   */
+  static reconstituir(
+    produtoId: Identificador,
+    unidade: CodigoUnidade,
+    milesimos: bigint,
+    custoMedio: Dinheiro,
+  ): SaldoEstoque {
+    return new SaldoEstoque(produtoId, unidade, milesimos, custoMedio);
+  }
+
+  /**
    * Projeta o saldo a partir de uma lista de movimentos.
    *
    * A ordem só importa para o **custo médio**, que é histórico por natureza —

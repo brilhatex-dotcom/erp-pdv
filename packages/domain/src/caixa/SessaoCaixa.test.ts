@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { Identificador } from "../shared/Identificador.js";
 import { Dinheiro } from "../valores/Dinheiro.js";
+import { MovimentoCaixa } from "./MovimentoCaixa.js";
 import { type DadosSessaoCaixa, type ResumoVenda, SessaoCaixa } from "./SessaoCaixa.js";
 
 const SESSAO = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5b01").unwrap();
@@ -530,5 +531,103 @@ describe("SessaoCaixa — caixa fechado", () => {
 
   it("deixa de estar aberto", () => {
     expect(fechada().estaAberta).toBe(false);
+  });
+});
+
+describe("SessaoCaixa — reconstituição", () => {
+  // O caixa reabre a partir de totais, nunca da lista de vendas do dia: com
+  // 2.000 vendas, carregá-las para abrir a gaveta quebraria o RNF-01.
+  function reconstituida(): SessaoCaixa {
+    return SessaoCaixa.reconstituir({
+      id: SESSAO,
+      estacaoId: ESTACAO,
+      operadorId: OPERADOR,
+      fundoTroco: reais("100,00"),
+      abertaEm: AGORA,
+      status: "ABERTA",
+      fechadaEm: undefined,
+      trocoDevolvido: reais("5,00"),
+      totalVendido: reais("450,00"),
+      quantidadeVendas: 12,
+      movimentos: [],
+      recebidos: new Map([
+        ["DINHEIRO", reais("200,00")],
+        ["CARTAO_DEBITO", reais("150,00")],
+        ["CREDIARIO", reais("100,00")],
+      ]),
+    });
+  }
+
+  it("volta com os totais gravados", () => {
+    const sessao = reconstituida();
+
+    expect(sessao.totalVendido.formatar()).toBe("R$ 450,00");
+    expect(sessao.quantidadeVendas).toBe(12);
+    expect(sessao.trocoDevolvido.formatar()).toBe("R$ 5,00");
+    expect(sessao.estaAberta).toBe(true);
+  });
+
+  it("🔑 recompõe o esperado na gaveta sem contar cartão nem crediário", () => {
+    // 100 de fundo + 200 em dinheiro − 5 de troco. Os 150 do cartão e os 100
+    // do crediário não passam pela gaveta.
+    expect(reconstituida().esperadoEmDinheiro.formatar()).toBe("R$ 295,00");
+  });
+
+  it("separa o que é a receber do que foi recebido", () => {
+    expect(reconstituida().totalAReceber.formatar()).toBe("R$ 100,00");
+  });
+
+  it("volta com os movimentos de sangria e suprimento", () => {
+    const sessao = SessaoCaixa.reconstituir({
+      id: SESSAO,
+      estacaoId: ESTACAO,
+      operadorId: OPERADOR,
+      fundoTroco: reais("100,00"),
+      abertaEm: AGORA,
+      status: "ABERTA",
+      fechadaEm: undefined,
+      trocoDevolvido: Dinheiro.zero(),
+      totalVendido: Dinheiro.zero(),
+      quantidadeVendas: 0,
+      movimentos: [
+        MovimentoCaixa.criar({
+          id: proximoId(),
+          tipo: "SANGRIA",
+          valor: reais("30,00"),
+          motivo: "Retirada para o cofre",
+          usuarioId: OPERADOR,
+          ocorridoEm: AGORA,
+        }).unwrap(),
+      ],
+      recebidos: new Map(),
+    });
+
+    expect(sessao.movimentos).toHaveLength(1);
+    expect(sessao.sangrias.formatar()).toBe("R$ 30,00");
+    expect(sessao.esperadoEmDinheiro.formatar()).toBe("R$ 70,00");
+  });
+
+  it("volta fechada quando já foi fechada", () => {
+    const fechada = SessaoCaixa.reconstituir({
+      id: SESSAO,
+      estacaoId: ESTACAO,
+      operadorId: OPERADOR,
+      fundoTroco: reais("100,00"),
+      abertaEm: AGORA,
+      status: "FECHADA",
+      fechadaEm: new Date("2026-07-30T18:00:00.000Z"),
+      trocoDevolvido: Dinheiro.zero(),
+      totalVendido: reais("450,00"),
+      quantidadeVendas: 12,
+      movimentos: [],
+      recebidos: new Map(),
+    });
+
+    expect(fechada.estaAberta).toBe(false);
+    expect(fechada.fechadaEm?.toISOString()).toBe("2026-07-30T18:00:00.000Z");
+  });
+
+  it("não registra evento algum", () => {
+    expect(reconstituida().eventos).toHaveLength(0);
   });
 });

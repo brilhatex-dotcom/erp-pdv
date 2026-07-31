@@ -616,3 +616,79 @@ describe("Produto — identidade", () => {
     expect(a.equals(b)).toBe(true);
   });
 });
+
+describe("Produto — código de balança", () => {
+  // O açougue e o hortifruti dependem disso: a etiqueta impressa pela balança
+  // carrega este código, e é por ele que o PDV acha o produto na bipada.
+  it("guarda o código quando o produto é pesável", () => {
+    const produto = criar({
+      tipo: "PESAVEL",
+      unidadeBase: "KG",
+      codigoBalanca: "012345",
+    });
+
+    expect(produto.codigoBalanca).toBe("012345");
+  });
+
+  it("ignora espaços em volta do código", () => {
+    const produto = criar({
+      tipo: "PESAVEL",
+      unidadeBase: "KG",
+      codigoBalanca: "  012345  ",
+    });
+
+    expect(produto.codigoBalanca).toBe("012345");
+  });
+
+  it.each([[undefined], [""], ["   "]])("fica sem código quando recebe %p", (valor) => {
+    const produto = criar({
+      tipo: "PESAVEL",
+      unidadeBase: "KG",
+      codigoBalanca: valor,
+    });
+
+    expect(produto.codigoBalanca).toBeUndefined();
+  });
+
+  it("recusa código com letra — a balança só imprime dígitos", () => {
+    const resultado = Produto.criar(
+      dadosBase({ tipo: "PESAVEL", unidadeBase: "KG", codigoBalanca: "01A345" }),
+    );
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_CODIGO_BALANCA_INVALIDO",
+      );
+    }
+  });
+
+  it("recusa código de balança em produto que não é pesável", () => {
+    const resultado = Produto.criar(dadosBase({ codigoBalanca: "012345" }));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
+      );
+    }
+  });
+
+  it("reconstitui produto sem custo gravado", () => {
+    const produto = Produto.reconstituir({
+      ...dadosBase({ custo: undefined }),
+      descricaoPdv: "REFRI COLA 2L",
+    });
+
+    expect(produto.custo.ehZero()).toBe(true);
+  });
+
+  it("preserva o código na reconstituição", () => {
+    const produto = Produto.reconstituir({
+      ...dadosBase({ tipo: "PESAVEL", unidadeBase: "KG", codigoBalanca: "012345" }),
+      descricaoPdv: "PICANHA",
+    });
+
+    expect(produto.codigoBalanca).toBe("012345");
+  });
+});
