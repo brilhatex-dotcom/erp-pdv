@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { PrismaClient } from "../../gerado/index.js";
+import { PrismaClient } from "../gerado/index.js";
 
 /**
  * Banco de teste.
@@ -62,7 +62,12 @@ export async function limparBanco(prisma: PrismaClient): Promise<void> {
       "movimentos_estoque",
       "embalagens",
       "referencias_produto",
-      "produtos"
+      "produtos",
+      "sessoes_acesso",
+      "estacoes_permitidas",
+      "usuarios",
+      "permissoes_papel",
+      "papeis"
     RESTART IDENTITY CASCADE
   `);
 }

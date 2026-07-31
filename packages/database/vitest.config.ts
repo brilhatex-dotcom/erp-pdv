@@ -14,8 +14,7 @@ export default mergeConfig(base, {
         "src/**/index.ts",
         // Cliente gerado pelo Prisma: não é código nosso.
         "src/gerado/**",
-        // Infraestrutura de teste, não código de produção — mesma exclusão que
-        // `@erp/application` e `apps/server` já fazem.
+        // Infraestrutura de teste, não código de produção.
         //
         // Medi-la produzia um portão que dependia do ambiente: `banco.ts` lê
         // `DATABASE_URL_TESTE ?? padrão`, e cada lado do `??` é exercitado numa

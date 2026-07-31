@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.3 |
+| **Versão do documento** | 1.2 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -17,8 +17,6 @@
 |---|---|---|
 | 1.0 | 30/07/2026 | Versão inicial |
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
-| **1.2** | 30/07/2026 | **ADR-0014, ADR-0015 e ADR-0016**: escopo restrito a varejo (serviços e NFS-e fora do produto), emissão fiscal via provedor externo atrás da porta `ProvedorFiscal` e módulo fiscal opcional por empresa. Impacta §1.4, §5 e §15. |
-| **1.3** | 31/07/2026 | **ADR-0018 e ADR-0019**: fronteira HTTP com envelope de erro único e nenhuma rota de negócio sem autenticação; dinheiro e quantidade trafegam como texto inteiro no JSON. Acrescenta a seta `@erp/contracts → apps/server` ao grafo de §3.3, que o texto de §2.6 já exigia. |
 
 ---
 
@@ -450,7 +448,6 @@ graph BT
     DOMAIN --> APP
     UTILS --> DOMAIN
     CONTRACTS --> APP
-    CONTRACTS --> SERVER
     APP --> SERVER
     DB --> SERVER
     FISCAL --> SERVER
@@ -470,7 +467,6 @@ graph BT
 
 **Leitura das regras críticas:**
 - `@erp/domain` não depende de **nada** (exceto `@erp/utils`, que também é puro).
-- `@erp/contracts` é usado **pelo servidor e pelos clientes**: é o servidor que valida a requisição em runtime com o mesmo schema de que o cliente derivou o tipo (§2.6). Essa seta faltava no grafo até a versão 1.3 deste documento, embora o texto de §2.6 já a exigisse.
 - `@erp/database` e `@erp/fiscal` implementam portas de `@erp/application` — a seta aponta para dentro.
 - `apps/pdv` importa `@erp/domain` para calcular carrinho **localmente** (sem servidor) — é isso que permite o modo offline.
 - Nenhum `app` importa outro `app`.
@@ -780,7 +776,7 @@ packages/fiscal/src/
 | **Banco** | **PostgreSQL** (embarcado) | 17 | SQLite, Firebird | Único banco em dev/teste/produção; integridade, MVCC, PITR, roles |
 | Cache local do PDV | **SQLite** (embarcado no Electron) | 3.4x | IndexedDB | Apenas catálogo replicado + fila offline — **não** é sistema de registro |
 | UI | **React** | 19 | Vue, Svelte | Maior ecossistema; contratação mais fácil |
-| Build do front | **Vite** | 7.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
+| Build do front | **Vite** | 8.x | Webpack, Next.js | Rápido; SPA é o que o produto precisa (SEO é irrelevante) |
 | Estilo | **Tailwind CSS** | 4.x | CSS Modules | Consistência via tokens; sem CSS órfão |
 | Estado servidor | **TanStack Query** | 5.x | Redux | Cache, revalidação e offline nativos |
 | Estado local | **Zustand** | 5.x | Redux Toolkit | Mínimo necessário para o carrinho |
@@ -1085,7 +1081,7 @@ Papel puro não basta para um ERP. "Pode dar desconto" precisa responder **quant
 
 ```mermaid
 graph LR
-    U[Usuário] -->|possui| P[Papéis]
+    U[Usuário] -->|possui **um**| P[Papel]
     P -->|concede| PERM[Permissões<br/>recurso:ação]
     U -->|restrito a| ESC[Escopo<br/>loja / estação]
     P -->|limitado por| LIM[Limites<br/>desconto máx., valor máx.]
@@ -1110,6 +1106,8 @@ graph LR
 | **ADMIN** | Configuração total, usuários, fiscal, integrações | — (todas as ações auditadas) |
 
 Papéis são **personalizáveis**: a empresa cria papéis próprios combinando permissões. Os acima são o padrão de fábrica.
+
+**Cada usuário tem exatamente um papel.** Papel múltiplo por usuário obrigaria a explicar composição de permissões a quem não tem equipe de TI, e a resposta a "por que o João consegue isso?" passaria a exigir somar conjuntos mentalmente — custo de suporte que ninguém paga. A necessidade real ("um funcionário que vende **e** repõe estoque") já é atendida criando um papel com as duas coisas, que é uma configuração que o dono da loja entende olhando.
 
 ### 9.3 Nomenclatura de permissões
 

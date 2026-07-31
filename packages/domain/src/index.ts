@@ -117,45 +117,52 @@ export {
   type StatusCaixa,
 } from "./caixa/SessaoCaixa.js";
 
-// ── Acesso ──────────────────────────────────────────────────────────────
+// ── Identidade ──────────────────────────────────────────────────────────
+export { CredencialHash } from "./identidade/CredencialHash.js";
 export {
-  ALCADA_SIMPLES,
-  type Alcada,
+  type CredencialBloqueada,
+  credencialBloqueada,
+  type EventoIdentidade,
+  type FamiliaDeSessaoRevogada,
+  familiaDeSessaoRevogada,
+  type OperacaoAutorizadaPorSupervisor,
+  operacaoAutorizadaPorSupervisor,
+  type TentativaRecusada,
+  tentativaRecusada,
+} from "./identidade/eventos.js";
+export { Matricula } from "./identidade/Matricula.js";
+export {
+  BASE_PERCENTUAL,
+  type DadosPapel,
+  type LimitesPapel,
+  Papel,
+} from "./identidade/Papel.js";
+export {
+  type CodigoPapelPadrao,
+  MODELOS_PAPEL_PADRAO,
+  papelPadrao,
+} from "./identidade/papeisPadrao.js";
+export { ehPermissao, type Permissao, PERMISSOES } from "./identidade/Permissao.js";
+export { Pin, TAMANHO_PIN } from "./identidade/Pin.js";
+export {
+  type AcaoSolicitada,
+  avaliar,
   type Decisao,
-  decidir,
-  type Pedido,
   podeAutorizar,
-} from "./acesso/autorizacao.js";
+} from "./identidade/PoliticaAutorizacao.js";
+export { Senha, TAMANHO_MINIMO_SENHA } from "./identidade/Senha.js";
 export {
-  type AcessoAutorizado,
-  acessoAutorizado,
-  type AcessoRecusado,
-  acessoRecusado,
-  type EventoAcesso,
-  type MeioDeAcesso,
-  type UsuarioBloqueado,
-  usuarioBloqueado,
-} from "./acesso/eventos.js";
-export { HashCredencial } from "./acesso/HashCredencial.js";
+  type ContextoSessao,
+  type DadosReconstituicaoSessao,
+  type DadosSessaoAcesso,
+  SessaoAcesso,
+} from "./identidade/SessaoAcesso.js";
 export {
-  type DadosLimites,
-  ILIMITADO,
-  type LimiteDinheiro,
-  type LimiteMinutos,
-  LimitesPapel,
-  PERCENTUAL_TOTAL,
-} from "./acesso/LimitesPapel.js";
-export { Matricula } from "./acesso/Matricula.js";
-export { type DadosPapel, Papel, papeisDeFabrica } from "./acesso/Papel.js";
-export { ehPermissao, type Permissao, PERMISSOES } from "./acesso/Permissao.js";
-export { Pin } from "./acesso/Pin.js";
-export { Senha } from "./acesso/Senha.js";
-export {
-  BLOQUEIO_INICIAL_MINUTOS,
-  BLOQUEIO_MAXIMO_MINUTOS,
   type DadosReconstituicaoUsuario,
   type DadosUsuario,
-  type MotivoImpedimento,
+  type ErroUsuario,
+  MINUTOS_BLOQUEIO_MAXIMO,
+  MINUTOS_PRIMEIRO_BLOQUEIO,
   TENTATIVAS_ATE_BLOQUEIO,
   Usuario,
-} from "./acesso/Usuario.js";
+} from "./identidade/Usuario.js";

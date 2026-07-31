@@ -14,11 +14,10 @@
   },
   "files": [
     "dist",
-    "gerado",
     "prisma"
   ],
   "scripts": {
-    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "build": "prisma generate && tsc -p tsconfig.build.json && node scripts/copiar-gerado.mjs",
     "typecheck": "prisma generate && tsc --noEmit",
     "lint": "prisma generate && eslint src",
     "test": "prisma generate && vitest run",
@@ -32,6 +31,7 @@
     "@erp/application": "workspace:*",
     "@erp/domain": "workspace:*",
     "@erp/utils": "workspace:*",
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.19.1"
   },
   "devDependencies": {

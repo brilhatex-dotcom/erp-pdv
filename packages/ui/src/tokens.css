@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/**
+ * Tokens do design system.
+ *
+ * As escolhas aqui não são estéticas — respondem ao ambiente real do balcão:
+ * monitor antigo, iluminação ruim, operador em pé, e às vezes uma pessoa mais
+ * velha que não vai avisar que não está enxergando.
+ */
+@theme {
+  /* ── Cores ─────────────────────────────────────────────────────────────
+   *
+   * Paleta curta de propósito. Um sistema com trinta tons vira trinta
+   * decisões por tela, e as telas deixam de parecer o mesmo produto.
+   *
+   * Todas as combinações de texto sobre fundo declaradas abaixo passam de
+   * 4,5:1 (WCAG AA). Não é formalidade: é o monitor de 2014 do mercadinho.
+   */
+  --color-tinta: oklch(0.22 0.01 250);
+  --color-tinta-suave: oklch(0.48 0.01 250);
+  --color-papel: oklch(1 0 0);
+  --color-papel-fundo: oklch(0.97 0.003 250);
+  --color-borda: oklch(0.89 0.005 250);
+
+  /* Azul de ação: distingue o que é clicável sem depender de sublinhado. */
+  --color-acao: oklch(0.52 0.16 253);
+  --color-acao-forte: oklch(0.44 0.17 253);
+  --color-acao-suave: oklch(0.96 0.02 253);
+
+  /* Verde de confirmação — usado com moderação, senão perde o significado. */
+  --color-ok: oklch(0.55 0.14 155);
+  --color-ok-suave: oklch(0.96 0.03 155);
+
+  /* Âmbar de atenção: algo precisa de olho, mas nada quebrou. */
+  --color-atencao: oklch(0.68 0.15 75);
+  --color-atencao-suave: oklch(0.97 0.04 85);
+
+  /* Vermelho de erro. Nunca é a única pista — sempre acompanha texto e ícone,
+   * porque ~8% dos homens não distinguem vermelho de verde. */
+  --color-erro: oklch(0.53 0.2 27);
+  --color-erro-suave: oklch(0.96 0.03 27);
+
+  /* ── Tipografia ────────────────────────────────────────────────────────
+   *
+   * A base é 16px, não 14px. Interface administrativa costuma encolher a
+   * fonte para caber mais coisa; aqui a densidade perde para a legibilidade,
+   * porque quem lê está de pé e com pressa.
+   */
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  /* Tabular para dinheiro: dígitos de largura fixa fazem a coluna de valores
+   * alinhar, e desalinhamento em coluna de dinheiro é onde o olho erra. */
+  --font-numero: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  /* Para o valor total no PDV: precisa ser lido de longe pelo cliente. */
+  --text-total: 2.75rem;
+
+  /* ── Espaçamento e forma ───────────────────────────────────────────────
+   *
+   * Alvo mínimo de 44px em qualquer coisa clicável (WCAG 2.5.5). Vale mesmo
+   * no desktop: o balcão tem mouse ruim e a mão do operador está ocupada.
+   */
+  --spacing-alvo: 2.75rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+
+  /* Sombras discretas: profundidade suficiente para separar camadas, sem o
+   * borrão que monitor de baixo contraste transforma em sujeira. */
+  --shadow-cartao: 0 1px 2px oklch(0.22 0.01 250 / 0.06);
+  --shadow-flutuante: 0 4px 12px oklch(0.22 0.01 250 / 0.12);
+}
+
+/**
+ * Foco sempre visível.
+ *
+ * Este produto é operado por teclado — no PDV, exclusivamente. Um `outline:
+ * none` em qualquer lugar deixa o operador sem saber onde está, e é por isso
+ * que o anel é definido globalmente em vez de componente a componente.
+ */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid var(--color-acao);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  body {
+    background-color: var(--color-papel-fundo);
+    color: var(--color-tinta);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    /* O balcão não tem tempo para animação; e enjoo de movimento é real. */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Respeita quem pediu menos movimento no sistema operacional. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

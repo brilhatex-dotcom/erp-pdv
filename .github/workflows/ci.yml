@@ -35,12 +35,11 @@ jobs:
           - 5432:5432
         # Sem o healthcheck, o passo de teste começa antes do banco aceitar
         # conexão e falha por corrida, não por defeito.
-        #
         # `-U erp -d erp_teste` explícitos: sem eles o `pg_isready` tenta o
         # usuário do sistema e o log do serviço enche de `FATAL: role "root"
-        # does not exist` a cada 5 s. O healthcheck passa mesmo assim — o
-        # servidor respondeu —, mas erro falso no log é o que faz alguém
-        # perseguir a causa errada quando algo de verdade quebrar.
+        # does not exist` a cada 5 s. O healthcheck passa mesmo assim, mas erro
+        # falso no log faz alguém perseguir a causa errada quando algo de
+        # verdade quebrar.
         options: >-
           --health-cmd "pg_isready -U erp -d erp_teste"
           --health-interval 5s
@@ -49,6 +48,7 @@ jobs:
 
     env:
       DATABASE_URL_TESTE: postgresql://erp:erp@localhost:5432/erp_teste
+      DATABASE_URL_TESTE_API: postgresql://erp:erp@localhost:5432/erp_teste_api
 
     steps:
       - uses: actions/checkout@v4
@@ -59,6 +59,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      - name: Criar bancos de teste
+        # Um por suíte: o Turbo roda os pacotes em paralelo, e duas suítes
+        # truncando as mesmas tabelas dariam falha intermitente.
+        run: |
+          PGPASSWORD=erp psql -h localhost -U erp -d erp_teste -c "SELECT 1" >/dev/null
+          PGPASSWORD=erp createdb -h localhost -U erp erp_teste_api
 
       - name: Instalar dependências
         # --frozen-lockfile: o CI nunca resolve versão diferente da do
@@ -104,16 +111,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Auditoria das dependências de produção
-        # BLOQUEIA o merge (CLAUDE.md §7). `--prod` de propósito: este passo
-        # mede o que é instalado na loja.
+        # BLOQUEIA o merge (CLAUDE.md §7). `--prod` de propósito: este passo mede
+        # o que é instalado na loja.
         #
-        # A primeira versão auditava tudo, e o efeito prático foi o oposto do
-        # pretendido: duas falhas altas em `brace-expansion`, arrastado por
-        # ESLint e Vitest, deixavam o portão vermelho sem que houvesse nada
-        # vulnerável no produto. A tentativa de calar aquilo forçando a versão
-        # nova quebrou o provedor de cobertura — `minimatch@9` é CommonJS e a
-        # linha 5.x do `brace-expansion` é ESM. Portão que mede a coisa errada
-        # empurra para a solução errada.
+        # Auditar tudo mede a coisa errada — as falhas altas de hoje estão em
+        # `brace-expansion`, arrastado por ESLint e Vitest, sem nada vulnerável
+        # no produto. E portão que mede errado empurra para a solução errada:
+        # a tentativa de calar aquilo forçando a versão nova quebra o provedor
+        # de cobertura, porque `minimatch@9` é CommonJS e a linha 5.x é ESM.
         run: pnpm audit --prod --audit-level high
 
       - name: Auditoria do ferramental (informativa)

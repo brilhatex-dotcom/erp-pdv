@@ -1,7 +1,7 @@
 import type { OutboxRepository } from "@erp/application";
 import type { DomainEvent } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "../../gerado/index.js";
+import type { Prisma, PrismaClient } from "../gerado/index.js";
 import { serializarEvento } from "../mapeadores/eventoMapeador.js";
 
 type ClientePrisma = PrismaClient | Prisma.TransactionClient;

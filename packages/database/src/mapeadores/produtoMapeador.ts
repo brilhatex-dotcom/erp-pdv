@@ -4,7 +4,7 @@ import type {
   Embalagem as EmbalagemLinha,
   Produto as ProdutoLinha,
   ReferenciaProduto as ReferenciaLinha,
-} from "../../gerado/index.js";
+} from "../gerado/index.js";
 import { ouNulo, paraDinheiro, paraId, paraIdOpcional, paraUnidade } from "./comuns.js";
 
 export type ProdutoCompleto = ProdutoLinha & {

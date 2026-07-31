@@ -1,77 +1,139 @@
-import type { GeradorId, Relogio, UnitOfWork } from "@erp/application";
-import type { Verificacao } from "@erp/contracts";
-import { criarPrismaClient, type PrismaClient, UnitOfWorkPrisma } from "@erp/database";
+import {
+  Autenticar,
+  AutorizarOperacao,
+  type GeradorId,
+  type Hasher,
+  IniciarVenda,
+  AdicionarItemPorCodigo,
+  FinalizarVenda,
+  RegistrarPagamento,
+  RenovarSessao,
+  type Relogio,
+  type Repositorios,
+  type UnitOfWork,
+} from "@erp/application";
+import {
+  criarPrismaClient,
+  HasherArgon2,
+  montarRepositorios,
+  type PrismaClient,
+  UnitOfWorkPrisma,
+} from "@erp/database";
+import {
+  BYTES_ALEATORIOS_UUID_V7,
+  type Identificador,
+  LAYOUT_BALANCA_PADRAO,
+  montarUuidV7,
+} from "@erp/domain";
+import { randomBytes, randomUUID } from "node:crypto";
 
-import { GeradorUuidV7 } from "./adaptadores/GeradorUuidV7.js";
-import { RelogioSistema } from "./adaptadores/RelogioSistema.js";
-import type { Ambiente } from "./ambiente.js";
+import type { Ambiente } from "../ambiente.js";
 
 /**
- * Composição — **o único lugar onde porta encontra adapter**.
+ * Container de composição.
  *
- * Todo o resto do sistema conhece apenas interfaces. Concentrar a montagem aqui
- * é o que permite ao CI provar que o domínio não conhece o Prisma: se a
- * escolha do adapter estivesse espalhada pelas rotas, a regra de arquitetura
- * seria só uma recomendação.
+ * É o **único** lugar do sistema que conhece implementações concretas. Tudo
+ * abaixo dele fala com portas. Trocar Postgres por outro banco, ou Argon2id por
+ * outro algoritmo, é mexer aqui — e em nenhum caso de uso.
+ *
+ * É explícito de propósito, sem framework de injeção: um container de 60 linhas
+ * que se lê de cima a baixo tem custo de manutenção menor que decorators e
+ * resolução mágica, e o comitê já rejeitou NestJS pelo mesmo motivo
+ * (ARQUITETURA.md §5.2.3).
+ *
+ * Quando o módulo fiscal entrar, é aqui que o `ProvedorFiscalNulo` é registrado
+ * para a empresa que não emite documento (ADR-0016) — sem um `if` sequer dentro
+ * do domínio.
  */
 export interface Container {
+  readonly ambiente: Ambiente;
+  readonly prisma: PrismaClient;
+  readonly unitOfWork: UnitOfWork;
+  /**
+   * Repositórios **fora** de transação, para leitura.
+   *
+   * Consulta que só lê não precisa de transação: abrir uma para responder "quem
+   * sou eu" gastaria uma conexão do pool — que tem 20 no servidor da loja — sem
+   * ganhar garantia nenhuma.
+   */
+  readonly leitura: Repositorios;
   readonly relogio: Relogio;
   readonly geradorId: GeradorId;
-  readonly unitOfWork: UnitOfWork;
+  readonly hasher: Hasher;
 
-  /** Verifica se o banco responde. Usada por `/pronto`. */
-  verificarBanco(): Promise<Verificacao>;
+  readonly autenticar: Autenticar;
+  readonly renovarSessao: RenovarSessao;
+  readonly autorizarOperacao: AutorizarOperacao;
 
-  /** Devolve as conexões. Chamada no encerramento gracioso. */
+  readonly iniciarVenda: IniciarVenda;
+  readonly adicionarItem: AdicionarItemPorCodigo;
+  readonly registrarPagamento: RegistrarPagamento;
+  readonly finalizarVenda: FinalizarVenda;
+
   encerrar(): Promise<void>;
 }
 
+/** Relógio do sistema. É porta porque teste com relógio real não é determinístico. */
+const relogioDoSistema: Relogio = { agora: () => new Date() };
+
 /**
- * Teto da verificação de prontidão.
+ * Gerador de UUIDv7 (ADR-0008).
  *
- * Verificação sem tempo limite não é verificação: banco travado deixaria
- * `/pronto` pendurado, e quem consulta — instalador, atualizador, PDV
- * decidindo entrar em contingência — ficaria esperando em vez de receber
- * "não está pronto". Responder "não" rápido é mais útil que responder certo
- * devagar.
+ * O domínio expõe `montarUuidV7`, que é puro; quem fornece tempo e entropia é
+ * este adapter — porque `Date.now` e `randomBytes` são infraestrutura.
  */
-const TEMPO_LIMITE_VERIFICACAO_MS = 2_000;
+const geradorUuidV7: GeradorId = {
+  proximo(): Identificador {
+    const aleatorios = new Uint8Array(randomBytes(BYTES_ALEATORIOS_UUID_V7));
+    // Entrada sempre válida: instante atual e a quantidade exata de bytes.
+    return montarUuidV7(Date.now(), aleatorios).unwrap();
+  },
+};
+
+/**
+ * Segredo do refresh token.
+ *
+ * 256 bits de `randomBytes` — gerador criptográfico, nunca `Math.random`. O
+ * valor só existe em claro dentro do cookie do cliente; o banco guarda o hash.
+ */
+function gerarRefresh(): string {
+  return randomBytes(32).toString("base64url");
+}
 
 export function montarContainer(ambiente: Ambiente): Container {
   const prisma = criarPrismaClient({
-    urlBanco: ambiente.urlBanco,
-    registrarConsultas: ambiente.registrarConsultasSql,
+    urlBanco: ambiente.DATABASE_URL,
+    registrarConsultas: !ambiente.ehProducao,
   });
 
-  return montarContainerCom(prisma);
-}
-
-/**
- * Monta o container sobre um cliente já existente.
- *
- * Existe separado para que o teste de integração use o cliente do banco de
- * teste sem passar por variável de ambiente.
- */
-export function montarContainerCom(prisma: PrismaClient): Container {
-  const relogio = new RelogioSistema();
+  const unitOfWork = new UnitOfWorkPrisma(prisma);
+  const hasher = new HasherArgon2();
+  const relogio = relogioDoSistema;
+  const geradorId = geradorUuidV7;
 
   return {
+    ambiente,
+    prisma,
+    unitOfWork,
+    leitura: montarRepositorios(prisma),
     relogio,
-    geradorId: new GeradorUuidV7(relogio),
-    unitOfWork: new UnitOfWorkPrisma(prisma),
+    geradorId,
+    hasher,
 
-    async verificarBanco(): Promise<Verificacao> {
-      const inicio = performance.now();
+    autenticar: new Autenticar(unitOfWork, relogio, geradorId, hasher, gerarRefresh),
+    renovarSessao: new RenovarSessao(
+      unitOfWork,
+      relogio,
+      geradorId,
+      hasher,
+      gerarRefresh,
+    ),
+    autorizarOperacao: new AutorizarOperacao(relogio, hasher),
 
-      try {
-        await comTempoLimite(prisma.$queryRaw`SELECT 1`, TEMPO_LIMITE_VERIFICACAO_MS);
-        return { ok: true, latenciaMs: decorridoMs(inicio) };
-      } catch {
-        // A causa vai para o log de quem chamou, junto da correlação da
-        // requisição. Aqui só interessa o veredito.
-        return { ok: false, latenciaMs: decorridoMs(inicio) };
-      }
-    },
+    iniciarVenda: new IniciarVenda(unitOfWork, relogio, geradorId),
+    adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
+    registrarPagamento: new RegistrarPagamento(unitOfWork),
+    finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
 
     async encerrar(): Promise<void> {
       await prisma.$disconnect();
@@ -79,30 +141,7 @@ export function montarContainerCom(prisma: PrismaClient): Container {
   };
 }
 
-function decorridoMs(inicio: number): number {
-  return Math.round(performance.now() - inicio);
-}
-
-/**
- * Desiste da promessa após o prazo.
- *
- * O temporizador é sempre limpo — deixá-lo pendente manteria o processo vivo
- * depois do `close()`, e o serviço do Windows demoraria a parar sem motivo
- * aparente.
- */
-async function comTempoLimite<T>(promessa: PromiseLike<T>, prazoMs: number): Promise<T> {
-  let temporizador: NodeJS.Timeout | undefined;
-
-  try {
-    return await Promise.race([
-      promessa,
-      new Promise<never>((_resolver, rejeitar) => {
-        temporizador = setTimeout(() => {
-          rejeitar(new Error(`Tempo limite de ${String(prazoMs)} ms esgotado.`));
-        }, prazoMs);
-      }),
-    ]);
-  } finally {
-    clearTimeout(temporizador);
-  }
+/** Identificador de dispositivo, quando o cliente não informou um. */
+export function novoDispositivoId(): string {
+  return randomUUID();
 }

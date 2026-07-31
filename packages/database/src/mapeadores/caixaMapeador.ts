@@ -9,7 +9,7 @@ import type {
   MovimentoCaixa as MovimentoLinha,
   RecebimentoCaixa as RecebimentoLinha,
   SessaoCaixa as SessaoLinha,
-} from "../../gerado/index.js";
+} from "../gerado/index.js";
 import { ouNulo, paraDinheiro, paraId, paraIdOpcional } from "./comuns.js";
 
 export type SessaoCompleta = SessaoLinha & {

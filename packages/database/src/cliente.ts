@@ -1,4 +1,4 @@
-import { PrismaClient } from "../gerado/index.js";
+import { PrismaClient } from "./gerado/index.js";
 
 export interface OpcoesPrisma {
   readonly urlBanco: string;

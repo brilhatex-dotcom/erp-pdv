@@ -22,7 +22,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "gerado/**"],
+      "outputs": ["dist/**"],
       "env": ["DATABASE_URL"]
     },
     "typecheck": {

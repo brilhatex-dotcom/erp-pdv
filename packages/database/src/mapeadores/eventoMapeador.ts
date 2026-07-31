@@ -1,6 +1,6 @@
 import { Dinheiro, type DomainEvent, Identificador, Quantidade } from "@erp/domain";
 
-import type { Prisma } from "../../gerado/index.js";
+import type { Prisma } from "../gerado/index.js";
 
 /**
  * Serializa um evento de domínio para o corpo JSON da outbox.

@@ -33,8 +33,8 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0015](0015-emissao-fiscal-via-provedor-externo.md) | Emissão fiscal via provedor externo, atrás de abstração própria | Aceito |
 | [0016](0016-modulo-fiscal-opcional-por-empresa.md) | Módulo fiscal opcional, habilitado por empresa | Aceito |
 | [0017](0017-persistencia-chaves-naturais-e-projecao-travada.md) | Chave natural nas tabelas filhas; trava explícita na projeção de saldo | Aceito |
-| [0018](0018-fronteira-http-erro-traduzido-e-autenticacao-obrigatoria.md) | Fronteira HTTP traduz erro; nenhuma rota de negócio sem autenticação | Aceito |
-| [0019](0019-dinheiro-como-texto-inteiro-no-json.md) | Dinheiro e quantidade como texto inteiro no JSON | Aceito |
+| [0018](0018-um-papel-por-usuario.md) | Um papel por usuário, com papéis personalizáveis | Aceito |
+| [0019](0019-desfecho-explicito-em-transacao.md) | Desfecho explícito em transação, para gravações que sobrevivem ao erro | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo

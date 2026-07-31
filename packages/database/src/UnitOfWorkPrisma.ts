@@ -1,7 +1,12 @@
 import { ErroInfraestrutura, type Repositorios, type UnitOfWork } from "@erp/application";
 import { type DomainError, err, type Result } from "@erp/domain";
 
-import type { Prisma, PrismaClient } from "../gerado/index.js";
+import type { Prisma, PrismaClient } from "./gerado/index.js";
+import {
+  PapelRepositorioPrisma,
+  SessaoAcessoRepositorioPrisma,
+  UsuarioRepositorioPrisma,
+} from "./repositorios/AcessoRepositorioPrisma.js";
 import { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
 import { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 import { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
@@ -98,5 +103,8 @@ export function montarRepositorios(tx: Prisma.TransactionClient): Repositorios {
     estoque: new EstoqueRepositorioPrisma(tx),
     caixas: new CaixaRepositorioPrisma(tx),
     outbox: new OutboxRepositorioPrisma(tx),
+    usuarios: new UsuarioRepositorioPrisma(tx),
+    papeis: new PapelRepositorioPrisma(tx),
+    sessoes: new SessaoAcessoRepositorioPrisma(tx),
   };
 }
