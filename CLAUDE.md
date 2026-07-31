@@ -91,6 +91,22 @@ autopeças · lojas de conveniência · pequenos depósitos · açougues · hort
 horas de desenvolvimento e gera um chamado por cliente é uma decisão ruim — o chamado
 se multiplica por toda a base instalada, o desenvolvimento não.
 
+### Regra permanente: decisão com custo recorrente exige alternativas
+
+Sempre que uma decisão gerar **custo recorrente** — para o fabricante ou para o cliente
+final — é **obrigatório apresentar antes**, por escrito:
+
+1. **Todas as alternativas viáveis**, inclusive a de menor custo e a de não fazer nada.
+2. Vantagens e desvantagens de cada uma, sem esconder o lado fraco da recomendada.
+3. **Impacto financeiro estimado**, com a variável que mais o influencia identificada.
+4. Quem paga a conta: o fabricante ou o cliente — e o que acontece se o volume crescer.
+
+**Nunca assumir automaticamente a solução mais complexa ou mais cara.** A solução
+recomendada precisa ser justificada contra as mais simples, não pressuposta.
+
+Custo recorrente que cresce com o uso do cliente é o mais perigoso: um contrato
+lucrativo vira prejuízo sem que nada tenha sido decidido errado no dia da assinatura.
+
 ---
 
 ## 3. Fluxo obrigatório de desenvolvimento
@@ -146,6 +162,10 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | Cache de contingência do PDV | SQLite embarcado no Electron — **somente** catálogo replicado e fila offline | §12.2 |
 | Topologia | Servidor local na loja + contingência na estação | ADR-0001 · §2.2 |
 | Emissão fiscal | Assíncrona via Outbox, nunca bloqueando a venda | ADR-0006 · §15 |
+| **Comunicação fiscal** | **Via API fiscal externa, atrás da porta `ProvedorFiscal`. Sem SEFAZ direto.** O ERP nunca conhece o fornecedor | **ADR-0015** · `docs/fiscal/ARQUITETURA-FISCAL.md` |
+| **Módulo fiscal** | **Opcional por empresa**, via Null Object na composição. O domínio **não** tem `if (fiscalHabilitado)` | **ADR-0016** |
+| Certificado digital | **É do cliente.** Custódia no provedor quando possível; o ERP guarda só hash, titular e validade | ADR-0015 · §6 |
+| Numeração fiscal | Controlada pelo **ERP**, não pelo provedor. Uma série por estação de PDV | §8 do doc fiscal |
 | Estoque | Eventos comutativos, sem coluna de saldo mutável | ADR-0007 · §11.4 |
 | Identificadores | UUIDv7 gerado no cliente | ADR-0008 · §11.2 |
 | Dinheiro | Inteiro em centavos (`bigint`) | ADR-0009 · §6.3 |
@@ -206,7 +226,10 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 - Usar `float` para dinheiro.
 - Fixar alíquota, prazo fiscal ou layout de documento no código.
 - Escrever migração destrutiva na mesma versão que passa a usar o campo novo.
-- Bloquear a venda esperando SEFAZ, impressora ou rede.
+- Bloquear a venda esperando SEFAZ, impressora, provedor fiscal ou rede.
+- Deixar formato, vocabulário ou código de erro do provedor fiscal vazar para fora do adapter.
+- Fazer qualquer funcionalidade fora do módulo fiscal depender de documento fiscal.
+- Persistir certificado digital de cliente quando o provedor puder custodiá-lo.
 - Exibir stack trace ou erro técnico ao operador de caixa.
 - Introduzir dependência nova sem justificar frente aos nove papéis.
 - Marcar tarefa como concluída com teste falhando ou implementação parcial.

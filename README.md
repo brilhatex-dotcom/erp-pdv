@@ -60,6 +60,7 @@ packages/
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
+  fiscal/               arquitetura fiscal e análise de custo dos provedores
   adr/                  decisões arquiteturais registradas
 CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões
 ```
@@ -71,8 +72,10 @@ CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões
 - **Hexagonal.** `@erp/domain` não conhece banco, HTTP nem UI — e o CI **impede** que
   passe a conhecer.
 - **PostgreSQL 17 único**, embarcado no instalador ([ADR-0013](docs/adr/0013-postgresql-unico-embarcado.md)).
-- **Fiscal desacoplado.** NFC-e e NF-e entram como adapters, com contingência automática
-  e preparação para a Reforma Tributária (CBS/IBS/IS).
+- **Fiscal via provedor externo e opcional.** A emissão passa por uma API fiscal
+  especializada atrás da porta `ProvedorFiscal` — o ERP nunca conhece o fornecedor, e
+  trocá-lo é escrever um adapter ([ADR-0015](docs/adr/0015-emissao-fiscal-via-provedor-externo.md)).
+  O módulo pode ser desligado por empresa ([ADR-0016](docs/adr/0016-modulo-fiscal-opcional-por-empresa.md)).
 - **Dinheiro em centavos**, sempre inteiro.
 
 Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).

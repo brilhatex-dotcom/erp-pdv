@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.1 |
+| **Versão do documento** | 1.2 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -1529,6 +1529,19 @@ Acionada por comando ESC/POS enviado **através da impressora** (padrão de merc
 
 ## 15. Estratégia para emissão fiscal
 
+> ⚠️ **Revisado em 30/07/2026 — ADR-0015 e ADR-0016.**
+> O ERP **não implementa comunicação direta com a SEFAZ**. A emissão passa por uma
+> **API fiscal externa**, atrás da porta `ProvedorFiscal`, e o módulo fiscal é
+> **opcional por empresa**.
+>
+> O projeto completo — porta, contratos, tela de configuração, custódia do certificado,
+> contingência e **análise de custo dos provedores** — está em
+> **[`docs/fiscal/ARQUITETURA-FISCAL.md`](fiscal/ARQUITETURA-FISCAL.md)**.
+>
+> As subseções 15.3 a 15.8 permanecem válidas quanto ao **domínio fiscal** (máquina de
+> estados, numeração, tributação, guarda de XML), que continua sendo responsabilidade
+> do ERP. O que mudou é **quem fala com a SEFAZ**: o provedor, não nós.
+
 ### 15.1 Princípio: o fiscal é um satélite, nunca o núcleo
 
 A legislação fiscal brasileira muda constantemente — e a Reforma Tributária torna isso ainda mais intenso nos próximos anos. Se regra fiscal estiver espalhada pelo PDV, cada nota técnica da SEFAZ vira refatoração de risco.
@@ -1718,7 +1731,7 @@ Sequência proposta, com fronteiras claras entre entregas:
 | **6** | **PDV** — carrinho, atalhos, pagamento, fechamento de venda | 5 |
 | **7** | Caixa — abertura, sangria, suprimento, fechamento com conferência | 6 |
 | **8** | Impressão — ESC/POS, cupom, fechamento | 7 |
-| **9** | Fiscal — `NuloEmissor` → NFC-e homologação → produção | 7 |
+| **9** | Fiscal — `ProvedorFiscalNulo` → `ProvedorFiscalFalso` → adapter do provedor escolhido → homologação → produção | 7 |
 | **10** | Offline e sincronização — réplica local, fila, contingência | 6, 9 |
 | **11** | Backup (PITR), atualização e **instalador com PostgreSQL embarcado** — autoconfiguração como serviço do Windows | todas |
 | **12** | Relatórios e dashboard | 7 |
@@ -1746,6 +1759,9 @@ As decisões deste documento serão registradas individualmente em `docs/adr/`, 
 | 0011 | Autenticação diferenciada: PIN no PDV, senha + 2FA na retaguarda | §8.1 |
 | 0012 | Migrações no padrão expand-contract | §13.4 |
 | **0013** | **PostgreSQL único embarcado no instalador** (supersede o 0002) | §5.2.1 |
+| **0014** | Escopo restrito a varejo; prestação de serviços fora do produto | `ANALISE-SEGMENTOS.md` §5.1 |
+| **0015** | **Emissão fiscal via provedor externo, atrás de abstração própria** | `fiscal/ARQUITETURA-FISCAL.md` |
+| **0016** | **Módulo fiscal opcional, habilitado por empresa** | `fiscal/ARQUITETURA-FISCAL.md` §4 |
 
 ---
 
