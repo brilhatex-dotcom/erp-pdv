@@ -99,7 +99,15 @@ describe("fluxo de venda", () => {
     });
 
     expect(item.statusCode).toBe(201);
-    expect(item.json<{ total: string }>().total).toBe("990");
+    // A resposta traz o item **e** a venda: é o que poupa uma ida ao servidor
+    // por bipada no caminho quente do PDV.
+    const registrado = item.json<{
+      item: { total: string };
+      venda: { total: string; faltaPagar: string };
+    }>();
+    expect(registrado.item.total).toBe("990");
+    expect(registrado.venda.total).toBe("990");
+    expect(registrado.venda.faltaPagar).toBe("990");
 
     const pagamento = await servidor.inject({
       method: "POST",
@@ -403,7 +411,7 @@ describe("entrada malformada", () => {
 
     expect(resposta.statusCode).toBe(201);
     // 3 × R$ 9,90.
-    expect(resposta.json<{ total: string }>().total).toBe("2970");
+    expect(resposta.json<{ item: { total: string } }>().item.total).toBe("2970");
   });
 
   it("recusa forma de pagamento desconhecida", async () => {

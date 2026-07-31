@@ -1,0 +1,6 @@
+/* Os tokens do design system valem para a retaguarda e para o PDV. */
+@import "@erp/ui/tokens.css";
+
+/* O Tailwind 4 precisa saber onde procurar as classes usadas. */
+@source "../src";
+@source "../../../packages/ui/src";

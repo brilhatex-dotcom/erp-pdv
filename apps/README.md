@@ -7,7 +7,7 @@ e não contém regra de negócio nova (`CLAUDE.md` §9).
 |---|---|---|
 | `server/` | API + jobs (Fastify) | 3 |
 | `web/` | Retaguarda (React SPA) | 4 |
-| `pdv/` | Frente de caixa (Electron + React) | 6 |
+| `pdv/` | Frente de caixa (React; Electron na etapa do hardware) | 6 |
 | `cli/` | Administração: backup, restauração, diagnóstico | 11 |
 
 Cada aplicação é criada na sua etapa, com conteúdo real. Diretório vazio criado

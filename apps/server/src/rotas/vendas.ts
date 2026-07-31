@@ -112,7 +112,42 @@ export function rotasDeVendas(servidor: FastifyInstance, container: Container): 
 
     if (resultado.isErr()) return responderErro(resposta, resultado.error);
 
-    return resposta.status(201).send(apresentarItem(resultado.unwrap()));
+    // Devolve o **item e a venda inteira**. O PDV precisa do total e do que
+    // falta pagar a cada bipada, e uma segunda requisição para buscá-los
+    // custaria uma ida ao servidor no caminho mais percorrido do sistema
+    // (RNF-03). Recalcular no navegador não é opção: o desconto rateado é
+    // regra de negócio.
+    const atual = await container.leitura.vendas.porId(vendaId);
+    /* v8 ignore next -- inalcançável: a venda acabou de ser gravada */
+    if (atual === undefined) return resposta.status(404).send();
+
+    return resposta.status(201).send({
+      item: apresentarItem(resultado.unwrap()),
+      venda: apresentarVenda(atual),
+    });
+  });
+
+  /**
+   * Estado atual da venda.
+   *
+   * Existe para o PDV **recuperar** uma venda em curso: um F5 acidental, o
+   * navegador reiniciando ou a estação reabrindo no meio do atendimento. Sem
+   * isto o operador perderia o carrinho e a venda ficaria órfã no servidor —
+   * com o estoque ainda não baixado, mas ocupando numeração.
+   */
+  servidor.get("/api/vendas/:id", protegida, async (requisicao, resposta) => {
+    const vendaId = identificadorDaRota(requisicao);
+    if (vendaId === undefined) return recusar(resposta, "Venda inválida.");
+
+    const venda = await container.leitura.vendas.porId(vendaId);
+
+    if (venda === undefined) {
+      return resposta.status(404).send({
+        erro: { codigo: "VENDA_NAO_ENCONTRADA", mensagem: "Venda não encontrada." },
+      });
+    }
+
+    return resposta.send(apresentarVenda(venda));
   });
 
   servidor.post("/api/vendas/:id/pagamentos", protegida, async (requisicao, resposta) => {

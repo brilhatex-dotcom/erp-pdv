@@ -26,7 +26,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 7a — Design system e retaguarda** | ✅ **Concluída** — tokens calibrados para o balcão, primitivos acessíveis, login e consulta de produto. 1.187 testes |
 | **Etapa 7b — Rotas de venda** | ✅ **Concluída** — carrinho, pagamento e fechamento pela API, com o operador vindo do token. 1.219 testes |
 | **Etapa 7c — `@erp/cliente-api`** | ✅ **Concluída** — cliente HTTP e sessão extraídos de `apps/web` para o PDV reusar. 1.223 testes |
-| Etapa 8 — PDV (Electron, teclado-first) | ⬜ Próxima |
+| **Etapa 8 — PDV: tela de venda** | ✅ **Concluída** — bipagem, carrinho, pagamento e troco, a venda inteira sem mouse. 1.243 testes |
+| Etapa 9 — PDV: casca Electron, impressora e gaveta | ⬜ Próxima |
 
 ## Requisitos
 
@@ -75,6 +76,7 @@ localmente, passa no CI.
 | `pnpm db:deploy` | Aplica migrações já existentes (é o que roda na instalação) |
 | `pnpm --filter @erp/server start` | Sobe a API (exige `SEGREDO_TOKEN` e `DATABASE_URL`) |
 | `pnpm --filter @erp/web dev` | Abre a retaguarda em `localhost:5173` (proxy para a API) |
+| `pnpm --filter @erp/pdv dev` | Abre o PDV em `localhost:5174` (proxy para a API) |
 
 ## Estrutura
 
@@ -90,6 +92,7 @@ packages/
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
   web/         retaguarda: SPA React + Vite
+  pdv/         frente de caixa: venda por teclado (React + Vite)
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
