@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Container } from "./composicao/container.js";
 import { tratadorDeErro } from "./http/erros.js";
 import { rotasDeAcesso } from "./rotas/acesso.js";
+import { rotasDeCadastros } from "./rotas/cadastros.js";
 import { rotasDeProdutos } from "./rotas/produtos.js";
 import { rotasDeSaude } from "./rotas/saude.js";
 import { rotasDeVendas } from "./rotas/vendas.js";
@@ -55,7 +56,7 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
    * tentativa consome CPU da máquina que está rodando o caixa.
    */
   await servidor.register(rateLimit, {
-    max: 60,
+    max: container.ambiente.LIMITE_REQUISICOES_MINUTO,
     timeWindow: "1 minute",
     // Saúde precisa responder mesmo sob ataque, senão o supervisor de processo
     // reinicia o servidor no pior momento possível.
@@ -66,6 +67,7 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   rotasDeAcesso(servidor, container);
   rotasDeProdutos(servidor, container);
   rotasDeVendas(servidor, container);
+  rotasDeCadastros(servidor, container);
 
   return servidor;
 }

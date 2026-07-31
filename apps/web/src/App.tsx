@@ -1,7 +1,8 @@
 import { Botao, Carregando } from "@erp/ui";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
+import { Clientes } from "./telas/Clientes.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Login } from "./telas/Login.js";
 
@@ -29,14 +30,42 @@ export function App(): ReactNode {
   return <Retaguarda />;
 }
 
+/** Telas da retaguarda. Lista curta de propósito — cresce por etapa. */
+const SECOES = [
+  { chave: "PRODUTOS", rotulo: "Produtos" },
+  { chave: "CLIENTES", rotulo: "Clientes" },
+] as const;
+
+type Secao = (typeof SECOES)[number]["chave"];
+
 function Retaguarda(): ReactNode {
-  const { usuario, sair } = useSessao();
+  const { usuario, sair, pode } = useSessao();
+  const [secao, setSecao] = useState<Secao>("PRODUTOS");
+
+  // O operador de caixa que abre a retaguarda não deve ver uma aba que só
+  // devolve "sem permissão" ao ser clicada.
+  const visiveis = SECOES.filter(
+    (atual) => atual.chave !== "CLIENTES" || pode("cliente:consultar"),
+  );
 
   return (
     <div className="min-h-screen">
       <header className="border-b border-borda bg-papel">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <span className="font-semibold text-tinta">Retaguarda</span>
+          <nav className="flex items-center gap-2" aria-label="Seções da retaguarda">
+            {visiveis.map((atual) => (
+              <Botao
+                key={atual.chave}
+                tom={secao === atual.chave ? "primario" : "secundario"}
+                aria-current={secao === atual.chave ? "page" : undefined}
+                onClick={() => {
+                  setSecao(atual.chave);
+                }}
+              >
+                {atual.rotulo}
+              </Botao>
+            ))}
+          </nav>
 
           <div className="flex items-center gap-3 text-sm text-tinta-suave">
             <span>
@@ -50,7 +79,7 @@ function Retaguarda(): ReactNode {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <ConsultarProduto />
+        {secao === "PRODUTOS" ? <ConsultarProduto /> : <Clientes />}
       </main>
     </div>
   );

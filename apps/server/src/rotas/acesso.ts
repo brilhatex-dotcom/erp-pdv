@@ -25,56 +25,76 @@ const entradaLogin = z.object({
  * O token de acesso, curto, vai no corpo — o cliente o guarda em memória.
  */
 export function rotasDeAcesso(servidor: FastifyInstance, container: Container): void {
-  servidor.post("/api/acesso/login", async (requisicao, resposta) => {
-    const entrada = entradaLogin.safeParse(requisicao.body);
-
-    if (!entrada.success) {
-      // Mensagem genérica: dizer qual campo falhou ajudaria a sondar o formato.
-      await resposta.status(400).send({
-        erro: { codigo: "REQUISICAO_INVALIDA", mensagem: "Informe matrícula e senha." },
-      });
-      return;
-    }
-
-    const dispositivoId = Identificador.criar(entrada.data.dispositivoId);
-
-    /* v8 ignore next -- inalcançável: o Zod já validou o formato UUID */
-    if (dispositivoId.isErr()) return responderErro(resposta, dispositivoId.error);
-
-    const resultado = await container.autenticar.executar({
-      matricula: entrada.data.matricula,
-      segredo: entrada.data.segredo,
-      contexto: entrada.data.contexto,
-      dispositivoId: dispositivoId.unwrap(),
-    });
-
-    if (resultado.isErr()) return responderErro(resposta, resultado.error);
-
-    const { usuario, sessao, refreshEmClaro } = resultado.unwrap();
-
-    const token = await emitirTokenAcesso(container, {
-      usuarioId: usuario.id,
-      sessaoId: sessao.id,
-      contexto: sessao.contexto,
-      matricula: usuario.matricula.valor,
-    });
-
-    definirCookies(resposta, container, sessao.id.valor, refreshEmClaro, sessao.expiraEm);
-
-    return resposta.send({
-      token,
-      expiraEm: sessao.expiraEm.toISOString(),
-      usuario: {
-        id: usuario.id.valor,
-        nome: usuario.nome,
-        matricula: usuario.matricula.valor,
-        papel: usuario.papel.codigo,
-        permissoes: [...usuario.papel.permissoes],
-        // O cliente precisa saber para forçar a tela de troca antes de operar.
-        precisaTrocarCredencial: usuario.precisaTrocarCredencial,
+  servidor.post(
+    "/api/acesso/login",
+    {
+      // Rédea curta só aqui: cada tentativa custa um Argon2id na máquina que
+      // roda o caixa. O limite geral é folgado porque o PDV faz uma requisição
+      // por bipada — apertá-lo travaria a venda sem dificultar ataque nenhum.
+      config: {
+        rateLimit: {
+          max: container.ambiente.LIMITE_LOGIN_MINUTO,
+          timeWindow: "1 minute",
+        },
       },
-    });
-  });
+    },
+    async (requisicao, resposta) => {
+      const entrada = entradaLogin.safeParse(requisicao.body);
+
+      if (!entrada.success) {
+        // Mensagem genérica: dizer qual campo falhou ajudaria a sondar o formato.
+        await resposta.status(400).send({
+          erro: { codigo: "REQUISICAO_INVALIDA", mensagem: "Informe matrícula e senha." },
+        });
+        return;
+      }
+
+      const dispositivoId = Identificador.criar(entrada.data.dispositivoId);
+
+      /* v8 ignore next -- inalcançável: o Zod já validou o formato UUID */
+      if (dispositivoId.isErr()) return responderErro(resposta, dispositivoId.error);
+
+      const resultado = await container.autenticar.executar({
+        matricula: entrada.data.matricula,
+        segredo: entrada.data.segredo,
+        contexto: entrada.data.contexto,
+        dispositivoId: dispositivoId.unwrap(),
+      });
+
+      if (resultado.isErr()) return responderErro(resposta, resultado.error);
+
+      const { usuario, sessao, refreshEmClaro } = resultado.unwrap();
+
+      const token = await emitirTokenAcesso(container, {
+        usuarioId: usuario.id,
+        sessaoId: sessao.id,
+        contexto: sessao.contexto,
+        matricula: usuario.matricula.valor,
+      });
+
+      definirCookies(
+        resposta,
+        container,
+        sessao.id.valor,
+        refreshEmClaro,
+        sessao.expiraEm,
+      );
+
+      return resposta.send({
+        token,
+        expiraEm: sessao.expiraEm.toISOString(),
+        usuario: {
+          id: usuario.id.valor,
+          nome: usuario.nome,
+          matricula: usuario.matricula.valor,
+          papel: usuario.papel.codigo,
+          permissoes: [...usuario.papel.permissoes],
+          // O cliente precisa saber para forçar a tela de troca antes de operar.
+          precisaTrocarCredencial: usuario.precisaTrocarCredencial,
+        },
+      });
+    },
+  );
 
   servidor.post("/api/acesso/renovar", async (requisicao, resposta) => {
     const sessaoId = Identificador.criar(requisicao.cookies[COOKIE_SESSAO] ?? "");

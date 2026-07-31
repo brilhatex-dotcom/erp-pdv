@@ -31,6 +31,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 7b — Rotas de venda** | ✅ **Concluída** — carrinho, pagamento e fechamento pela API, com o operador vindo do token. 1.219 testes |
 | **Etapa 7c — `@erp/cliente-api`** | ✅ **Concluída** — cliente HTTP e sessão extraídos de `apps/web` para o PDV reusar. 1.223 testes |
 | **Etapa 8 — PDV: tela de venda** | ✅ **Concluída** — bipagem, carrinho, pagamento e troco, a venda inteira sem mouse. 1.243 testes |
+| **Etapa 8b — Correções e persistência dos cadastros** | ✅ **Concluída** — login do balcão, abertura de caixa, e categoria/cliente/fornecedor no Postgres. 1.490 testes |
+| **Etapa 8c — Cadastros ponta a ponta** | ✅ **Concluída** — rotas HTTP, permissões e tela de clientes na retaguarda. 1.537 testes |
 | Etapa 9 — PDV: casca Electron, impressora e gaveta | ⬜ Próxima |
 
 ## Requisitos

@@ -29,6 +29,24 @@ const esquema = z.object({
   MINUTOS_TOKEN_ACESSO: z.coerce.number().int().min(1).max(60).default(15),
 
   /** Origens autorizadas, separadas por vírgula. Vazio = mesma origem apenas. */
+  /**
+   * Teto de requisições por minuto, por origem.
+   *
+   * Generoso de propósito: uma estação de PDV com fila faz uma requisição por
+   * bipada, e um operador rápido passa de um item por segundo. Um limite
+   * apertado aqui não protege de nada e trava a venda no horário de pico — o
+   * ataque que importa é contra o login, e esse tem limite próprio.
+   */
+  LIMITE_REQUISICOES_MINUTO: z.coerce.number().int().min(10).default(600),
+  /**
+   * Teto de tentativas de login por minuto, por origem.
+   *
+   * Aqui a rédea é curta: cada tentativa consome CPU do Argon2id na mesma
+   * máquina que roda o caixa, e sem este limite o custo do hash vira a arma do
+   * atacante. Dez por minuto é folgado para quem erra o PIN e proibitivo para
+   * quem varre matrículas.
+   */
+  LIMITE_LOGIN_MINUTO: z.coerce.number().int().min(1).default(10),
   ORIGENS_PERMITIDAS: z.string().default(""),
 });
 

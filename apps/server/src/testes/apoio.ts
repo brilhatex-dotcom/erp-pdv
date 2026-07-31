@@ -43,7 +43,9 @@ export function urlBancoDeTeste(): string {
  * validação, tratador de erro — sem precisar de porta livre. É o teste do
  * transporte de verdade, não de um simulacro dele.
  */
-export async function montarServidorDeTeste(): Promise<{
+export async function montarServidorDeTeste(
+  sobrescritas: Record<string, string> = {},
+): Promise<{
   readonly servidor: FastifyInstance;
   readonly container: Container;
 }> {
@@ -52,6 +54,11 @@ export async function montarServidorDeTeste(): Promise<{
     DATABASE_URL: urlBancoDeTeste(),
     SEGREDO_TOKEN: "segredo-de-teste-com-mais-de-32-caracteres",
     ORIGENS_PERMITIDAS: "http://localhost:5173",
+    // A suíte autentica dezenas de vezes por minuto; uma loja de verdade, não.
+    // O limite continua valendo em produção e tem teste próprio — travá-lo aqui
+    // só mediria a velocidade do Vitest.
+    LIMITE_LOGIN_MINUTO: "1000",
+    ...sobrescritas,
   });
 
   const container = montarContainer(ambiente);
@@ -86,7 +93,8 @@ export async function limparBanco(container: Container): Promise<void> {
       "saldos_estoque", "movimentos_estoque", "embalagens",
       "referencias_produto", "produtos",
       "sessoes_acesso", "estacoes_permitidas", "usuarios",
-      "permissoes_papel", "papeis"
+      "permissoes_papel", "papeis",
+      "categorias", "clientes", "fornecedores"
     RESTART IDENTITY CASCADE
   `);
 }

@@ -45,6 +45,8 @@ const OPERADOR_CAIXA: ModeloPapel = {
     "caixa:abrir",
     "caixa:fechar",
     "fiscal:emitir",
+    "cliente:consultar",
+    "cliente:cadastrar",
   ],
   limites: {
     descontoMaximoItemBps: 500,
@@ -66,6 +68,7 @@ const SUPERVISOR: ModeloPapel = {
     "produto:alterar_preco",
     "fiscal:cancelar",
     "relatorio:vendas",
+    "cliente:editar",
   ],
   limites: {
     descontoMaximoItemBps: 1500,
@@ -86,6 +89,10 @@ const ESTOQUISTA: ModeloPapel = {
     "estoque:entrada",
     "estoque:ajuste",
     "estoque:inventario",
+    "categoria:gerenciar",
+    "fornecedor:consultar",
+    "fornecedor:cadastrar",
+    "fornecedor:editar",
   ],
   limites: {},
 };
@@ -100,6 +107,8 @@ const FINANCEIRO: ModeloPapel = {
     "relatorio:financeiro",
     "relatorio:vendas",
     "venda:consultar_todas",
+    "cliente:consultar",
+    "cliente:definir_limite",
   ],
   limites: {},
 };
@@ -126,7 +135,13 @@ const CONTADOR: ModeloPapel = {
   codigo: "CONTADOR",
   nome: "Contador",
   // Somente leitura: nenhuma permissão de escrita, nem sequer fiscal.
-  permissoes: ["venda:consultar_todas", "relatorio:vendas", "relatorio:financeiro"],
+  permissoes: [
+    "venda:consultar_todas",
+    "relatorio:vendas",
+    "relatorio:financeiro",
+    "cliente:consultar",
+    "fornecedor:consultar",
+  ],
   limites: {},
 };
 

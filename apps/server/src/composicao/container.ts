@@ -5,6 +5,12 @@ import {
   type Hasher,
   IniciarVenda,
   AdicionarItemPorCodigo,
+  AlterarCategoria,
+  AlterarCliente,
+  AlterarFornecedor,
+  CadastrarCategoria,
+  CadastrarCliente,
+  CadastrarFornecedor,
   FinalizarVenda,
   RegistrarPagamento,
   RenovarSessao,
@@ -70,6 +76,13 @@ export interface Container {
   readonly registrarPagamento: RegistrarPagamento;
   readonly finalizarVenda: FinalizarVenda;
 
+  readonly cadastrarCategoria: CadastrarCategoria;
+  readonly alterarCategoria: AlterarCategoria;
+  readonly cadastrarCliente: CadastrarCliente;
+  readonly alterarCliente: AlterarCliente;
+  readonly cadastrarFornecedor: CadastrarFornecedor;
+  readonly alterarFornecedor: AlterarFornecedor;
+
   encerrar(): Promise<void>;
 }
 
@@ -134,6 +147,13 @@ export function montarContainer(ambiente: Ambiente): Container {
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),
     finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
+
+    cadastrarCategoria: new CadastrarCategoria(unitOfWork, geradorId),
+    alterarCategoria: new AlterarCategoria(unitOfWork),
+    cadastrarCliente: new CadastrarCliente(unitOfWork, geradorId),
+    alterarCliente: new AlterarCliente(unitOfWork),
+    cadastrarFornecedor: new CadastrarFornecedor(unitOfWork, geradorId),
+    alterarFornecedor: new AlterarFornecedor(unitOfWork),
 
     async encerrar(): Promise<void> {
       await prisma.$disconnect();

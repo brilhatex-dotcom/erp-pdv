@@ -53,6 +53,22 @@ export const PERMISSOES = [
   "relatorio:financeiro",
   "relatorio:margem",
 
+  // Cadastros de apoio
+  //
+  // Consultar e cadastrar cliente ficam com o balcão de propósito: o cliente
+  // que pede fiado ou nota com destinatário quase nunca está cadastrado, e
+  // exigir supervisor nesse momento para a venda. Já **definir o limite de
+  // crédito** é decisão de quem responde pelo dinheiro, não de quem opera o
+  // caixa — por isso é permissão separada.
+  "cliente:consultar",
+  "cliente:cadastrar",
+  "cliente:editar",
+  "cliente:definir_limite",
+  "fornecedor:consultar",
+  "fornecedor:cadastrar",
+  "fornecedor:editar",
+  "categoria:gerenciar",
+
   // Administração
   "usuario:criar",
   "usuario:editar_permissoes",
