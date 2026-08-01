@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Balcao } from "../balcao.js";
-import type { EstadoConexaoNaPonte } from "../contrato-ponte.js";
+import type { ClienteAgente, EstadoConexaoNoAgente } from "@erp/agente-contrato";
+
+import { definirAgenteParaTeste } from "../balcao.js";
 import { IndicadorConexao } from "../telas/IndicadorConexao.js";
 
 /**
@@ -11,17 +12,12 @@ import { IndicadorConexao } from "../telas/IndicadorConexao.js";
  * e **nunca diz que a venda parou** — porque ela não parou.
  */
 
-function instalarPonte(estado: EstadoConexaoNaPonte | undefined): void {
-  const ponte =
+function instalarPonte(estado: EstadoConexaoNoAgente | undefined): void {
+  definirAgenteParaTeste(
     estado === undefined
       ? undefined
-      : ({ estadoConexao: vi.fn().mockResolvedValue(estado) } as unknown as Balcao);
-
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: ponte,
-    configurable: true,
-    writable: true,
-  });
+      : ({ estado: vi.fn().mockResolvedValue(estado) } as unknown as ClienteAgente),
+  );
 }
 
 afterEach(() => {
@@ -99,14 +95,10 @@ describe("IndicadorConexao", () => {
     expect(aviso).toHaveTextContent("Avise o responsável pela loja");
   });
 
-  it("ponte que quebra não derruba a tela de venda", async () => {
-    const estadoConexao = vi.fn().mockRejectedValue(new Error("IPC morreu"));
+  it("agente que quebra não derruba a tela de venda", async () => {
+    const estadoConexao = vi.fn().mockRejectedValue(new Error("agente morreu"));
 
-    Object.defineProperty(globalThis.window, "balcao", {
-      value: { estadoConexao },
-      configurable: true,
-      writable: true,
-    });
+    definirAgenteParaTeste({ estado: estadoConexao } as unknown as ClienteAgente);
 
     const { container } = render(<IndicadorConexao />);
 

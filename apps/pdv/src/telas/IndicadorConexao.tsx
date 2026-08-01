@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useState } from "react";
 
-import { balcao } from "../balcao.js";
-import type { EstadoConexaoNaPonte } from "../contrato-ponte.js";
+import type { EstadoConexaoNoAgente } from "@erp/agente-contrato";
+
+import { agente } from "../balcao.js";
 
 /**
  * O estado da conexão, visto do balcão.
@@ -30,23 +31,22 @@ import type { EstadoConexaoNaPonte } from "../contrato-ponte.js";
 const INTERVALO_MS = 3000;
 
 export function IndicadorConexao(): ReactNode {
-  const [estado, setEstado] = useState<EstadoConexaoNaPonte>({
+  const [estado, setEstado] = useState<EstadoConexaoNoAgente>({
     tipo: "CONECTADO",
     pendentes: 0,
   });
 
   useEffect(() => {
-    const ponte = balcao();
-
-    // No navegador não há contingência: não existe processo principal para
-    // manter fila. Mostrar "offline" aqui seria mentira em desenvolvimento.
-    if (ponte === undefined) return;
-
     let vivo = true;
 
     const consultar = async (): Promise<void> => {
       try {
-        const atual = await ponte.estadoConexao();
+        // Sem Agente não há contingência: nenhuma fila para relatar. Mostrar
+        // "offline" aqui seria mentira em desenvolvimento e em tablet.
+        const ponte = await agente();
+        if (ponte === undefined) return;
+
+        const atual = await ponte.estado();
         if (vivo) setEstado(atual);
       } catch {
         // A ponte quebrou. Não há o que dizer ao operador sobre isto — e travar

@@ -9,7 +9,7 @@ import { comoTexto, previsualizar } from "@erp/printing";
  * ### Para que serve
  *
  * O PDV conecta nela sem saber que não é real. Isso exercita o caminho inteiro
- * — tela, ponte do Electron, socket, bytes — que de outro modo só seria testado
+ * — tela, Agente Local, socket, bytes — que de outro modo só seria testado
  * com equipamento na mesa.
  *
  * Serve para desenvolver sem impressora e serve no suporte: apontar a estação

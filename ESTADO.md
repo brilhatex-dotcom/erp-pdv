@@ -47,12 +47,13 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
 | Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
-| Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
+| **Agente Local** | ✅ Serviço HTTP em `127.0.0.1:9787` — impressão, fila offline e catálogo | `apps/agente/` |
+| Contrato tela ↔ Agente | ✅ Tipos e cliente HTTP compartilhados | `packages/agente-contrato/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**1.903 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.936 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -76,10 +77,10 @@ Duas frentes que destravam o resto:
 - **Cadastro da empresa** (ADR-0024): CNPJ, razão social, endereço, logotipo,
   regime tributário. Uma linha, uma instalação. É o cabeçalho de todo relatório e
   o emitente quando o fiscal entrar. **Nenhuma outra tabela ganha `empresa_id`.**
-- **Agente Local** (ADR-0023): o processo instalado que passa a ser dono da
-  impressão, da fila offline e do catálogo replicado. `FilaDeVendas`,
-  `ReplicaCatalogo` e `Sincronizador` **mudam de casa, não são reescritos** — hoje
-  vivem no processo principal do Electron.
+- ~~Agente Local~~ ✅ **Feito.** `apps/agente` é um serviço Node em
+  `127.0.0.1:9787`, dono da impressão, da fila offline e do catálogo. A casca
+  Electron e a ponte IPC foram removidas; a tela fala HTTP pelo
+  `@erp/agente-contrato`.
 
 ### 2.2 Módulos do ERP, na ordem pedida
 
@@ -94,7 +95,7 @@ Duas frentes que destravam o resto:
 | 7 | Estoque | ⚠️ Domínio pronto (eventos comutativos); **falta rota e tela** |
 | 8 | **Compras** | ⬜ Nada existe. Entrada de mercadoria, que alimenta o estoque |
 | 9 | Vendas | ✅ Pronto |
-| 10 | PDV | ⚠️ Pronto como Electron; **vira PWA** (ADR-0023) |
+| 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
 | 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
 | 12 | **Financeiro** | ⬜ Nada existe. Contas a pagar e a receber; o crediário da venda já grava o título |
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
@@ -104,7 +105,7 @@ Duas frentes que destravam o resto:
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | **PWA** | ⬜ Manifesto, service worker e instalação na área de trabalho |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
-| 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto; faltam Bematech, Elgin, Epson e Daruma |
+| 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto no Agente; faltam Bematech, Elgin, Epson e Daruma |
 
 ### 2.3 Só depois de tudo acima — fiscal com provedor real
 
@@ -124,11 +125,13 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
-- **A casca Electron vira quiosque fino** (ADR-0023): abre a PWA em tela cheia e
-  não contém lógica nenhuma. O processo principal de hoje — dono de fila,
-  catálogo e impressão — migra para o Agente Local. Casca que ganha lógica volta
-  a ser uma segunda aplicação, e aí todo defeito precisa ser reproduzido duas
-  vezes.
+- **A casca Electron de quiosque ainda não existe** (ADR-0023). O processo
+  principal antigo foi removido junto com a migração para o Agente; a casca fina
+  — que só abre a PWA em tela cheia — é trabalho de poucas horas, para quando
+  houver instalador. Ela não pode ganhar lógica.
+- **O segredo do Agente vem de `VITE_SEGREDO_AGENTE` no build da PWA.** É
+  provisório e está marcado como tal em `balcao.ts`: o certo é o servidor da loja
+  entregá-lo junto com a sessão, para não viajar dentro de um bundle público.
 
 ## 3. Armadilhas já pagas — não caia de novo
 
@@ -149,6 +152,7 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`.env` sumido em ambiente novo** | `P1012: Environment variable not found: DATABASE_URL` | O `.env` é ignorado pelo git e não sobrevive a um contêiner novo. Recrie: `cp packages/database/.env.example packages/database/.env` |
 | **`prisma migrate dev` trava sem saída** | Comando fica parado; matá-lo deixa `P1002: timed out acquiring advisory lock` | `migrate dev` é **interativo** (pede nome da migração). Em sessão automatizada use `pnpm db:deploy`. Se já travou, mate o processo e derrube a conexão presa: `pg_terminate_backend` no banco |
 | **`as CodigoUnidade` num dado de disco** | `Cannot read properties of undefined (reading 'fracionavel')` no meio da bipada | O domínio procura a unidade numa tabela. Afirmar o tipo sem checar troca recusa clara por tela branca — use `ehCodigoUnidade` antes |
+| **Mock de teste desatualizado passa despercebido** | Teste verde com `An error occurred in the <p> component` no log | Ao mudar o que uma função devolve, o dublê que ainda devolve o formato antigo **não** quebra o teste — só faz o React estourar em segundo plano. Ler o log do `test:cov`, não só o placar |
 | **`BigInt(texto)` de arquivo externo** | Exceção não tratada em vez de recusa | `BigInt("abc")` **lança**. Todo centavo lido de disco ou rede passa por `/^\d+$/` antes |
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |

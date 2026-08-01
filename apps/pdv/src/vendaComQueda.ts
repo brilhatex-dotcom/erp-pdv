@@ -1,7 +1,8 @@
 import type { ClienteApi } from "@erp/cliente-api";
 
-import { balcao } from "./balcao.js";
-import type { VendaNaPonte } from "./contrato-ponte.js";
+import type { VendaNoAgente } from "@erp/agente-contrato";
+
+import { agente } from "./balcao.js";
 
 /**
  * A venda que sobrevive à queda do servidor.
@@ -117,7 +118,7 @@ async function biparNaFila(
   vendaAberta: VendaVisivel | undefined,
   codigo: string,
 ): Promise<VendaVisivel> {
-  const ponte = balcao();
+  const ponte = await agente();
 
   if (ponte === undefined) {
     // Navegador, sem processo principal: não há fila. É o único caso em que a
@@ -130,17 +131,16 @@ async function biparNaFila(
   }
 
   if (vendaAberta === undefined) {
-    const iniciada = await ponte.iniciarVendaLocal({
+    // Não há verificação de retorno: o cliente do Agente já lança
+    // `AgenteIndisponivel` quando a chamada falha, e conferir de novo aqui
+    // seria um ramo que nenhum teste consegue alcançar.
+    await ponte.iniciarVenda({
       estacaoId: contexto.estacaoId,
       operadorId: contexto.operadorId,
     });
-
-    if (iniciada === undefined) {
-      throw new VendaIndisponivel("Não foi possível abrir a venda nesta estação.");
-    }
   }
 
-  const resultado = await ponte.itemLocal({ codigo });
+  const resultado = await ponte.adicionarItem(codigo);
 
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
@@ -168,11 +168,11 @@ export async function pagar(
     );
   }
 
-  const ponte = balcao();
+  const ponte = await agente();
 
   if (ponte === undefined) throw new VendaIndisponivel("Contingência indisponível.");
 
-  const resultado = await ponte.pagamentoLocal({ forma, valor });
+  const resultado = await ponte.registrarPagamento(forma, valor);
 
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
@@ -192,18 +192,18 @@ export async function finalizar(
     );
   }
 
-  const ponte = balcao();
+  const ponte = await agente();
 
   if (ponte === undefined) throw new VendaIndisponivel("Contingência indisponível.");
 
-  const resultado = await ponte.finalizarVendaLocal();
+  const resultado = await ponte.finalizar();
 
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
   return { troco: resultado.troco };
 }
 
-function comoVisivel(venda: VendaNaPonte): VendaVisivel {
+function comoVisivel(venda: VendaNoAgente): VendaVisivel {
   return {
     id: venda.id,
     numero: undefined,

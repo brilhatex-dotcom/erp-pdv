@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App.js";
-import type { Balcao } from "../balcao.js";
+import type { ClienteAgente } from "@erp/agente-contrato";
+
+import { definirAgenteParaTeste } from "../balcao.js";
 
 /**
  * O balcão com o servidor fora do ar.
@@ -48,33 +50,29 @@ function json(status: number, corpo: unknown): Response {
   });
 }
 
-/** Ponte completa, como o Electron a expõe na estação instalada. */
-function instalarPonte(sobrescritas: Partial<Balcao> = {}): void {
+/** Agente completo, como a estação instalada o expõe. */
+function instalarPonte(sobrescritas: Partial<ClienteAgente> = {}): void {
   const ponte = {
-    imprimirCupom: vi.fn().mockResolvedValue({ tipo: "IMPRESSO" }),
-    abrirGaveta: vi.fn().mockResolvedValue({ tipo: "IMPRESSO" }),
-    configuracao: vi.fn().mockResolvedValue({ api: "", temImpressora: true }),
-    estadoConexao: vi.fn().mockResolvedValue({ tipo: "OFFLINE", pendentes: 2 }),
-    iniciarVendaLocal: vi.fn().mockResolvedValue({
+    disponivel: vi.fn().mockResolvedValue(true),
+    imprimirCupom: vi.fn().mockResolvedValue(undefined),
+    abrirGaveta: vi.fn().mockResolvedValue(undefined),
+    estado: vi.fn().mockResolvedValue({ tipo: "OFFLINE", pendentes: 2 }),
+    iniciarVenda: vi.fn().mockResolvedValue({
       id: "local-1",
       offline: true,
       total: "0",
       faltaPagar: "0",
       itens: [],
     }),
-    itemLocal: vi.fn().mockResolvedValue({ tipo: "OK", venda: VENDA_LOCAL }),
-    pagamentoLocal: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
-    finalizarVendaLocal: vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" }),
-    cancelarVendaLocal: vi.fn().mockResolvedValue(null),
-    sincronizarAgora: vi.fn(),
+    adicionarItem: vi.fn().mockResolvedValue({ tipo: "OK", venda: VENDA_LOCAL }),
+    registrarPagamento: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
+    finalizar: vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" }),
+    cancelar: vi.fn().mockResolvedValue(undefined),
+    sincronizar: vi.fn(),
     ...sobrescritas,
   };
 
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: ponte,
-    configurable: true,
-    writable: true,
-  });
+  definirAgenteParaTeste(ponte as unknown as ClienteAgente);
 }
 
 /** Servidor que autentica e depois some — a queda no meio do expediente. */
@@ -103,11 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: undefined,
-    configurable: true,
-    writable: true,
-  });
+  definirAgenteParaTeste(undefined);
   vi.restoreAllMocks();
 });
 
@@ -191,7 +185,7 @@ describe("venda com o servidor fora do ar", () => {
     // A réplica pode estar velha. O operador precisa saber que o problema é
     // este computador, não o produto — senão ele recusa a venda ao cliente.
     instalarPonte({
-      itemLocal: vi.fn().mockResolvedValue({
+      adicionarItem: vi.fn().mockResolvedValue({
         tipo: "ERRO",
         mensagem: "Produto não encontrado no catálogo local.",
       }),

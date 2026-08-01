@@ -1,7 +1,9 @@
 import { type ClienteApi, ErroDaApi } from "@erp/cliente-api";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Balcao } from "./balcao.js";
+import type { ClienteAgente } from "@erp/agente-contrato";
+
+import { definirAgenteParaTeste } from "./balcao.js";
 import {
   biparItem,
   ehQuedaDeServidor,
@@ -25,20 +27,20 @@ function clienteFalso(requisitar: unknown): ClienteApi {
   return { requisitar } as unknown as ClienteApi;
 }
 
-function ponteFalsa(sobrescritas: Partial<Balcao> = {}): Balcao {
+function ponteFalsa(sobrescritas: Partial<ClienteAgente> = {}): ClienteAgente {
   const base = {
+    disponivel: vi.fn().mockResolvedValue(true),
     imprimirCupom: vi.fn(),
     abrirGaveta: vi.fn(),
-    configuracao: vi.fn(),
-    estadoConexao: vi.fn(),
-    iniciarVendaLocal: vi.fn().mockResolvedValue({
+    estado: vi.fn(),
+    iniciarVenda: vi.fn().mockResolvedValue({
       id: "local-1",
       offline: true,
       total: "0",
       faltaPagar: "0",
       itens: [],
     }),
-    itemLocal: vi.fn().mockResolvedValue({
+    adicionarItem: vi.fn().mockResolvedValue({
       tipo: "OK",
       venda: {
         id: "local-1",
@@ -57,22 +59,18 @@ function ponteFalsa(sobrescritas: Partial<Balcao> = {}): Balcao {
         ],
       },
     }),
-    pagamentoLocal: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
-    finalizarVendaLocal: vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" }),
-    cancelarVendaLocal: vi.fn().mockResolvedValue(null),
-    sincronizarAgora: vi.fn(),
+    registrarPagamento: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
+    finalizar: vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" }),
+    cancelar: vi.fn().mockResolvedValue(undefined),
+    sincronizar: vi.fn(),
     ...sobrescritas,
   };
 
-  return base;
+  return base as unknown as ClienteAgente;
 }
 
-function instalarPonte(ponte: Balcao | undefined): void {
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: ponte,
-    configurable: true,
-    writable: true,
-  });
+function instalarPonte(ponte: ClienteAgente | undefined): void {
+  definirAgenteParaTeste(ponte);
 }
 
 beforeEach(() => {
@@ -115,8 +113,8 @@ describe("ehQuedaDeServidor", () => {
 
 describe("bipar com o servidor no ar", () => {
   it("usa o servidor e não toca na ponte", async () => {
-    const iniciarVendaLocal = vi.fn();
-    instalarPonte(ponteFalsa({ iniciarVendaLocal }));
+    const iniciarVenda = vi.fn();
+    instalarPonte(ponteFalsa({ iniciarVenda }));
 
     const requisitar = vi
       .fn()
@@ -134,12 +132,12 @@ describe("bipar com o servidor no ar", () => {
 
     expect(resultado.origem).toBe("SERVIDOR");
     expect(resultado.venda.numero).toBe(42);
-    expect(iniciarVendaLocal).not.toHaveBeenCalled();
+    expect(iniciarVenda).not.toHaveBeenCalled();
   });
 
   it("🔑 propaga recusa de negócio em vez de enfileirar", async () => {
-    const itemLocal = vi.fn();
-    instalarPonte(ponteFalsa({ itemLocal }));
+    const adicionarItem = vi.fn();
+    instalarPonte(ponteFalsa({ adicionarItem }));
 
     const requisitar = vi
       .fn()
@@ -154,7 +152,7 @@ describe("bipar com o servidor no ar", () => {
       ),
     ).rejects.toThrow("Não achei");
 
-    expect(itemLocal).not.toHaveBeenCalled();
+    expect(adicionarItem).not.toHaveBeenCalled();
   });
 });
 
@@ -213,7 +211,7 @@ describe("bipar com o servidor fora", () => {
 
   it("erro do catálogo local chega ao operador", async () => {
     const ponte = ponteFalsa({
-      itemLocal: vi.fn().mockResolvedValue({
+      adicionarItem: vi.fn().mockResolvedValue({
         tipo: "ERRO",
         mensagem: "Produto não encontrado no catálogo local.",
       }),
@@ -233,8 +231,8 @@ describe("bipar com o servidor fora", () => {
 
 describe("pagamento e fechamento seguem a origem da venda", () => {
   it("venda do servidor paga no servidor", async () => {
-    const pagamentoLocal = vi.fn();
-    instalarPonte(ponteFalsa({ pagamentoLocal }));
+    const registrarPagamento = vi.fn();
+    instalarPonte(ponteFalsa({ registrarPagamento }));
 
     const requisitar = vi.fn().mockResolvedValue({ faltaPagar: "0" });
 
@@ -247,7 +245,7 @@ describe("pagamento e fechamento seguem a origem da venda", () => {
     );
 
     expect(requisitar).toHaveBeenCalledOnce();
-    expect(pagamentoLocal).not.toHaveBeenCalled();
+    expect(registrarPagamento).not.toHaveBeenCalled();
   });
 
   it("🔑 venda da fila paga na fila, mesmo se o servidor voltar", async () => {
@@ -270,8 +268,8 @@ describe("pagamento e fechamento seguem a origem da venda", () => {
   });
 
   it("fechamento na fila devolve o troco calculado localmente", async () => {
-    const finalizarVendaLocal = vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" });
-    instalarPonte(ponteFalsa({ finalizarVendaLocal }));
+    const finalizarNoAgente = vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" });
+    instalarPonte(ponteFalsa({ finalizar: finalizarNoAgente }));
 
     const resultado = await finalizar(
       { ...CONTEXTO_BASE, cliente: clienteFalso(vi.fn()) },
@@ -280,12 +278,12 @@ describe("pagamento e fechamento seguem a origem da venda", () => {
     );
 
     expect(resultado.troco).toBe("10");
-    expect(finalizarVendaLocal).toHaveBeenCalledOnce();
+    expect(finalizarNoAgente).toHaveBeenCalledOnce();
   });
 
   it("falha ao fechar na fila vira mensagem, não exceção técnica", async () => {
     const ponte = ponteFalsa({
-      finalizarVendaLocal: vi
+      finalizar: vi
         .fn()
         .mockResolvedValue({ tipo: "ERRO", mensagem: "Ainda falta receber." }),
     });

@@ -2,7 +2,7 @@ import { mensagemDe, useSessao } from "@erp/cliente-api";
 import { Botao, CampoTexto, ErroDeTela, formatarDinheiro } from "@erp/ui";
 import { type ReactNode, useState } from "react";
 
-import { balcao } from "../balcao.js";
+import { agente } from "../balcao.js";
 import { identificadorDaEstacao } from "../estacao.js";
 
 /**
@@ -220,12 +220,12 @@ function Linha(props: {
  * não tem a ver com dinheiro.
  */
 async function vendasPendentes(): Promise<number> {
-  const ponte = balcao();
-
-  if (ponte === undefined) return 0;
-
   try {
-    return (await ponte.estadoConexao()).pendentes;
+    const ponte = await agente();
+
+    if (ponte === undefined) return 0;
+
+    return (await ponte.estado()).pendentes;
   } catch {
     return 0;
   }
