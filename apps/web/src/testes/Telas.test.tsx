@@ -119,7 +119,7 @@ describe("Login da retaguarda", () => {
     await userEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Consultar produto" })).toBeVisible();
+      expect(screen.getByRole("heading", { name: "Produtos" })).toBeVisible();
     });
   });
 
@@ -138,7 +138,7 @@ describe("Login da retaguarda", () => {
     await userEvent.keyboard("cavalo bateria grampo{Enter}");
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Consultar produto" })).toBeVisible();
+      expect(screen.getByRole("heading", { name: "Produtos" })).toBeVisible();
     });
   });
 
@@ -228,6 +228,12 @@ describe("Login da retaguarda", () => {
 describe("Consulta de produto", () => {
   async function entrarComo(usuario: typeof USUARIO_GERENTE, extras: Rotas = {}) {
     const app = montarApp({ "/api/acesso/eu": () => json(200, usuario), ...extras });
+
+    // A retaguarda abre no cadastro; a consulta de balcão é a aba ao lado.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Consulta de preço" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Consulta de preço" }));
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Consultar produto" })).toBeVisible();
@@ -2003,5 +2009,596 @@ describe("Usuários — caminhos da retaguarda", () => {
     await waitFor(() => {
       expect(screen.getByText("(você)")).toBeVisible();
     });
+  });
+});
+
+// ── Cadastro de produtos ─────────────────────────────────────────────────
+
+const PRODUTO_COMPLETO = {
+  ...PRODUTO,
+  codigoBarras: "7891000315507",
+  referencias: [],
+  embalagens: [],
+};
+
+const GERENTE_DE_PRODUTO = {
+  ...USUARIO_GERENTE,
+  permissoes: [
+    "venda:criar",
+    "produto:ver_custo",
+    "produto:criar",
+    "produto:editar",
+    "produto:alterar_preco",
+  ],
+};
+
+/** Quem cadastra sem enxergar margem — a combinação que a loja pequena monta. */
+const BALCONISTA_SEM_CUSTO = {
+  ...USUARIO_OPERADOR,
+  permissoes: ["venda:criar", "produto:criar", "produto:editar"],
+};
+
+const LISTA_VAZIA = () => json(200, { itens: [] });
+const CATEGORIAS = () => json(200, { itens: [{ id: "cat-1", nome: "Bebidas" }] });
+
+async function abrirProdutos(
+  usuario: typeof USUARIO_GERENTE,
+  extras: Rotas = {},
+): Promise<ReturnType<typeof montarApp>> {
+  const app = montarApp({
+    "/api/acesso/eu": () => json(200, usuario),
+    "/api/produtos": LISTA_VAZIA,
+    "/api/categorias": CATEGORIAS,
+    ...extras,
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "Produtos" })).toBeVisible();
+  });
+
+  return app;
+}
+
+async function irParaNovoProduto(): Promise<void> {
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Novo produto" })).toBeVisible();
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Novo produto" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "Novo produto" })).toBeVisible();
+  });
+}
+
+describe("Lista de produtos", () => {
+  it("abre listando, não com o formulário em branco", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO, {
+      "/api/produtos": () =>
+        json(200, { itens: [{ ...PRODUTO_COMPLETO, custo: "650" }] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(screen.getByText("R$ 9,90")).toBeVisible();
+    expect(screen.getByText("R$ 6,50")).toBeVisible();
+  });
+
+  it("🔑 não mostra coluna de custo para quem não pode vê-lo", async () => {
+    await abrirProdutos(BALCONISTA_SEM_CUSTO, {
+      "/api/produtos": () => json(200, { itens: [PRODUTO_COMPLETO] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(screen.queryByRole("columnheader", { name: "Custo" })).not.toBeInTheDocument();
+  });
+
+  it("mostra traço quando o custo não foi informado", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO, {
+      "/api/produtos": () => json(200, { itens: [PRODUTO_COMPLETO] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("—")).toBeVisible();
+    });
+  });
+
+  it("marca o inativo e o pesável com texto, não só com cor", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO, {
+      "/api/produtos": () =>
+        json(200, {
+          itens: [{ ...PRODUTO_COMPLETO, ativo: false, tipo: "PESAVEL", unidade: "KG" }],
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Inativo")).toBeVisible();
+    });
+    expect(screen.getByText(/pesável/)).toBeVisible();
+  });
+
+  it("lista vazia tem texto diferente de busca sem resultado", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO);
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhum produto encontrado")).toBeVisible();
+    });
+    expect(screen.getByText(/Ainda não há produtos cadastrados/)).toBeVisible();
+
+    await userEvent.type(screen.getByLabelText(/Procurar produto/), "coca");
+    await userEvent.click(screen.getByRole("button", { name: "Procurar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nada para "coca"/)).toBeVisible();
+    });
+  });
+
+  it("🔑 falha ao listar oferece repetir, sem tela branca", async () => {
+    let tentativas = 0;
+
+    await abrirProdutos(GERENTE_DE_PRODUTO, {
+      "/api/produtos": () => {
+        tentativas += 1;
+        return tentativas === 1
+          ? json(500, { erro: { codigo: "X", mensagem: "Banco fora do ar." } })
+          : json(200, { itens: [PRODUTO_COMPLETO] });
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Banco fora do ar");
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+  });
+
+  it("🔑 quem não pode criar nem editar não vê os botões", async () => {
+    await abrirProdutos(USUARIO_OPERADOR, {
+      "/api/produtos": () => json(200, { itens: [PRODUTO_COMPLETO] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(
+      screen.queryByRole("button", { name: "Novo produto" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+  });
+
+  it("a tela sobrevive à lista de categorias falhando", async () => {
+    // Categoria é campo opcional: travar o cadastro porque a lista de apoio
+    // caiu seria parar o trabalho por causa de um seletor.
+    await abrirProdutos(GERENTE_DE_PRODUTO, {
+      "/api/categorias": () => json(500, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await irParaNovoProduto();
+
+    expect(screen.getByLabelText(/Categoria/)).toBeVisible();
+  });
+});
+
+describe("Cadastro de produto", () => {
+  it("🔑 manda o preço em centavos, nunca em reais", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante Cola 2L");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "19,90");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["precoVenda"]).toBe("1990");
+    expect(enviado["tipo"]).toBe("UNITARIO");
+    expect(enviado["unidadeBase"]).toBe("UN");
+  });
+
+  it("🔑 quem não pode ver custo não tem o campo, e o corpo não leva custo", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, BALCONISTA_SEM_CUSTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    expect(screen.queryByLabelText(/Custo de compra/)).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Pão Francês");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "PAO001");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "0,90");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    // Mandar zero apagaria a margem de todo relatório.
+    expect(enviado).not.toHaveProperty("custo");
+  });
+
+  it("🔑 pesável ganha o campo da balança e a unidade vira quilo", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    expect(screen.queryByLabelText(/Código na balança/)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Como é vendido/),
+      "Por peso ou medida",
+    );
+
+    // Sem isto, o cadastro só falharia ao salvar: pesável exige unidade que
+    // aceita fração.
+    expect(screen.getByLabelText(/Unidade/)).toHaveValue("KG");
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Picanha Bovina");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "PIC001");
+    await userEvent.type(screen.getByLabelText(/Código na balança/), "421");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "79,90");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["tipo"]).toBe("PESAVEL");
+    expect(enviado["unidadeBase"]).toBe("KG");
+    expect(enviado["codigoBalanca"]).toBe("421");
+  });
+
+  it("voltar para unitário devolve a unidade padrão", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO);
+    await irParaNovoProduto();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Como é vendido/),
+      "Por peso ou medida",
+    );
+    await userEvent.selectOptions(screen.getByLabelText(/Como é vendido/), "Por unidade");
+
+    expect(screen.getByLabelText(/Unidade/)).toHaveValue("UN");
+    expect(screen.queryByLabelText(/Código na balança/)).not.toBeInTheDocument();
+  });
+
+  it("🔑 cadastra a referência de fabricante que a autopeças precisa", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Vela de Ignição");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "VELA-F7");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "24,00");
+
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar código" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Tipo"),
+      "Similar de outra marca",
+    );
+    await userEvent.type(screen.getByLabelText("Código"), "F7TC");
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["referencias"]).toEqual([{ tipo: "SIMILAR", valor: "F7TC" }]);
+  });
+
+  it("remove a referência adicionada por engano", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO);
+    await irParaNovoProduto();
+
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar código" }));
+    expect(screen.getByLabelText("Código")).toBeVisible();
+
+    const remover = screen.getAllByRole("button", { name: "Remover" })[0];
+    expect(remover).toBeDefined();
+    await userEvent.click(remover as HTMLElement);
+    expect(screen.queryByLabelText("Código")).not.toBeInTheDocument();
+  });
+
+  it("🔑 cadastra a embalagem de fardo que o depósito precisa", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante Cola 2L");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "9,90");
+
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar embalagem" }));
+    await userEvent.selectOptions(screen.getByLabelText("Embalagem"), "Fardo");
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["embalagens"]).toEqual([{ unidade: "FD", fator: "12" }]);
+  });
+
+  it("remove a embalagem e recusa quantidade que não faz sentido", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO);
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar embalagem" }));
+    await userEvent.clear(screen.getByLabelText(/Quantidade dentro/));
+    await userEvent.type(screen.getByLabelText(/Quantidade dentro/), "1");
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("maior que 1");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remover" }));
+    expect(screen.queryByLabelText(/Quantidade dentro/)).not.toBeInTheDocument();
+  });
+
+  it("recusa campos obrigatórios vazios antes de chamar o servidor", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+    });
+
+    await irParaNovoProduto();
+    const antes = corpos.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("código interno");
+
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("descrição");
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "abc");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Preço de venda inválido");
+
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "9,90");
+    await userEvent.clear(screen.getByLabelText(/Custo de compra/));
+    await userEvent.type(screen.getByLabelText(/Custo de compra/), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Custo inválido");
+
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("🔑 recusa do servidor aparece sem perder o que foi digitado", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () =>
+        json(409, {
+          erro: {
+            codigo: "PRODUTO_SKU_EM_USO",
+            mensagem: "O código REF001 já é do produto Refrigerante Cola 2 Litros.",
+          },
+        }),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Outro refrigerante");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "9,90");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("já é do produto");
+    });
+    expect(screen.getByLabelText(/Descrição \*/)).toHaveValue("Outro refrigerante");
+  });
+
+  it("cancelar volta para a lista sem gravar", async () => {
+    await abrirProdutos(GERENTE_DE_PRODUTO);
+    await irParaNovoProduto();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo produto" })).toBeVisible();
+    });
+  });
+});
+
+describe("Edição de produto", () => {
+  it("🔑 abre preenchido e manda PUT com o estado completo", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": () =>
+        json(200, {
+          itens: [
+            {
+              ...PRODUTO_COMPLETO,
+              custo: "650",
+              categoriaId: "cat-1",
+              referencias: [{ tipo: "ORIGINAL", valor: "90919-01210" }],
+              embalagens: [{ unidade: "FD", fator: "12" }],
+            },
+          ],
+        }),
+      "GET /api/categorias": CATEGORIAS,
+      "PUT /api/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002": () =>
+        json(200, PRODUTO_COMPLETO),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    expect(screen.getByLabelText(/Código interno/)).toHaveValue("REF001");
+    expect(screen.getByLabelText(/Preço de venda/)).toHaveValue("9,90");
+    expect(screen.getByLabelText(/Custo de compra/)).toHaveValue("6,50");
+    expect(screen.getByLabelText("Código")).toHaveValue("90919-01210");
+    // Tipo e unidade não aparecem: o produto já tem estoque naquela unidade.
+    expect(screen.queryByLabelText(/Como é vendido/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText("Produto ativo"));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "PUT")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["ativo"]).toBe(false);
+    expect(enviado["custo"]).toBe("650");
+    expect(enviado["categoriaId"]).toBe("cat-1");
+    expect(enviado["referencias"]).toEqual([{ tipo: "ORIGINAL", valor: "90919-01210" }]);
+  });
+
+  it("🔑 o formulário de quem não vê custo não o envia, e o gravado fica de pé", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, BALCONISTA_SEM_CUSTO),
+      "GET /api/produtos": () => json(200, { itens: [PRODUTO_COMPLETO] }),
+      "GET /api/categorias": CATEGORIAS,
+      "PUT /api/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002": () =>
+        json(200, PRODUTO_COMPLETO),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).not.toHaveProperty("custo");
+  });
+
+  it("descrição do cupom em branco não vai no corpo — o servidor deriva da longa", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante Cola 2L");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.type(screen.getByLabelText(/Código de barras/), "7891000315507");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "9,90");
+    await userEvent.selectOptions(screen.getByLabelText(/Categoria/), "Bebidas");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado).not.toHaveProperty("descricaoPdv");
+    expect(enviado["codigoBarras"]).toBe("7891000315507");
+    expect(enviado["categoriaId"]).toBe("cat-1");
+  });
+
+  it("descrição do cupom preenchida vai como digitada", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, GERENTE_DE_PRODUTO),
+      "GET /api/produtos": LISTA_VAZIA,
+      "GET /api/categorias": CATEGORIAS,
+      "POST /api/produtos": () => json(201, PRODUTO_COMPLETO),
+    });
+
+    await irParaNovoProduto();
+
+    await userEvent.type(screen.getByLabelText(/Descrição \*/), "Refrigerante Cola 2L");
+    await userEvent.type(screen.getByLabelText(/Descrição do cupom/), "REFRI COLA 2L");
+    await userEvent.type(screen.getByLabelText(/Código interno/), "REF001");
+    await userEvent.clear(screen.getByLabelText(/Preço de venda/));
+    await userEvent.type(screen.getByLabelText(/Preço de venda/), "9,90");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(
+      (corpos.find((c) => c.metodo === "POST")?.corpo as Record<string, unknown>)[
+        "descricaoPdv"
+      ],
+    ).toBe("REFRI COLA 2L");
   });
 });

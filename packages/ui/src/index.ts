@@ -13,5 +13,10 @@ export {
   type PropsVazio,
   Vazio,
 } from "./componentes/Estados.js";
-export { formatarDinheiro, formatarQuantidade } from "./formato.js";
+export {
+  centavosParaReais,
+  formatarDinheiro,
+  formatarQuantidade,
+  reaisParaCentavos,
+} from "./formato.js";
 export { juntarClasses } from "./juntarClasses.js";

@@ -79,7 +79,16 @@ export async function responderErro(
  * Devolvê-lo inteiro entregaria de graça o mapa interno do sistema — e uma lista
  * de bloqueio esqueceria justamente o campo novo que alguém acabou de acrescentar.
  */
-const DETALHES_PUBLICOS = new Set(["permissaoNecessaria", "disponivel", "bloqueadoAte"]);
+const DETALHES_PUBLICOS = new Set([
+  "permissaoNecessaria",
+  "disponivel",
+  "bloqueadoAte",
+  // A lista de erros de um formulário longo. Cada item é `{ codigo, mensagem }`
+  // vindo de `agregarErros`, e `mensagem` de `DomainError` é, por contrato,
+  // escrita para o operador. Sem isto o cadastro de produto voltaria a mandar
+  // corrigir um campo por gravação — que é o que a agregação existe para evitar.
+  "erros",
+]);
 
 function detalhesPublicos(
   erro: DomainError,

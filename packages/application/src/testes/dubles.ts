@@ -21,6 +21,7 @@ import {
   type Usuario,
   type Venda,
 } from "@erp/domain";
+import { normalizarParaBusca } from "@erp/utils";
 
 import { ErroInfraestrutura } from "../erros/ErroInfraestrutura.js";
 import type { GeradorId } from "../portas/infraestrutura/GeradorId.js";
@@ -99,11 +100,42 @@ export class ProdutoRepositorioEmMemoria implements ProdutoRepository {
     return Promise.resolve(undefined);
   }
 
+  porSku(sku: string): Promise<Produto | undefined> {
+    for (const produto of this.itens.values()) {
+      if (produto.sku === sku.trim()) return Promise.resolve(produto);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  porCodigoBarras(codigo: string): Promise<Produto | undefined> {
+    for (const produto of this.itens.values()) {
+      if (produto.codigoBarras?.valor === codigo) return Promise.resolve(produto);
+    }
+    return Promise.resolve(undefined);
+  }
+
   porCodigoBalanca(codigo: string): Promise<Produto | undefined> {
     for (const produto of this.itens.values()) {
       if (produto.codigoBalanca === codigo) return Promise.resolve(produto);
     }
     return Promise.resolve(undefined);
+  }
+
+  buscar(filtro: FiltroBusca): Promise<readonly Produto[]> {
+    const termo = normalizarParaBusca(filtro.termo ?? "");
+
+    const encontrados = [...this.itens.values()]
+      .filter((produto) => !(filtro.apenasAtivos === true && !produto.ativo))
+      .filter(
+        (produto) =>
+          termo === "" ||
+          produto.descricaoBusca.includes(termo) ||
+          produto.correspondeAoCodigo(filtro.termo ?? ""),
+      )
+      .sort((um, outro) => um.descricao.localeCompare(outro.descricao, "pt-BR"))
+      .slice(0, filtro.limite);
+
+    return Promise.resolve(encontrados);
   }
 
   salvar(produto: Produto): Promise<void> {

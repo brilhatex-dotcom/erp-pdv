@@ -16,6 +16,9 @@ import {
   InstalacaoPrecisaConfiguracao,
   AlterarCategoria,
   AlterarCliente,
+  AlterarPrecoDoProduto,
+  AlterarProduto,
+  CadastrarProduto,
   AlterarFornecedor,
   CadastrarCategoria,
   CadastrarCliente,
@@ -94,6 +97,10 @@ export interface Container {
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
   readonly finalizarVenda: FinalizarVenda;
+
+  readonly cadastrarProduto: CadastrarProduto;
+  readonly alterarProduto: AlterarProduto;
+  readonly alterarPrecoDoProduto: AlterarPrecoDoProduto;
 
   readonly cadastrarCategoria: CadastrarCategoria;
   readonly alterarCategoria: AlterarCategoria;
@@ -184,6 +191,10 @@ export function montarContainer(ambiente: Ambiente): Container {
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),
     finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
+
+    cadastrarProduto: new CadastrarProduto(unitOfWork, geradorId),
+    alterarProduto: new AlterarProduto(unitOfWork, relogio),
+    alterarPrecoDoProduto: new AlterarPrecoDoProduto(unitOfWork, relogio),
 
     cadastrarCategoria: new CadastrarCategoria(unitOfWork, geradorId),
     alterarCategoria: new AlterarCategoria(unitOfWork),

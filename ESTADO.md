@@ -77,6 +77,7 @@ movimentação é o pior de resolver.
 | Cliente HTTP + sessão compartilhados | ✅ Completo | `packages/cliente-api/src/` |
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
+| **Produtos — cadastro completo** | ✅ Completo, ponta a ponta | `casos-de-uso/catalogo/`, `rotas/produtos.ts`, `telas/Produtos.tsx` |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
 | Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
@@ -85,7 +86,7 @@ movimentação é o pior de resolver.
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**1.980 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**2.123 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -125,7 +126,7 @@ Duas frentes que destravam o resto:
 | 3 | **Empresas** | ⬜ §2.1 |
 | 4 | Clientes | ✅ Pronto |
 | 5 | Fornecedores | ✅ Pronto |
-| 6 | Produtos | ⚠️ Domínio, banco e consulta prontos; **falta a tela de cadastro** |
+| 6 | Produtos | ✅ Pronto — cadastro, alteração, busca da retaguarda e correção de preço pelo supervisor |
 | 7 | Estoque | ⚠️ Domínio pronto (eventos comutativos); **falta rota e tela** |
 | 8 | **Compras** | ⬜ Nada existe. Entrada de mercadoria, que alimenta o estoque |
 | 9 | Vendas | ✅ Pronto |
@@ -159,6 +160,14 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
+- **Busca de produto da retaguarda faz varredura.** `ProdutoRepositorioPrisma.buscar`
+  usa `contains` sobre `descricao_busca`: o índice B-tree só atende prefixo, e quem
+  procura "coca" dentro de "REFRIGERANTE COCA COLA" precisa de contenção. Foi
+  decisão consciente — **não** é o caminho quente (a bipada do balcão é `porCodigo`,
+  por igualdade), o resultado é limitado a dezenas de linhas, e a alternativa (índice
+  GIN com `pg_trgm`) acrescentaria uma extensão do PostgreSQL à responsabilidade do
+  instalador. **Gatilho de revisão:** acima de ~50 mil produtos, ou busca passando de
+  300 ms, medir e reconsiderar.
 - **A casca Electron vira quiosque fino** (ADR-0023): abre a PWA em tela cheia e
   não contém lógica nenhuma. O processo principal de hoje — dono de fila,
   catálogo e impressão — migra para o Agente Local. Casca que ganha lógica volta

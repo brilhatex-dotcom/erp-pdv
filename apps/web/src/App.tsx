@@ -5,10 +5,11 @@ import { useSessao } from "@erp/cliente-api";
 import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
-import { Fornecedores } from "./telas/Fornecedores.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
+import { Fornecedores } from "./telas/Fornecedores.js";
 import { Login } from "./telas/Login.js";
 import { PrimeiroAcesso } from "./telas/PrimeiroAcesso.js";
+import { Produtos } from "./telas/Produtos.js";
 import { Usuarios } from "./telas/Usuarios.js";
 
 /**
@@ -85,6 +86,10 @@ export function App(): ReactNode {
  */
 const SECOES = [
   { chave: "PRODUTOS", rotulo: "Produtos", permissao: undefined },
+  // Separada do cadastro de propósito: aqui se bipa o código e o preço aparece
+  // grande, para responder ao cliente que perguntou no balcão. A lista de
+  // cadastro responde outra pergunta — "que produtos eu tenho".
+  { chave: "CONSULTA", rotulo: "Consulta de preço", permissao: undefined },
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
@@ -151,7 +156,9 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Usuarios />;
     case "CAIXAS":
       return <Caixas />;
-    default:
+    case "CONSULTA":
       return <ConsultarProduto />;
+    default:
+      return <Produtos />;
   }
 }

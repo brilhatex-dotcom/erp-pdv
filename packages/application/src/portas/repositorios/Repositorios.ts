@@ -1,3 +1,4 @@
+import type { FiltroBusca } from "./FiltroBusca.js";
 import type {
   CategoriaRepository,
   ClienteRepository,
@@ -37,8 +38,31 @@ export interface ProdutoRepository {
    */
   porCodigo(codigo: string): Promise<Produto | undefined>;
 
+  /**
+   * Busca **só** pelo SKU, em igualdade exata.
+   *
+   * Separado de `porCodigo` porque serve a outra pergunta: `porCodigo` responde
+   * "que produto o operador bipou", e aceitar uma referência de fabricante ali
+   * é justamente o que se quer. Já a conferência de unicidade do cadastro
+   * precisa saber se **este SKU** já existe — usar `porCodigo` acusaria
+   * conflito porque outro produto tem uma referência parecida.
+   */
+  porSku(sku: string): Promise<Produto | undefined>;
+
+  /** Busca pelo código de barras principal, em igualdade exata. */
+  porCodigoBarras(codigo: string): Promise<Produto | undefined>;
+
   /** Busca pelo código interno usado na balança. */
   porCodigoBalanca(codigo: string): Promise<Produto | undefined>;
+
+  /**
+   * Busca por texto para a lista da retaguarda.
+   *
+   * **Não** é o caminho quente: quem está no balcão bipa, e a bipada cai em
+   * `porCodigo`. Aqui é quem está sentado na retaguarda procurando "coca" para
+   * conferir um preço.
+   */
+  buscar(filtro: FiltroBusca): Promise<readonly Produto[]>;
 
   salvar(produto: Produto): Promise<void>;
 }

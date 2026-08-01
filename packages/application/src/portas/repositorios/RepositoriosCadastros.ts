@@ -16,19 +16,9 @@ import type {
  * juntar depois.
  */
 
-/**
- * Filtro da busca da retaguarda.
- *
- * O limite é obrigatório por decisão de desempenho: a tela nunca pede "todos".
- * Uma loja com dez mil clientes não deve conseguir montar uma consulta que
- * devolva dez mil linhas para uma lista que mostra vinte.
- */
-export interface FiltroBusca {
-  /** O que foi digitado. Vazio significa "os primeiros", não "todos". */
-  readonly termo?: string | undefined;
-  readonly apenasAtivos?: boolean | undefined;
-  readonly limite: number;
-}
+import type { FiltroBusca } from "./FiltroBusca.js";
+
+export type { FiltroBusca };
 
 export interface CategoriaRepository {
   porId(id: Identificador): Promise<Categoria | undefined>;

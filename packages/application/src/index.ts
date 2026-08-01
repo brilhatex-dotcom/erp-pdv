@@ -3,6 +3,7 @@ export { agregarErros } from "./erros/agregarErros.js";
 export { ErroInfraestrutura } from "./erros/ErroInfraestrutura.js";
 
 // ── Portas ──────────────────────────────────────────────────────────────
+export type { FiltroBusca } from "./portas/repositorios/FiltroBusca.js";
 export type { GeradorId } from "./portas/infraestrutura/GeradorId.js";
 export type { Relogio } from "./portas/infraestrutura/Relogio.js";
 export type { UnitOfWork } from "./portas/infraestrutura/UnitOfWork.js";
@@ -86,11 +87,28 @@ export {
   type SaidaRenovarSessao,
 } from "./casos-de-uso/acesso/RenovarSessao.js";
 
+// ── Catálogo ────────────────────────────────────────────────────────────
+export {
+  AlterarPrecoDoProduto,
+  type EntradaAlterarPreco,
+} from "./casos-de-uso/catalogo/AlterarPrecoDoProduto.js";
+export {
+  AlterarProduto,
+  type EntradaAlterarProduto,
+} from "./casos-de-uso/catalogo/AlterarProduto.js";
+export {
+  CadastrarProduto,
+  type EntradaCadastrarProduto,
+} from "./casos-de-uso/catalogo/CadastrarProduto.js";
+export type {
+  EmbalagemBruta,
+  ReferenciaBruta,
+} from "./casos-de-uso/catalogo/interpretarProduto.js";
+
 // ── Cadastros ───────────────────────────────────────────────────────────
 export type {
   CategoriaRepository,
   ClienteRepository,
-  FiltroBusca,
   FornecedorRepository,
 } from "./portas/repositorios/RepositoriosCadastros.js";
 export {

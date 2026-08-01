@@ -1,4 +1,4 @@
-import type { ProdutoRepository } from "@erp/application";
+import type { FiltroBusca, ProdutoRepository } from "@erp/application";
 import type { Identificador, Produto } from "@erp/domain";
 import { normalizarParaBusca } from "@erp/utils";
 
@@ -48,6 +48,66 @@ export class ProdutoRepositorioPrisma implements ProdutoRepository {
     });
 
     return linha === null ? undefined : paraDominio(linha);
+  }
+
+  async porSku(sku: string): Promise<Produto | undefined> {
+    const linha = await this.prisma.produto.findUnique({
+      where: { sku: sku.trim() },
+      include: INCLUIR,
+    });
+
+    return linha === null ? undefined : paraDominio(linha);
+  }
+
+  async porCodigoBarras(codigo: string): Promise<Produto | undefined> {
+    const linha = await this.prisma.produto.findUnique({
+      where: { codigoBarras: codigo.trim() },
+      include: INCLUIR,
+    });
+
+    return linha === null ? undefined : paraDominio(linha);
+  }
+
+  /**
+   * Busca por texto para a lista da retaguarda.
+   *
+   * Usa `contains` sobre `descricaoBusca`, que é varredura — o índice B-tree só
+   * serviria a busca por prefixo, e quem procura "coca" dentro de
+   * "REFRIGERANTE COCA COLA" precisa de contenção. A escolha é deliberada: esta
+   * **não** é a consulta do balcão (aquela é `porCodigo`, por igualdade), o
+   * resultado é limitado a algumas dezenas de linhas, e a alternativa —
+   * índice GIN com `pg_trgm` — acrescentaria uma extensão do PostgreSQL à
+   * responsabilidade do instalador em troca de milissegundos numa tela onde
+   * ninguém está com fila esperando.
+   *
+   * **Gatilho de revisão:** acima de ~50 mil produtos, ou busca passando de
+   * 300 ms, vale medir e considerar o `pg_trgm`.
+   */
+  async buscar(filtro: FiltroBusca): Promise<readonly Produto[]> {
+    const termo = (filtro.termo ?? "").trim();
+    const normalizado = normalizarParaBusca(termo).replace(/[\s\-./]/g, "");
+
+    const linhas = await this.prisma.produto.findMany({
+      where: {
+        ...(filtro.apenasAtivos === true ? { ativo: true } : {}),
+        ...(termo === ""
+          ? {}
+          : {
+              OR: [
+                { descricaoBusca: { contains: normalizarParaBusca(termo) } },
+                { sku: termo },
+                { sku: termo.toUpperCase() },
+                { codigoBarras: termo },
+                { referencias: { some: { normalizado } } },
+              ],
+            }),
+      },
+      include: INCLUIR,
+      orderBy: { descricao: "asc" },
+      take: filtro.limite,
+    });
+
+    return linhas.map(paraDominio);
   }
 
   async porCodigoBalanca(codigo: string): Promise<Produto | undefined> {

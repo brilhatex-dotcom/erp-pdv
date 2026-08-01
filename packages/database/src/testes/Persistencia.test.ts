@@ -84,6 +84,13 @@ function parafuso(): Produto {
   }).unwrap();
 }
 
+/** O mesmo parafuso, com código de barras — para as buscas por igualdade. */
+function parafusoComCodigoDeBarras(): Produto {
+  const produto = parafuso();
+  produto.definirCodigoBarras(CodigoBarras.criar("7891000315507").unwrap());
+  return produto;
+}
+
 function carne(): Produto {
   return Produto.criar({
     id: CARNE,
@@ -225,6 +232,61 @@ describe("Catálogo — ida e volta pelo banco", () => {
 
     expect(await produtos.porId(proximoId())).toBeUndefined();
     expect(await produtos.porCodigo("INEXISTENTE")).toBeUndefined();
+  });
+
+  it("encontra o produto pelo SKU e pelo código de barras, em igualdade exata", async () => {
+    // Separado de `porCodigo` porque serve à conferência de unicidade do
+    // cadastro: aceitar a referência de outro produto aqui acusaria conflito
+    // onde não há.
+    const produtos = new ProdutoRepositorioPrisma(prisma);
+    await produtos.salvar(parafusoComCodigoDeBarras());
+
+    expect((await produtos.porSku("  PAR-3/8  "))?.id.equals(PARAFUSO)).toBe(true);
+    // A referência do fabricante **não** responde por SKU.
+    expect(await produtos.porSku("CIS-338-2")).toBeUndefined();
+
+    expect((await produtos.porCodigoBarras("7891000315507"))?.id.equals(PARAFUSO)).toBe(
+      true,
+    );
+    expect(await produtos.porCodigoBarras("7891000100103")).toBeUndefined();
+  });
+
+  it("busca por parte da descrição, sem acento e sem caixa", async () => {
+    const produtos = new ProdutoRepositorioPrisma(prisma);
+    await produtos.salvar(parafuso());
+    await produtos.salvar(carne());
+
+    const achados = await produtos.buscar({ termo: "SEXTAVADO", limite: 20 });
+
+    expect(achados.map((p) => p.id.valor)).toEqual([PARAFUSO.valor]);
+  });
+
+  it("busca também pelo código bipado e pela referência do fabricante", async () => {
+    const produtos = new ProdutoRepositorioPrisma(prisma);
+    await produtos.salvar(parafusoComCodigoDeBarras());
+
+    expect(await produtos.buscar({ termo: "7891000315507", limite: 20 })).toHaveLength(1);
+    expect(await produtos.buscar({ termo: "par-3/8", limite: 20 })).toHaveLength(1);
+    expect(await produtos.buscar({ termo: "cis 338 2", limite: 20 })).toHaveLength(1);
+  });
+
+  it("termo vazio devolve os primeiros, e o limite é respeitado", async () => {
+    const produtos = new ProdutoRepositorioPrisma(prisma);
+    await produtos.salvar(parafuso());
+    await produtos.salvar(carne());
+
+    expect(await produtos.buscar({ limite: 20 })).toHaveLength(2);
+    expect(await produtos.buscar({ termo: "  ", limite: 1 })).toHaveLength(1);
+  });
+
+  it("filtra os inativos quando pedido", async () => {
+    const produtos = new ProdutoRepositorioPrisma(prisma);
+    const inativo = parafuso();
+    inativo.desativar(new Date());
+    await produtos.salvar(inativo);
+
+    expect(await produtos.buscar({ limite: 20, apenasAtivos: true })).toHaveLength(0);
+    expect(await produtos.buscar({ limite: 20 })).toHaveLength(1);
   });
 
   it("regravar não duplica referências nem embalagens", async () => {

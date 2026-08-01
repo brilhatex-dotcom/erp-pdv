@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { formatarDinheiro, formatarQuantidade } from "../formato.js";
+import {
+  centavosParaReais,
+  formatarDinheiro,
+  formatarQuantidade,
+  reaisParaCentavos,
+} from "../formato.js";
 import { juntarClasses } from "../juntarClasses.js";
 import { Botao } from "./Botao.js";
 import { CampoTexto } from "./CampoTexto.js";
@@ -258,6 +263,46 @@ describe("Formatação para a tela", () => {
   ])("formata quantidade %p como %p", (milesimos, esperado) => {
     expect(formatarQuantidade(milesimos)).toBe(esperado);
   });
+});
+
+describe("Digitação de dinheiro", () => {
+  it.each([
+    ["0", "0,00"],
+    ["990", "9,90"],
+    ["1990", "19,90"],
+    ["200000", "2000,00"],
+    ["5", "0,05"],
+    ["-990", "-9,90"],
+  ])("centavos %s viram %s no campo", (centavos, esperado) => {
+    expect(centavosParaReais(centavos)).toBe(esperado);
+  });
+
+  it("aceita bigint direto, sem passar por texto", () => {
+    expect(centavosParaReais(1990n)).toBe("19,90");
+  });
+
+  it.each([
+    ["19,90", "1990"],
+    ["19.90", "1990"],
+    ["  9,9  ", "990"],
+    ["9,", "900"],
+    ["0,05", "5"],
+  ])("o campo %s vira %s centavos", (texto, esperado) => {
+    expect(reaisParaCentavos(texto)).toBe(esperado);
+  });
+
+  it("🔑 número sem separador é reais, não centavos", () => {
+    // A interpretação inversa daria um valor cem vezes menor, e o erro só
+    // apareceria no balcão — na etiqueta que não bate com a gôndola.
+    expect(reaisParaCentavos("2000")).toBe("200000");
+  });
+
+  it.each([[""], ["abc"], ["19,900"], ["-5"], ["1,2,3"], ["R$ 9,90"]])(
+    "recusa %p em vez de gravar um valor errado",
+    (texto) => {
+      expect(reaisParaCentavos(texto)).toBeUndefined();
+    },
+  );
 });
 
 describe("Junção de classes", () => {
