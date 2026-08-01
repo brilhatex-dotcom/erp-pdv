@@ -7,6 +7,7 @@ import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
 import { Compras } from "./telas/Compras.js";
+import { Empresa } from "./telas/Empresa.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Estoque } from "./telas/Estoque.js";
 import { Fornecedores } from "./telas/Fornecedores.js";
@@ -100,6 +101,9 @@ const SECOES = [
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
   { chave: "USUARIOS", rotulo: "Usuários", permissao: "usuario:criar" },
   { chave: "CAIXAS", rotulo: "Caixas", permissao: "relatorio:vendas" },
+  // Sem permissão declarada: todo mundo consulta o cabeçalho da loja, que sai
+  // impresso em cada cupom. Só o `PUT` exige `config:empresa`, no servidor.
+  { chave: "EMPRESA", rotulo: "Empresa", permissao: undefined },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -169,6 +173,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Usuarios />;
     case "CAIXAS":
       return <Caixas />;
+    case "EMPRESA":
+      return <Empresa />;
     case "CONSULTA":
       return <ConsultarProduto />;
     case "ESTOQUE":

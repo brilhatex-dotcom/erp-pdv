@@ -25,6 +25,10 @@ export {
   InstalacaoPrecisaConfiguracao,
 } from "./casos-de-uso/usuarios/CriarPrimeiroAdministrador.js";
 export {
+  DefinirEmpresa,
+  type EntradaDefinirEmpresa,
+} from "./casos-de-uso/cadastros/DefinirEmpresa.js";
+export {
   AlterarUsuario,
   CadastrarUsuario,
   DefinirCredencial,
@@ -127,6 +131,7 @@ export {
 export type {
   CategoriaRepository,
   ClienteRepository,
+  EmpresaRepository,
   FornecedorRepository,
 } from "./portas/repositorios/RepositoriosCadastros.js";
 export {

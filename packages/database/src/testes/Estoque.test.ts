@@ -268,6 +268,33 @@ describe("Extrato de estoque", () => {
     expect(itens[1]?.custoUnitario).toBe("300");
   });
 
+  it("🔑 movimentos do mesmo instante saem sempre na mesma ordem", async () => {
+    // Uma nota de entrada com vários itens grava todos na mesma transação, com
+    // o mesmo `ocorrido_em`. Ordenar só por instante deixa a sequência a cargo
+    // do plano de execução — e a lista muda de ordem entre duas atualizações da
+    // tela, com quem confere o estoque desconfiando do sistema, com razão.
+    await mover(refrigerante, "ENTRADA", "10");
+    await mover(refrigerante, "AJUSTE_POSITIVO", "1", { observacao: "Contagem" });
+    await mover(refrigerante, "PERDA", "2", { observacao: "Garrafas quebradas" });
+
+    const primeira = await extratoDeEstoque(prisma, refrigerante.id.valor, {
+      limite: 20,
+      comCusto: false,
+    });
+    const segunda = await extratoDeEstoque(prisma, refrigerante.id.valor, {
+      limite: 20,
+      comCusto: false,
+    });
+
+    // O id é UUIDv7 (ADR-0008): desempata na ordem em que foram criados.
+    expect(primeira.map((item) => item.tipo)).toEqual([
+      "PERDA",
+      "AJUSTE_POSITIVO",
+      "ENTRADA",
+    ]);
+    expect(segunda.map((item) => item.id)).toEqual(primeira.map((item) => item.id));
+  });
+
   it("mostra quem lançou, para a conferência ter a quem perguntar", async () => {
     await mover(refrigerante, "ENTRADA", "10");
 

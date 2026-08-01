@@ -13,6 +13,15 @@ export interface PropsCampoSelecao {
   readonly opcoes: readonly OpcaoDeSelecao[];
   readonly aoMudar: (valor: string) => void;
   readonly required?: boolean | undefined;
+  /**
+   * Campo travado.
+   *
+   * Existe para a tela que o usuário **pode ver e não pode alterar** — o
+   * cadastro da empresa aberto por quem não tem `config:empresa`. Esconder o
+   * valor esconderia informação que ele precisa conferir; deixá-lo editável
+   * produziria um erro do servidor depois de tudo preenchido.
+   */
+  readonly disabled?: boolean | undefined;
 }
 
 /**
@@ -35,6 +44,7 @@ export function CampoSelecao({
   opcoes,
   aoMudar,
   required,
+  disabled,
 }: PropsCampoSelecao): ReactNode {
   const id = useId();
   const idAjuda = `${id}-ajuda`;
@@ -57,12 +67,13 @@ export function CampoSelecao({
       <select
         id={id}
         required={required}
+        disabled={disabled}
         value={valor}
         aria-describedby={ajuda === undefined ? undefined : idAjuda}
         onChange={(evento) => {
           aoMudar(evento.target.value);
         }}
-        className="min-h-alvo rounded-md border border-borda bg-papel px-3 text-base text-tinta"
+        className="min-h-alvo rounded-md border border-borda bg-papel px-3 text-base text-tinta disabled:cursor-not-allowed disabled:opacity-55"
       >
         {opcoes.map((opcao) => (
           <option key={opcao.valor} value={opcao.valor}>

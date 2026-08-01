@@ -2,6 +2,7 @@ import type {
   Categoria,
   Cliente,
   Documento,
+  Empresa,
   Fornecedor,
   Identificador,
 } from "@erp/domain";
@@ -19,6 +20,18 @@ import type {
 import type { FiltroBusca } from "./FiltroBusca.js";
 
 export type { FiltroBusca };
+
+/**
+ * A empresa da instalação.
+ *
+ * Sem `porId`: nenhum caminho do sistema conhece o identificador dela, porque
+ * só existe uma (ADR-0024). Expor busca por id obrigaria toda tela a
+ * descobri-lo antes, e a primeira que errasse leria o cadastro de outro lugar.
+ */
+export interface EmpresaRepository {
+  atual(): Promise<Empresa | undefined>;
+  salvar(empresa: Empresa): Promise<void>;
+}
 
 export interface CategoriaRepository {
   porId(id: Identificador): Promise<Categoria | undefined>;

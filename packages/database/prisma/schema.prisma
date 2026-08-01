@@ -537,6 +537,45 @@ model Cliente {
   @@map("clientes")
 }
 
+/// A empresa que opera esta instalação.
+///
+/// **Uma linha, sempre** (ADR-0024). A garantia não é convenção: `unica` é uma
+/// coluna com valor fixo e índice único, então a segunda inserção falha no
+/// banco. Confiar só no código deixaria a porta aberta para o dia em que um
+/// caminho novo esquecer de conferir — e duas empresas na mesma instalação
+/// fariam todo relatório somar dois cabeçalhos diferentes.
+model Empresa {
+  id                 String  @id @db.Uuid
+  razaoSocial        String  @map("razao_social") @db.VarChar(60)
+  nomeFantasia       String? @map("nome_fantasia") @db.VarChar(60)
+  razaoSocialBusca   String  @map("razao_social_busca")
+  /// Só CNPJ: quem emite documento fiscal não emite com CPF.
+  cnpj               String  @unique @db.VarChar(14)
+  inscricaoEstadual  String? @map("inscricao_estadual") @db.VarChar(20)
+  inscricaoMunicipal String? @map("inscricao_municipal") @db.VarChar(20)
+  regimeTributario   String  @map("regime_tributario") @db.VarChar(30)
+  telefone           String? @db.VarChar(11)
+  email              String? @db.VarChar(160)
+
+  /// Endereço **obrigatório**: é o do emitente, e vai no cupom e na nota.
+  logradouro          String  @db.VarChar(120)
+  numero              String  @db.VarChar(10)
+  complemento         String? @db.VarChar(60)
+  bairro              String  @db.VarChar(60)
+  municipio           String  @db.VarChar(60)
+  codigoMunicipioIbge String? @map("codigo_municipio_ibge") @db.VarChar(7)
+  uf                  String  @db.VarChar(2)
+  cep                 String  @db.VarChar(8)
+
+  /// Sempre `true`. Existe só para o índice único garantir a linha única.
+  unica Boolean @unique @default(true)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@map("empresas")
+}
+
 model Fornecedor {
   id                String  @id @db.Uuid
   razaoSocial       String  @map("razao_social") @db.VarChar(120)

@@ -25,6 +25,7 @@ export {
   ClienteRepositorioPrisma,
   FornecedorRepositorioPrisma,
 } from "./repositorios/CadastroRepositorioPrisma.js";
+export { EmpresaRepositorioPrisma } from "./repositorios/EmpresaRepositorioPrisma.js";
 export { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 export { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 export { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";

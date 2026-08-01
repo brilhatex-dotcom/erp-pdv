@@ -77,6 +77,7 @@ movimentação é o pior de resolver.
 | Cliente HTTP + sessão compartilhados | ✅ Completo | `packages/cliente-api/src/` |
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
+| **Empresa da instalação** | ✅ Completo, ponta a ponta | `domain/cadastros/Empresa.ts`, `casos-de-uso/cadastros/DefinirEmpresa.ts`, `rotas/empresa.ts`, `telas/Empresa.tsx` |
 | **Produtos — cadastro completo** | ✅ Completo, ponta a ponta | `casos-de-uso/catalogo/`, `rotas/produtos.ts`, `telas/Produtos.tsx` |
 | **Estoque — movimento, saldo e extrato** | ✅ Completo, ponta a ponta | `casos-de-uso/estoque/`, `consultas/estoque.ts`, `rotas/estoque.ts`, `telas/Estoque.tsx` |
 | **Compras — entrada de mercadoria** | ✅ Completo, ponta a ponta | `domain/compras/`, `casos-de-uso/compras/`, `rotas/compras.ts`, `telas/Compras.tsx` |
@@ -89,7 +90,7 @@ movimentação é o pior de resolver.
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**2.349 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**2.415 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -106,13 +107,14 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 > **A ordem abaixo é decisão do responsável pelo produto, não sugestão técnica.**
 > O fiscal deixou de ser bloqueador (ADR-0022): entra **depois** de tudo isto.
 
-### 2.1 ⬅️ PRÓXIMO — Empresa e Agente Local
+### 2.1 ⬅️ PRÓXIMO — Agente Local
 
-Duas frentes que destravam o resto:
-
-- **Cadastro da empresa** (ADR-0024): CNPJ, razão social, endereço, logotipo,
-  regime tributário. Uma linha, uma instalação. É o cabeçalho de todo relatório e
-  o emitente quando o fiscal entrar. **Nenhuma outra tabela ganha `empresa_id`.**
+- ~~**Cadastro da empresa**~~ ✅ **Pronto.** CNPJ, razão social, endereço, regime
+  tributário e contato, com índice único no esquema garantindo a linha única
+  (ADR-0024). O CNPJ não muda depois de salvo: trocá-lo é outra empresa, e as
+  notas já emitidas passariam a apontar para um emitente que nunca as emitiu.
+  **Falta o logotipo** — entra junto com a impressão comum (módulo 19), que é
+  quem vai usá-lo.
 - **Agente Local** (ADR-0023): o processo instalado que passa a ser dono da
   impressão, da fila offline e do catálogo replicado. `FilaDeVendas`,
   `ReplicaCatalogo` e `Sincronizador` **mudam de casa, não são reescritos** — hoje
@@ -126,7 +128,7 @@ Duas frentes que destravam o resto:
 |---|---|---|
 | 1 | Login | ✅ Pronto |
 | 2 | Usuários | ✅ Pronto — domínio, casos de uso, rotas, tela e **primeiro acesso da instalação** |
-| 3 | **Empresas** | ⬜ §2.1 |
+| 3 | Empresas | ✅ Pronto — cadastro único por instalação, com aviso de aptidão a emitir. Falta só o logotipo, que entra com a impressão comum |
 | 4 | Clientes | ✅ Pronto |
 | 5 | Fornecedores | ✅ Pronto |
 | 6 | Produtos | ✅ Pronto — cadastro, alteração, busca da retaguarda e correção de preço pelo supervisor |
@@ -217,6 +219,9 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |
 | **Docker morre no reinício do contêiner** | `P1001: Can't reach database server` e testes pulados em silêncio | `nohup dockerd > /tmp/dockerd.log 2>&1 &` e `docker compose up -d`. Suíte que não alcança o banco é **pulada**, não reprovada — verde enganoso |
+| **Ordenação sem desempate** | Consulta devolve uma ordem local e outra no CI, sem nada ter mudado | `ORDER BY` só por instante deixa a sequência a cargo do plano de execução quando há empate — e empate é normal: uma nota de entrada grava todos os itens no mesmo `ocorrido_em`. Desempate com o id, que é UUIDv7 e portanto monotônico (ADR-0008) |
+| **Formulário grande digitado tecla a tecla estoura o CI** | Verde local, `Test timed out in 5000ms` no runner — e o estouro **contamina os casos seguintes**, que falham com valor de outro teste | `userEvent.type` re-renderiza o formulário a cada caractere. Em tela com mais de dez campos, preencha com `fireEvent.change` e guarde o teclado para o campo que o caso investiga (máscara, atalho). O sintoma enganoso é o teste **vizinho** falhando |
+| **Componente de design system criado duas vezes** | Conflito `add/add` no merge, com duas APIs para a mesma coisa | Em 01/08/2026 duas sessões criaram `CampoSelecao` — uma com `value`/`onChange`, outra com `valor`/`aoMudar`. Antes de criar componente em `packages/ui`, rode `git log origin/main --oneline -20` e `ls packages/ui/src/componentes`. Quem chega depois **adota o que está em `main`** e estende, em vez de defender o seu |
 | **`corpos[0]` capturando a chamada errada** | Teste "não chamou nada" falha sem motivo aparente | `ProvedorSessao` consulta `/api/acesso/eu` ao montar. Filtre o dublê de `fetch` pela rota que interessa |
 | **403 confundido com 401** | Cliente tenta renovar token e joga o operador no login | Sem token é **401**; sem alçada é **403**. Trocar faz o operador achar que a sessão caiu |
 

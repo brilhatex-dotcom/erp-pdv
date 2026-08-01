@@ -26,6 +26,7 @@ import {
   CadastrarCategoria,
   CadastrarCliente,
   CadastrarFornecedor,
+  DefinirEmpresa,
   FinalizarVenda,
   RegistrarPagamento,
   RenovarSessao,
@@ -116,6 +117,7 @@ export interface Container {
   readonly alterarCliente: AlterarCliente;
   readonly cadastrarFornecedor: CadastrarFornecedor;
   readonly alterarFornecedor: AlterarFornecedor;
+  readonly definirEmpresa: DefinirEmpresa;
 
   encerrar(): Promise<void>;
 }
@@ -215,6 +217,7 @@ export function montarContainer(ambiente: Ambiente): Container {
     alterarCliente: new AlterarCliente(unitOfWork),
     cadastrarFornecedor: new CadastrarFornecedor(unitOfWork, geradorId),
     alterarFornecedor: new AlterarFornecedor(unitOfWork),
+    definirEmpresa: new DefinirEmpresa(unitOfWork, geradorId),
 
     async encerrar(): Promise<void> {
       await prisma.$disconnect();
