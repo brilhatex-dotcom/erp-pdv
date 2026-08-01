@@ -234,6 +234,15 @@ export class SaldoEstoque {
       return custoEntrada;
     }
 
+    // Custo médio zero significa **"não informado"**, não "de graça" — é o que
+    // o esquema do banco declara e o que acontece toda vez que alguém dá
+    // entrada sem poder ver custo. Ponderar contra zero puxaria a média para
+    // baixo e **inflaria a margem** de todo relatório: o pior tipo de erro, o
+    // que faz o número parecer melhor do que é.
+    if (this.#custoMedio.ehZero()) {
+      return custoEntrada;
+    }
+
     // Os pesos aqui são sempre positivos — o saldo anterior foi verificado
     // acima e a quantidade do movimento é validada na criação. `unwrapOr`
     // fecha o tipo sem deixar um ramo de erro que nenhum teste alcança.

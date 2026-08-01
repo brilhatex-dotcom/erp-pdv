@@ -1,6 +1,7 @@
 import { mensagemDe, useSessao } from "@erp/cliente-api";
 import {
   Botao,
+  CampoSelecao,
   CampoTexto,
   Carregando,
   centavosParaReais,
@@ -484,7 +485,7 @@ function Formulario({
         */}
         {!editando && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Selecao
+            <CampoSelecao
               rotulo="Como é vendido"
               ajuda="Pesável é o que passa pela balança: carne, frios, hortifruti."
               valor={tipo}
@@ -502,7 +503,7 @@ function Formulario({
               }}
             />
 
-            <Selecao
+            <CampoSelecao
               rotulo="Unidade"
               ajuda="Não muda depois de cadastrado."
               valor={unidade}
@@ -551,7 +552,7 @@ function Formulario({
           )}
         </div>
 
-        <Selecao
+        <CampoSelecao
           rotulo="Categoria"
           ajuda="Agrupa o produto no relatório de vendas."
           valor={categoriaId}
@@ -626,7 +627,7 @@ function Referencias({
         // estável antes de gravar, e usar o valor faria a linha perder o foco a
         // cada tecla digitada.
         <div key={indice} className="flex flex-wrap items-end gap-3">
-          <Selecao
+          <CampoSelecao
             rotulo="Tipo"
             valor={referencia.tipo}
             opcoes={TIPOS_REFERENCIA.map((atual) => ({
@@ -715,7 +716,7 @@ function Embalagens({
 
       {embalagens.map((embalagem, indice) => (
         <div key={indice} className="flex flex-wrap items-end gap-3">
-          <Selecao
+          <CampoSelecao
             rotulo="Embalagem"
             valor={embalagem.unidade}
             opcoes={disponiveis.map((atual) => ({
@@ -774,46 +775,5 @@ function Embalagens({
         </Botao>
       </div>
     </fieldset>
-  );
-}
-
-/**
- * Seletor com rótulo visível.
- *
- * Mora aqui, e não no design system, porque é o primeiro `<select>` do produto:
- * subir para `@erp/ui` antes da segunda tela precisar dele criaria uma
- * abstração desenhada para um caso só (CLAUDE.md §4, princípio 6).
- */
-function Selecao({
-  rotulo,
-  ajuda,
-  valor,
-  opcoes,
-  aoMudar,
-}: {
-  readonly rotulo: string;
-  readonly ajuda?: string;
-  readonly valor: string;
-  readonly opcoes: readonly { readonly valor: string; readonly rotulo: string }[];
-  readonly aoMudar: (valor: string) => void;
-}): ReactNode {
-  return (
-    <label className="flex flex-col gap-1.5 text-sm font-medium text-tinta">
-      {rotulo}
-      <select
-        value={valor}
-        onChange={(evento) => {
-          aoMudar(evento.target.value);
-        }}
-        className="min-h-alvo rounded-md border border-borda bg-papel px-3 text-base text-tinta"
-      >
-        {opcoes.map((opcao) => (
-          <option key={opcao.valor} value={opcao.valor}>
-            {opcao.rotulo}
-          </option>
-        ))}
-      </select>
-      {ajuda !== undefined && <span className="text-sm text-tinta-suave">{ajuda}</span>}
-    </label>
   );
 }

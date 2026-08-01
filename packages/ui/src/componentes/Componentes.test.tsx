@@ -10,6 +10,7 @@ import {
 } from "../formato.js";
 import { juntarClasses } from "../juntarClasses.js";
 import { Botao } from "./Botao.js";
+import { CampoSelecao } from "./CampoSelecao.js";
 import { CampoTexto } from "./CampoTexto.js";
 import { Carregando, ErroDeTela, Vazio } from "./Estados.js";
 
@@ -167,6 +168,67 @@ describe("Campo de texto", () => {
     expect(screen.getByLabelText("Matrícula").id).not.toBe(
       screen.getByLabelText("PIN").id,
     );
+  });
+});
+
+describe("Campo de seleção", () => {
+  const CORES = [
+    { valor: "UN", rotulo: "Unidade" },
+    { valor: "KG", rotulo: "Quilo" },
+  ];
+
+  it("liga o rótulo ao campo — quem usa leitor de tela ouve o que ele pede", () => {
+    render(
+      <CampoSelecao
+        rotulo="Unidade"
+        valor="UN"
+        opcoes={CORES}
+        aoMudar={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText("Unidade")).toHaveValue("UN");
+  });
+
+  it("avisa a mudança com o valor escolhido", async () => {
+    const aoMudar = vi.fn();
+    render(<CampoSelecao rotulo="Unidade" valor="UN" opcoes={CORES} aoMudar={aoMudar} />);
+
+    await userEvent.selectOptions(screen.getByLabelText("Unidade"), "KG");
+
+    expect(aoMudar).toHaveBeenCalledWith("KG");
+  });
+
+  it("mostra a ajuda e a liga ao campo", () => {
+    render(
+      <CampoSelecao
+        rotulo="Unidade"
+        ajuda="Não muda depois de cadastrado."
+        valor="UN"
+        opcoes={CORES}
+        aoMudar={() => undefined}
+      />,
+    );
+
+    const campo = screen.getByLabelText("Unidade");
+    const ajuda = screen.getByText("Não muda depois de cadastrado.");
+
+    expect(campo).toHaveAttribute("aria-describedby", ajuda.id);
+  });
+
+  it("marca o obrigatório para quem vê e para quem ouve", () => {
+    render(
+      <CampoSelecao
+        rotulo="Unidade"
+        required
+        valor="UN"
+        opcoes={CORES}
+        aoMudar={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText(/Unidade/)).toBeRequired();
+    expect(screen.getByText("(obrigatório)")).toBeInTheDocument();
   });
 });
 

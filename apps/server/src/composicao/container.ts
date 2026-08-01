@@ -19,6 +19,7 @@ import {
   AlterarPrecoDoProduto,
   AlterarProduto,
   CadastrarProduto,
+  RegistrarMovimento,
   AlterarFornecedor,
   CadastrarCategoria,
   CadastrarCliente,
@@ -97,6 +98,8 @@ export interface Container {
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
   readonly finalizarVenda: FinalizarVenda;
+
+  readonly registrarMovimento: RegistrarMovimento;
 
   readonly cadastrarProduto: CadastrarProduto;
   readonly alterarProduto: AlterarProduto;
@@ -191,6 +194,8 @@ export function montarContainer(ambiente: Ambiente): Container {
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),
     finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
+
+    registrarMovimento: new RegistrarMovimento(unitOfWork, relogio, geradorId),
 
     cadastrarProduto: new CadastrarProduto(unitOfWork, geradorId),
     alterarProduto: new AlterarProduto(unitOfWork, relogio),

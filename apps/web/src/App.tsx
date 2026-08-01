@@ -6,6 +6,7 @@ import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
+import { Estoque } from "./telas/Estoque.js";
 import { Fornecedores } from "./telas/Fornecedores.js";
 import { Login } from "./telas/Login.js";
 import { PrimeiroAcesso } from "./telas/PrimeiroAcesso.js";
@@ -90,6 +91,7 @@ const SECOES = [
   // grande, para responder ao cliente que perguntou no balcão. A lista de
   // cadastro responde outra pergunta — "que produtos eu tenho".
   { chave: "CONSULTA", rotulo: "Consulta de preço", permissao: undefined },
+  { chave: "ESTOQUE", rotulo: "Estoque", permissao: undefined },
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
@@ -158,6 +160,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Caixas />;
     case "CONSULTA":
       return <ConsultarProduto />;
+    case "ESTOQUE":
+      return <Estoque />;
     default:
       return <Produtos />;
   }

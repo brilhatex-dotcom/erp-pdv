@@ -105,6 +105,12 @@ export type {
   ReferenciaBruta,
 } from "./casos-de-uso/catalogo/interpretarProduto.js";
 
+// ── Estoque ─────────────────────────────────────────────────────────────
+export {
+  type EntradaMovimento,
+  RegistrarMovimento,
+} from "./casos-de-uso/estoque/RegistrarMovimento.js";
+
 // ── Cadastros ───────────────────────────────────────────────────────────
 export type {
   CategoriaRepository,

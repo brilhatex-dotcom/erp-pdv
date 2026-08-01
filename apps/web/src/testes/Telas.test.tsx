@@ -2602,3 +2602,570 @@ describe("Edição de produto", () => {
     ).toBe("REFRI COLA 2L");
   });
 });
+
+// ── Estoque ──────────────────────────────────────────────────────────────
+
+const SALDO = {
+  produtoId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002",
+  sku: "REF001",
+  descricao: "Refrigerante Cola 2 Litros",
+  unidade: "UN",
+  milesimos: "10000",
+  ativo: true,
+};
+
+const ESTOQUISTA_DE_ESTOQUE = {
+  ...USUARIO_GERENTE,
+  nome: "Bruno Estoquista",
+  papel: "ESTOQUISTA",
+  permissoes: [
+    "produto:ver_custo",
+    "estoque:entrada",
+    "estoque:ajuste",
+    "estoque:inventario",
+  ],
+};
+
+/** Só dá entrada — não baixa mercadoria nem enxerga custo. */
+const CONFERENTE = {
+  ...USUARIO_OPERADOR,
+  nome: "Íris Conferente",
+  permissoes: ["venda:criar", "estoque:entrada"],
+};
+
+const SO_SALDO = () => json(200, { itens: [SALDO] });
+const SEM_MOVIMENTOS = () => json(200, { itens: [] });
+
+async function abrirEstoque(
+  usuario: typeof USUARIO_GERENTE,
+  extras: Rotas = {},
+): Promise<void> {
+  montarApp({
+    "/api/acesso/eu": () => json(200, usuario),
+    "/api/estoque/saldos": SO_SALDO,
+    ...extras,
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Estoque" })).toBeVisible();
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Estoque" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "Estoque" })).toBeVisible();
+  });
+}
+
+describe("Lista de estoque", () => {
+  it("mostra o saldo com a unidade do produto", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE);
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(screen.getByText(/10 un/)).toBeVisible();
+  });
+
+  it("🔑 marca o saldo negativo com texto, não só com cor", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE, {
+      "/api/estoque/saldos": () =>
+        json(200, { itens: [{ ...SALDO, milesimos: "-5000" }] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("negativo")).toBeVisible();
+    });
+  });
+
+  it("🔑 quem não pode ver custo não vê as colunas de custo e valor", async () => {
+    await abrirEstoque(CONFERENTE, {
+      "/api/estoque/saldos": () => json(200, { itens: [SALDO] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(
+      screen.queryByRole("columnheader", { name: "Custo médio" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("mostra custo e valor imobilizado a quem tem a permissão", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE, {
+      "/api/estoque/saldos": () =>
+        json(200, {
+          itens: [{ ...SALDO, custoMedio: "300", valorEmEstoque: "3000" }],
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("R$ 3,00")).toBeVisible();
+    });
+    expect(screen.getByText("R$ 30,00")).toBeVisible();
+  });
+
+  it("custo nunca informado aparece como traço, não como R$ 0,00", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE, {
+      "/api/estoque/saldos": () =>
+        json(200, { itens: [{ ...SALDO, custoMedio: "0", valorEmEstoque: "0" }] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(screen.queryByText("R$ 0,00")).not.toBeInTheDocument();
+  });
+
+  it("filtra por situação e a lista vazia de negativos é boa notícia", async () => {
+    const chamadas: string[] = [];
+
+    const buscar = vi.fn((url: string) => {
+      chamadas.push(url);
+      const caminho = url.split("?")[0] ?? url;
+
+      if (caminho === "/api/acesso/eu")
+        return Promise.resolve(json(200, ESTOQUISTA_DE_ESTOQUE));
+      if (caminho === "/api/estoque/saldos") {
+        return Promise.resolve(
+          url.includes("situacao=NEGATIVO") ? json(200, { itens: [] }) : SO_SALDO(),
+        );
+      }
+      return Promise.resolve(json(404, { erro: { codigo: "X", mensagem: "x" } }));
+    });
+
+    const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+    render(
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
+        <App />
+      </ProvedorSessao>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Estoque" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Estoque" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Negativos" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/É o resultado que se quer/)).toBeVisible();
+    });
+    expect(chamadas.some((url) => url.includes("situacao=NEGATIVO"))).toBe(true);
+  });
+
+  it("procura por texto e o termo vai na consulta", async () => {
+    const chamadas: string[] = [];
+
+    const buscar = vi.fn((url: string) => {
+      chamadas.push(url);
+      const caminho = url.split("?")[0] ?? url;
+
+      if (caminho === "/api/acesso/eu")
+        return Promise.resolve(json(200, ESTOQUISTA_DE_ESTOQUE));
+      if (caminho === "/api/estoque/saldos") {
+        return Promise.resolve(
+          url.includes("termo=cola") ? SO_SALDO() : json(200, { itens: [] }),
+        );
+      }
+      return Promise.resolve(json(404, { erro: { codigo: "X", mensagem: "x" } }));
+    });
+
+    const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+    render(
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
+        <App />
+      </ProvedorSessao>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Estoque" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Estoque" }));
+
+    await waitFor(() => {
+      // Lista sem resultado com filtro aplicado tem texto próprio.
+      expect(
+        screen.getByText("Nenhum produto encontrado com este filtro."),
+      ).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Procurar produto/), "cola");
+    await userEvent.click(screen.getByRole("button", { name: "Procurar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+    expect(chamadas.some((url) => url.includes("termo=cola"))).toBe(true);
+  });
+
+  it("marca o produto inativo com texto, não só com cor", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE, {
+      "/api/estoque/saldos": () => json(200, { itens: [{ ...SALDO, ativo: false }] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Inativo")).toBeVisible();
+    });
+  });
+
+  it("🔑 falha ao listar oferece repetir", async () => {
+    await abrirEstoque(ESTOQUISTA_DE_ESTOQUE, {
+      "/api/estoque/saldos": () =>
+        json(500, { erro: { codigo: "X", mensagem: "Banco fora do ar." } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Banco fora do ar");
+    });
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+  });
+
+  it("quem não pode lançar não vê o botão de lançar", async () => {
+    await abrirEstoque(USUARIO_OPERADOR, {
+      "/api/estoque/saldos": () => json(200, { itens: [SALDO] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Extrato" })).toBeVisible();
+    });
+    expect(screen.queryByRole("button", { name: "Lançar" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Lançamento de movimento", () => {
+  const PRODUTO_COM_FARDO = () =>
+    json(200, { ...PRODUTO, embalagens: [{ unidade: "FD", fator: "12" }] });
+
+  async function irParaLancamento(usuario = ESTOQUISTA_DE_ESTOQUE): Promise<void> {
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Estoque" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Estoque" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Lançar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Lançar movimento" })).toBeVisible();
+    });
+    expect(usuario).toBeDefined();
+  }
+
+  function montarLancamento(rotas: Record<string, () => Response> = {}) {
+    return montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA_DE_ESTOQUE),
+      "GET /api/estoque/saldos": SO_SALDO,
+      "GET /api/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002": PRODUTO_COM_FARDO,
+      "POST /api/estoque/movimentos": () => json(201, { id: "x" }),
+      ...rotas,
+    });
+  }
+
+  it("🔑 a quantidade vai em milésimos, nunca em número", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "1,5");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["quantidade"]).toBe("1500");
+    expect(typeof enviado["quantidade"]).toBe("string");
+  });
+
+  it("🔑 número sem vírgula é a unidade inteira, não milésimos", async () => {
+    // A leitura inversa lançaria mil vezes menos mercadoria do que chegou.
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(
+      (corpos.find((c) => c.metodo === "POST")?.corpo as Record<string, unknown>)[
+        "quantidade"
+      ],
+    ).toBe("3000");
+  });
+
+  it("🔑 oferece a embalagem do produto, para não obrigar a multiplicar de cabeça", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: /FD — 12 UN/ })).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "3");
+    await userEvent.selectOptions(screen.getByLabelText(/Unidade/), "FD");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    // A conversão para 36 unidades é do servidor: o cliente manda o que foi
+    // digitado, e a regra mora num lugar só.
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado).toMatchObject({ quantidade: "3000", unidade: "FD" });
+  });
+
+  it("🔑 ajuste sem motivo é recusado antes de chamar o servidor", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+    const antes = corpos.length;
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/O que aconteceu/),
+      "Perda, quebra ou vencimento",
+    );
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "2");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Informe o motivo");
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("perda com motivo é aceita", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/O que aconteceu/),
+      "Perda, quebra ou vencimento",
+    );
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "2");
+    await userEvent.type(screen.getByLabelText(/Motivo/), "Garrafas quebradas");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      tipo: "PERDA",
+      observacao: "Garrafas quebradas",
+    });
+  });
+
+  it("🔑 saída não está entre os tipos oferecidos", async () => {
+    // Saída é a venda. Oferecê-la aqui convidaria a mercadoria a sumir do
+    // estoque sem sair do caixa.
+    montarLancamento();
+    await irParaLancamento();
+
+    expect(screen.queryByRole("option", { name: /Venda/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /Transferência/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("recusa quantidade vazia e custo malformado antes da rede", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+    const antes = corpos.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("quantidade maior que zero");
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo por unidade/), "abc");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Custo inválido");
+
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("manda o custo em centavos", async () => {
+    const { corpos } = montarLancamento();
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo por unidade/), "3,00");
+    await userEvent.type(screen.getByLabelText(/^Lote/), "L2026-07");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      custoUnitario: "300",
+      lote: "L2026-07",
+    });
+  });
+
+  it("🔑 quem só dá entrada não vê os tipos de baixa nem o campo de custo", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, CONFERENTE),
+      "GET /api/estoque/saldos": SO_SALDO,
+      "GET /api/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002": PRODUTO_COM_FARDO,
+    });
+
+    await irParaLancamento();
+
+    expect(screen.getByRole("option", { name: "Entrada de mercadoria" })).toBeVisible();
+    expect(
+      screen.queryByRole("option", { name: "Perda, quebra ou vencimento" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Custo por unidade/)).not.toBeInTheDocument();
+  });
+
+  it("recusa do servidor aparece sem perder o que foi digitado", async () => {
+    montarLancamento({
+      "POST /api/estoque/movimentos": () =>
+        json(400, {
+          erro: {
+            codigo: "PRODUTO_EMBALAGEM_NAO_CADASTRADA",
+            mensagem: "Não há embalagem em caixa cadastrada para este produto.",
+          },
+        }),
+    });
+
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Quantidade/), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Não há embalagem");
+    });
+    expect(screen.getByLabelText(/Quantidade/)).toHaveValue("3");
+  });
+
+  it("a tela sobrevive ao cadastro do produto falhando", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA_DE_ESTOQUE),
+      "GET /api/estoque/saldos": SO_SALDO,
+      "GET /api/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002": () =>
+        json(500, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await irParaLancamento();
+
+    // Sem embalagens, resta a unidade do produto — e dá para lançar.
+    expect(screen.getByLabelText(/Unidade/)).toHaveValue("UN");
+  });
+
+  it("cancelar volta para a lista", async () => {
+    montarLancamento();
+    await irParaLancamento();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Estoque" })).toBeVisible();
+    });
+  });
+});
+
+describe("Extrato do estoque", () => {
+  async function abrirExtrato(rotas: Rotas = {}): Promise<void> {
+    montarApp({
+      "/api/acesso/eu": () => json(200, ESTOQUISTA_DE_ESTOQUE),
+      "/api/estoque/saldos": SO_SALDO,
+      "/api/estoque/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002/movimentos":
+        SEM_MOVIMENTOS,
+      ...rotas,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Estoque" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Estoque" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Extrato" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Extrato" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Extrato do estoque" })).toBeVisible();
+    });
+  }
+
+  it("🔑 mostra o sinal do movimento em texto, não só em cor", async () => {
+    await abrirExtrato({
+      "/api/estoque/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002/movimentos": () =>
+        json(200, {
+          itens: [
+            {
+              id: "m1",
+              tipo: "PERDA",
+              quantidade: "2000",
+              unidade: "UN",
+              efeito: -1,
+              usuarioNome: "Bruno Estoquista",
+              observacao: "Garrafas quebradas",
+              lote: "L2026-07",
+              ocorridoEm: "2026-08-01T12:00:00.000Z",
+            },
+            {
+              id: "m2",
+              tipo: "ENTRADA",
+              quantidade: "10000",
+              unidade: "UN",
+              efeito: 1,
+              usuarioNome: "Bruno Estoquista",
+              ocorridoEm: "2026-08-01T10:00:00.000Z",
+            },
+          ],
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Perda")).toBeVisible();
+    });
+    expect(screen.getByText(/−2 un/)).toBeVisible();
+    expect(screen.getByText(/\+10 un/)).toBeVisible();
+    expect(screen.getByText("Garrafas quebradas")).toBeVisible();
+    // Lote aparece quando existe: é o que rastreia um recolhimento do fabricante.
+    expect(screen.getByText(/lote L2026-07/)).toBeVisible();
+    expect(screen.getAllByText("Bruno Estoquista")[0]).toBeVisible();
+  });
+
+  it("produto sem movimento é estado vazio, não erro", async () => {
+    await abrirExtrato();
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhum movimento")).toBeVisible();
+    });
+  });
+
+  it("falha ao carregar oferece repetir, e voltar leva à lista", async () => {
+    await abrirExtrato({
+      "/api/estoque/produtos/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0002/movimentos": () =>
+        json(500, { erro: { codigo: "X", mensagem: "Falhou." } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Voltar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Estoque" })).toBeVisible();
+    });
+  });
+});

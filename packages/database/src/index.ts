@@ -36,6 +36,14 @@ export {
   type ProdutoParaReplica,
 } from "./consultas/catalogoParaReplica.js";
 export {
+  extratoDeEstoque,
+  type FiltroSaldos,
+  type MovimentoDoExtrato,
+  type SaldoDeProduto,
+  saldosDeEstoque,
+  type SituacaoDeSaldo,
+} from "./consultas/estoque.js";
+export {
   type FiltroSessoes,
   type SessaoDeCaixa,
   sessoesDeCaixa,
