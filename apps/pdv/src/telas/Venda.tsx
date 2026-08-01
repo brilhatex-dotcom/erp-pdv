@@ -11,6 +11,15 @@ import {
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { identificadorDaEstacao } from "../estacao.js";
+import {
+  biparItem,
+  finalizar as finalizarVenda,
+  type Origem,
+  pagar as registrarPagamento,
+  VendaIndisponivel,
+  type VendaVisivel,
+} from "../vendaComQueda.js";
+import { IndicadorConexao } from "./IndicadorConexao.js";
 
 /**
  * Tela de venda — o balcão.
@@ -43,19 +52,6 @@ interface ItemNaTela {
   readonly total: string;
 }
 
-interface VendaNaTela {
-  readonly id: string;
-  readonly numero: number;
-  readonly total: string;
-  readonly faltaPagar: string;
-  readonly itens: readonly ItemNaTela[];
-}
-
-interface RespostaPagamento {
-  readonly faltaPagar: string;
-  readonly troco: string;
-}
-
 /** As quatro formas do balcão, na ordem em que a tecla numérica as escolhe. */
 const FORMAS = [
   { codigo: "DINHEIRO", rotulo: "Dinheiro" },
@@ -68,7 +64,10 @@ export function Venda(): ReactNode {
   const { cliente, usuario, sair } = useSessao();
 
   const [fase, setFase] = useState<Fase>("VENDENDO");
-  const [venda, setVenda] = useState<VendaNaTela | undefined>(undefined);
+  // Uma vez na fila, a venda inteira segue na fila: metade no servidor e metade
+  // aqui produziria duas vendas parciais, nenhuma cobrável.
+  const [origem, setOrigem] = useState<Origem>("SERVIDOR");
+  const [venda, setVenda] = useState<VendaVisivel | undefined>(undefined);
   const [codigo, setCodigo] = useState("");
   const [forma, setForma] = useState<string>("DINHEIRO");
   const [valor, setValor] = useState("");
@@ -95,31 +94,31 @@ export function Venda(): ReactNode {
     setOcupado(true);
 
     try {
-      const aberta =
-        venda ??
-        (await cliente.requisitar<VendaNaTela>("/api/vendas", {
-          metodo: "POST",
-          corpo: { estacaoId: identificadorDaEstacao() },
-        }));
-
-      // A resposta traz a venda inteira junto com o item. O total e o que falta
-      // pagar vêm calculados do domínio: recalculá-los aqui duplicaria regra de
-      // negócio no navegador (CLAUDE.md §9), e buscá-los numa segunda
-      // requisição custaria uma ida ao servidor por bipada (RNF-03).
-      const atualizada = await cliente.requisitar<{ venda: VendaNaTela }>(
-        `/api/vendas/${aberta.id}/itens`,
-        { metodo: "POST", corpo: { codigo: procurado } },
+      // O total e o que falta pagar vêm calculados de quem registrou — servidor
+      // ou fila. Recalcular aqui duplicaria regra de negócio no navegador
+      // (CLAUDE.md §9), e pedir numa segunda requisição custaria uma ida ao
+      // servidor por bipada (RNF-03).
+      const resultado = await biparItem(
+        {
+          cliente,
+          estacaoId: identificadorDaEstacao(),
+          operadorId: usuario?.id ?? "",
+        },
+        origem,
+        venda,
+        procurado,
       );
 
-      setVenda(atualizada.venda);
+      setVenda(resultado.venda);
+      setOrigem(resultado.origem);
       setCodigo("");
     } catch (causa) {
-      setErro(mensagemDe(causa));
+      setErro(paraOperador(causa));
     } finally {
       setOcupado(false);
       campoCodigo.current?.select();
     }
-  }, [cliente, codigo, ocupado, venda]);
+  }, [cliente, codigo, ocupado, origem, usuario, venda]);
 
   const pagar = useCallback(async (): Promise<void> => {
     if (venda === undefined || ocupado) return;
@@ -133,18 +132,24 @@ export function Venda(): ReactNode {
     setOcupado(true);
 
     try {
-      const resposta = await cliente.requisitar<RespostaPagamento>(
-        `/api/vendas/${venda.id}/pagamentos`,
-        { metodo: "POST", corpo: { forma, valor: centavos } },
+      const contexto = {
+        cliente,
+        estacaoId: identificadorDaEstacao(),
+        operadorId: usuario?.id ?? "",
+      };
+
+      const resposta = await registrarPagamento(
+        contexto,
+        origem,
+        venda.id,
+        forma,
+        centavos,
       );
 
       if (resposta.faltaPagar === "0") {
         // Fechou: finaliza sem pedir mais uma tecla. O troco fica na tela até o
         // operador começar a próxima venda — é o número que ele confere na mão.
-        const finalizada = await cliente.requisitar<{ troco: string }>(
-          `/api/vendas/${venda.id}/finalizar`,
-          { metodo: "POST", corpo: {} },
-        );
+        const finalizada = await finalizarVenda(contexto, origem, venda.id);
 
         setTroco(finalizada.troco);
         setFase("CONCLUIDA");
@@ -159,7 +164,7 @@ export function Venda(): ReactNode {
         const problema = await imprimirCupomDaVenda({
           cupom: {
             loja: { nome: "" },
-            numero: venda.numero,
+            numero: venda.numero ?? 0,
             emitidoEm: new Date(),
             operador: usuario?.nome ?? "",
             itens: venda.itens.map((item) => ({
@@ -187,11 +192,11 @@ export function Venda(): ReactNode {
       setVenda({ ...venda, faltaPagar: resposta.faltaPagar });
       setValor(resposta.faltaPagar);
     } catch (causa) {
-      setErro(mensagemDe(causa));
+      setErro(paraOperador(causa));
     } finally {
       setOcupado(false);
     }
-  }, [cliente, forma, ocupado, valor, venda]);
+  }, [cliente, forma, ocupado, origem, usuario, valor, venda]);
 
   function irParaPagamento(): void {
     if (venda === undefined || venda.itens.length === 0) return;
@@ -202,6 +207,7 @@ export function Venda(): ReactNode {
 
   function novaVenda(): void {
     setVenda(undefined);
+    setOrigem("SERVIDOR");
     setCodigo("");
     setValor("");
     setForma("DINHEIRO");
@@ -216,7 +222,7 @@ export function Venda(): ReactNode {
         aviso={avisoImpressao}
         troco={troco}
         aoSeguir={novaVenda}
-        numero={venda?.numero ?? 0}
+        numero={venda?.numero}
         total={venda?.total ?? "0"}
       />
     );
@@ -225,9 +231,7 @@ export function Venda(): ReactNode {
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4">
       <header className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-tinta">
-          Caixa {venda === undefined ? "" : `· Venda ${String(venda.numero)}`}
-        </h1>
+        <h1 className="text-lg font-semibold text-tinta">Caixa {rotuloDaVenda(venda)}</h1>
         <div className="flex items-center gap-3 text-sm text-tinta-suave">
           <span>{usuario?.nome}</span>
           <Botao tom="discreto" onClick={() => void sair()}>
@@ -235,6 +239,8 @@ export function Venda(): ReactNode {
           </Botao>
         </div>
       </header>
+
+      <IndicadorConexao />
 
       {erro !== undefined && <ErroDeTela mensagem={erro} />}
 
@@ -410,6 +416,33 @@ function Pagamento(props: PropsPagamento): ReactNode {
   );
 }
 
+/**
+ * A frase que o operador lê.
+ *
+ * `VendaIndisponivel` já nasce escrita para ele — a contingência recusou por um
+ * motivo que faz sentido no balcão ("produto não está no catálogo local"), e
+ * passá-la por `mensagemDe` a trocaria pelo texto genérico, apagando a única
+ * informação útil.
+ */
+function paraOperador(causa: unknown): string {
+  return causa instanceof VendaIndisponivel ? causa.message : mensagemDe(causa);
+}
+
+/**
+ * O que aparece no cabeçalho.
+ *
+ * A venda offline não tem número — numerar é do servidor, e duas estações
+ * isoladas escolhendo sozinhas produziriam duas vendas 47 no mesmo dia. Dizer
+ * "offline" é mais honesto que mostrar um número que vai mudar.
+ */
+function rotuloDaVenda(venda: VendaVisivel | undefined): string {
+  if (venda === undefined) return "";
+
+  return venda.numero === undefined
+    ? "· Venda offline"
+    : `· Venda ${String(venda.numero)}`;
+}
+
 /** Rótulo da forma como ele sai no cupom. */
 function rotuloDaForma(codigo: string): string {
   return FORMAS.find((atual) => atual.codigo === codigo)?.rotulo ?? codigo;
@@ -418,7 +451,7 @@ function rotuloDaForma(codigo: string): string {
 function Concluida(props: {
   readonly aviso?: string | undefined;
   readonly troco: string;
-  readonly numero: number;
+  readonly numero?: number | undefined;
   readonly total: string;
   readonly aoSeguir: () => void;
 }): ReactNode {
@@ -435,7 +468,10 @@ function Concluida(props: {
       }}
     >
       <p className="text-sm text-tinta-suave">
-        Venda {String(props.numero)} concluída · {formatarDinheiro(props.total)}
+        {props.numero === undefined
+          ? "Venda concluída (será enviada quando o servidor voltar)"
+          : `Venda ${String(props.numero)} concluída`}{" "}
+        · {formatarDinheiro(props.total)}
       </p>
 
       <div className="flex flex-col items-center gap-1">

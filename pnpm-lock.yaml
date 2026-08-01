@@ -44,6 +44,9 @@ importers:
       '@erp/cliente-api':
         specifier: workspace:*
         version: link:../../packages/cliente-api
+      '@erp/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@erp/printing':
         specifier: workspace:*
         version: link:../../packages/printing

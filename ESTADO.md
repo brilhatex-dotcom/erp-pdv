@@ -45,10 +45,11 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
+| Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
 | Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
-| **Contingência offline do PDV** | ✅ Motor completo — **falta a tela (§2.1)** | fila, catálogo replicado, sincronização |
+| **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
 
-**1.714 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.797 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -62,27 +63,20 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ## 2. O que falta — em ordem de risco crescente
 
-### 2.1 ⬅️ PRÓXIMO — etapa 9c: ligar a contingência à tela
+### 2.1 ⬅️ PRÓXIMO — fechamento de caixa
 
-O motor da contingência offline está pronto e testado (fila durável, catálogo
-replicado, sincronização idempotente). **O operador ainda não vê nada disso.**
+Existem `/api/caixa/abrir` e `/api/caixa/aberto`. **Não existe fechamento** — nem rota,
+nem tela. A loja abre o caixa e nunca o fecha, o que deixa três coisas no ar:
 
-Falta, em `apps/pdv/src/`:
+- **Conferência do dia**: contar o dinheiro na gaveta contra o que o sistema registrou.
+- **Sangria e suprimento** já existem no domínio (`packages/domain`, etapa 3c) e não
+  têm rota nem tela.
+- **Bloquear o fechamento com fila pendente** — item que saiu do escopo da 9c porque
+  não havia o que bloquear. Conferir o dinheiro com venda ainda não enviada produz
+  diferença que ninguém consegue explicar, e é o caminho mais curto para o operador
+  desconfiar do sistema.
 
-- **Indicador de estado** na tela de venda: online, offline, e quantas vendas
-  aguardam envio. Sem isso o operador não sabe se pode fechar o caixa.
-- **Venda pela fila** quando o servidor não responde: hoje o caminho existe na
-  camada de baixo, mas a tela ainda fala direto com a API.
-- **Sincronização automática** ao voltar a conexão, com o recuo exponencial que já
-  está implementado — e um aviso discreto quando a fila esvazia.
-- **Bloqueio do fechamento de caixa** enquanto houver venda na fila: conferir o
-  dinheiro com venda não enviada produz diferença que ninguém consegue explicar.
-
-Ler antes: **ADR-0021** (por que arquivo e não SQLite) e a mensagem do commit
-`89b1f09`, que documenta as decisões da fila em detalhe.
-
-> ⚠️ A cobertura de `apps/pdv` é medida **por arquivo**, mínimo de 90%. Componente
-> novo sem teste reprova o portão mesmo com o resto verde.
+Ler antes: `SessaoCaixa` no domínio, que já tem as regras — falta a borda.
 
 ### 2.2 Fiscal — risco médio
 
@@ -128,6 +122,10 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`/* v8 ignore next */` cobre uma linha só** | Guarda inalcançável de 3 linhas reprova a cobertura | Use `/* v8 ignore next 3 */` quando o `if` inalcançável tem corpo |
 | **`.env` sumido em ambiente novo** | `P1012: Environment variable not found: DATABASE_URL` | O `.env` é ignorado pelo git e não sobrevive a um contêiner novo. Recrie: `cp packages/database/.env.example packages/database/.env` |
 | **`prisma migrate dev` trava sem saída** | Comando fica parado; matá-lo deixa `P1002: timed out acquiring advisory lock` | `migrate dev` é **interativo** (pede nome da migração). Em sessão automatizada use `pnpm db:deploy`. Se já travou, mate o processo e derrube a conexão presa: `pg_terminate_backend` no banco |
+| **`as CodigoUnidade` num dado de disco** | `Cannot read properties of undefined (reading 'fracionavel')` no meio da bipada | O domínio procura a unidade numa tabela. Afirmar o tipo sem checar troca recusa clara por tela branca — use `ehCodigoUnidade` antes |
+| **`BigInt(texto)` de arquivo externo** | Exceção não tratada em vez de recusa | `BigInt("abc")` **lança**. Todo centavo lido de disco ou rede passa por `/^\d+$/` antes |
+| **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
+| **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |
 
 ---
 

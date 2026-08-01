@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Frente de caixa \u2014 venda no balc\u00e3o, teclado-first",
+  "description": "Frente de caixa — venda no balcão, teclado-first",
   "scripts": {
     "build": "tsc -p tsconfig.build.json --noEmit && vite build",
     "typecheck": "tsc --noEmit",
@@ -21,7 +21,8 @@
     "react-dom": "^19.2.8",
     "@erp/printing": "workspace:*",
     "zod": "^4.1.13",
-    "@erp/utils": "workspace:*"
+    "@erp/utils": "workspace:*",
+    "@erp/domain": "workspace:*"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",
