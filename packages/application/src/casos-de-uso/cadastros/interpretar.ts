@@ -1,4 +1,5 @@
 import {
+  CNPJ,
   type DadosEndereco,
   Dinheiro,
   Documento,
@@ -60,6 +61,20 @@ export function interpretarDocumento(
   erros: ErroValidacao[],
 ): Documento | undefined {
   return interpretarOpcional(bruto, (valor) => Documento.criar(valor), erros);
+}
+
+/**
+ * CNPJ, e não `Documento`.
+ *
+ * O fornecedor aceita CPF porque o hortifruti compra do sitiante. Quem **emite**
+ * documento fiscal, não: aceitar CPF produziria um cadastro que nunca consegue
+ * emitir, e o lojista só descobriria no dia da primeira nota.
+ */
+export function interpretarCnpj(
+  bruto: string | undefined,
+  erros: ErroValidacao[],
+): CNPJ | undefined {
+  return interpretarOpcional(bruto, (valor) => CNPJ.criar(valor), erros);
 }
 
 export function interpretarInscricaoEstadual(

@@ -6,6 +6,7 @@ import {
   type Documento,
   type DomainError,
   type DomainEvent,
+  type Empresa,
   err,
   type Fornecedor,
   type Identificador,
@@ -38,6 +39,7 @@ import type {
 import type {
   CategoriaRepository,
   ClienteRepository,
+  EmpresaRepository,
   FiltroBusca,
   FornecedorRepository,
 } from "../portas/repositorios/RepositoriosCadastros.js";
@@ -307,6 +309,31 @@ export class SessaoAcessoRepositorioEmMemoria implements SessaoAcessoRepository 
   }
 }
 
+/**
+ * A empresa da instalação, em memória.
+ *
+ * Guarda **uma** referência, não um mapa: é a mesma garantia que o índice único
+ * dá no banco, e um dublê que aceitasse duas esconderia o defeito que o índice
+ * existe para pegar.
+ */
+export class EmpresaRepositorioEmMemoria implements EmpresaRepository {
+  #empresa: Empresa | undefined;
+
+  definir(empresa: Empresa): void {
+    this.#empresa = empresa;
+  }
+
+  atual(): Promise<Empresa | undefined> {
+    return Promise.resolve(this.#empresa);
+  }
+
+  salvar(empresa: Empresa): Promise<void> {
+    this.#empresa = empresa;
+
+    return Promise.resolve();
+  }
+}
+
 export class CategoriaRepositorioEmMemoria implements CategoriaRepository {
   readonly itens = new Map<string, Categoria>();
 
@@ -449,6 +476,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly usuarios: UsuarioRepositorioEmMemoria;
   readonly papeis: PapelRepositorioEmMemoria;
   readonly sessoes: SessaoAcessoRepositorioEmMemoria;
+  readonly empresa: EmpresaRepositorioEmMemoria;
   readonly categorias: CategoriaRepositorioEmMemoria;
   readonly clientes: ClienteRepositorioEmMemoria;
   readonly fornecedores: FornecedorRepositorioEmMemoria;
@@ -465,6 +493,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const usuarios = new UsuarioRepositorioEmMemoria();
   const papeis = new PapelRepositorioEmMemoria();
   const sessoes = new SessaoAcessoRepositorioEmMemoria();
+  const empresa = new EmpresaRepositorioEmMemoria();
   const categorias = new CategoriaRepositorioEmMemoria();
   const clientes = new ClienteRepositorioEmMemoria();
   const fornecedores = new FornecedorRepositorioEmMemoria();
@@ -478,6 +507,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     usuarios,
     papeis,
     sessoes,
+    empresa,
     categorias,
     clientes,
     fornecedores,
@@ -491,6 +521,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       usuarios,
       papeis,
       sessoes,
+      empresa,
       categorias,
       clientes,
       fornecedores,

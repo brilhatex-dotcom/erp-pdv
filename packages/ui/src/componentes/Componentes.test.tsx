@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { formatarDinheiro, formatarQuantidade } from "../formato.js";
 import { juntarClasses } from "../juntarClasses.js";
 import { Botao } from "./Botao.js";
+import { CampoSelecao } from "./CampoSelecao.js";
 import { CampoTexto } from "./CampoTexto.js";
 import { Carregando, ErroDeTela, Vazio } from "./Estados.js";
 
@@ -263,5 +264,54 @@ describe("Formatação para a tela", () => {
 describe("Junção de classes", () => {
   it("descarta o que é falso", () => {
     expect(juntarClasses("a", false, undefined, null, "", "b")).toBe("a b");
+  });
+});
+
+describe("Campo de seleção", () => {
+  const REGIMES = [
+    { valor: "SIMPLES_NACIONAL", rotulo: "Simples Nacional" },
+    { valor: "MEI", rotulo: "MEI" },
+  ];
+
+  it("🔑 é <select> nativo — abre pelo teclado e é lido por leitor de tela", () => {
+    // Lista construída à mão fica bonita na captura de tela e perde tudo o que
+    // importa no balcão: navegação por teclado, filtro pela primeira letra e
+    // roda de rolagem no celular.
+    render(<CampoSelecao rotulo="Regime tributário" opcoes={REGIMES} />);
+
+    expect(screen.getByRole("combobox", { name: "Regime tributário" })).toBeVisible();
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+  });
+
+  it("troca o valor pelo rótulo visível", async () => {
+    render(<CampoSelecao rotulo="Regime tributário" opcoes={REGIMES} />);
+
+    const campo = screen.getByLabelText("Regime tributário");
+    await userEvent.selectOptions(campo, "MEI");
+
+    expect(campo).toHaveValue("MEI");
+  });
+
+  it("liga o erro ao campo, como o campo de texto", () => {
+    render(<CampoSelecao rotulo="UF" opcoes={REGIMES} erro="Selecione o estado." />);
+
+    const campo = screen.getByLabelText("UF");
+    expect(campo).toHaveAttribute("aria-invalid", "true");
+    expect(campo).toHaveAccessibleDescription("Selecione o estado.");
+  });
+
+  it("mostra ajuda quando não há erro", () => {
+    render(
+      <CampoSelecao rotulo="Regime" opcoes={REGIMES} ajuda="Confira com o contador." />,
+    );
+
+    expect(screen.getByText("Confira com o contador.")).toBeVisible();
+  });
+
+  it("marca o obrigatório para quem vê e para quem ouve", () => {
+    render(<CampoSelecao rotulo="Regime" opcoes={REGIMES} required />);
+
+    expect(screen.getByText("(obrigatório)")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Regime/)).toBeRequired();
   });
 });

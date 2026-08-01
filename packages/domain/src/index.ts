@@ -47,6 +47,13 @@ export {
 // ── Cadastros ───────────────────────────────────────────────────────────
 export { Categoria, type DadosCategoria } from "./cadastros/Categoria.js";
 export { Cliente, type DadosCliente, type TipoPessoa } from "./cadastros/Cliente.js";
+export {
+  type DadosEmpresa,
+  ehRegimeTributario,
+  Empresa,
+  REGIMES_TRIBUTARIOS,
+  type RegimeTributario,
+} from "./cadastros/Empresa.js";
 export { type DadosFornecedor, Fornecedor } from "./cadastros/Fornecedor.js";
 
 // ── Catálogo ────────────────────────────────────────────────────────────

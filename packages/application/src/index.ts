@@ -18,6 +18,10 @@ export type {
 // ── Casos de uso ────────────────────────────────────────────────────────
 export { AbrirCaixa, type EntradaAbrirCaixa } from "./casos-de-uso/caixa/AbrirCaixa.js";
 export {
+  DefinirEmpresa,
+  type EntradaDefinirEmpresa,
+} from "./casos-de-uso/cadastros/DefinirEmpresa.js";
+export {
   type EntradaFecharCaixa,
   FecharCaixa,
   type ResultadoFechamento,
@@ -77,6 +81,7 @@ export {
 export type {
   CategoriaRepository,
   ClienteRepository,
+  EmpresaRepository,
   FiltroBusca,
   FornecedorRepository,
 } from "./portas/repositorios/RepositoriosCadastros.js";
