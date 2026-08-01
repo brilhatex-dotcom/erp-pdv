@@ -75,7 +75,6 @@ export function impressoraDeRede(opcoes: OpcoesRede): Impressora {
         const decidir = (resultado: ResultadoImpressao): void => {
           if (decidido) return;
           decidido = true;
-          socket.destroy();
           resolver(resultado);
         };
 
@@ -94,12 +93,24 @@ export function impressoraDeRede(opcoes: OpcoesRede): Impressora {
 
         socket.on("connect", () => {
           socket.write(bytes, (causa) => {
-            decidir(
-              causa === undefined || causa === null
-                ? IMPRESSO
-                : falhou(causa, `Impressora ${opcoes.host}`),
-            );
+            if (causa !== undefined && causa !== null) {
+              socket.destroy();
+              decidir(falhou(causa, `Impressora ${opcoes.host}`));
+              return;
+            }
+
+            // `end`, e **não** `destroy`: destruir logo após a escrita fecha a
+            // conexão de forma abrupta, e os bytes que ainda estavam no buffer
+            // do sistema podem ser descartados. Num cupom de trinta itens isso
+            // sai como cupom cortado no meio — defeito que só aparece com
+            // volume, e portanto na loja do cliente.
+            socket.end();
           });
+        });
+
+        // O fechamento limpo é a confirmação de que tudo saiu.
+        socket.on("close", () => {
+          decidir(IMPRESSO);
         });
       });
     },

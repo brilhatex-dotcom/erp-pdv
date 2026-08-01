@@ -12,7 +12,8 @@
     "test:cov": "vitest run --coverage",
     "dev": "vite",
     "preview": "vite preview",
-    "build:electron": "tsc -p tsconfig.electron.json"
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "impressora:virtual": "pnpm build:electron && node scripts/impressora-virtual.mjs"
   },
   "dependencies": {
     "@erp/cliente-api": "workspace:*",

@@ -45,6 +45,7 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
+| Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
 | Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |

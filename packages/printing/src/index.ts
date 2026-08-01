@@ -11,3 +11,10 @@ export {
   montarCupomVenda,
   type PagamentoDoCupom,
 } from "./cupomVenda.js";
+export {
+  comoTexto,
+  type CupomPrevisto,
+  type LinhaDoCupom,
+  type MarcaDeEstilo,
+  previsualizar,
+} from "./previsualizacao.js";

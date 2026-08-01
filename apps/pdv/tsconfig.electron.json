@@ -8,6 +8,6 @@
     "noEmit": false,
     "lib": ["ES2023"]
   },
-  "include": ["src/principal/**/*.ts", "src/ponte/**/*.ts"],
+  "include": ["src/principal/**/*.ts", "src/ponte/**/*.ts", "src/ferramentas/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
