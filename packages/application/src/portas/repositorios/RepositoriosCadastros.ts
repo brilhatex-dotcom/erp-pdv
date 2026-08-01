@@ -2,6 +2,7 @@ import type {
   Categoria,
   Cliente,
   Documento,
+  Empresa,
   Fornecedor,
   Identificador,
 } from "@erp/domain";
@@ -16,18 +17,20 @@ import type {
  * juntar depois.
  */
 
+import type { FiltroBusca } from "./FiltroBusca.js";
+
+export type { FiltroBusca };
+
 /**
- * Filtro da busca da retaguarda.
+ * A empresa da instalação.
  *
- * O limite é obrigatório por decisão de desempenho: a tela nunca pede "todos".
- * Uma loja com dez mil clientes não deve conseguir montar uma consulta que
- * devolva dez mil linhas para uma lista que mostra vinte.
+ * Sem `porId`: nenhum caminho do sistema conhece o identificador dela, porque
+ * só existe uma (ADR-0024). Expor busca por id obrigaria toda tela a
+ * descobri-lo antes, e a primeira que errasse leria o cadastro de outro lugar.
  */
-export interface FiltroBusca {
-  /** O que foi digitado. Vazio significa "os primeiros", não "todos". */
-  readonly termo?: string | undefined;
-  readonly apenasAtivos?: boolean | undefined;
-  readonly limite: number;
+export interface EmpresaRepository {
+  atual(): Promise<Empresa | undefined>;
+  salvar(empresa: Empresa): Promise<void>;
 }
 
 export interface CategoriaRepository {

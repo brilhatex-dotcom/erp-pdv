@@ -47,6 +47,13 @@ export {
 // ── Cadastros ───────────────────────────────────────────────────────────
 export { Categoria, type DadosCategoria } from "./cadastros/Categoria.js";
 export { Cliente, type DadosCliente, type TipoPessoa } from "./cadastros/Cliente.js";
+export {
+  type DadosEmpresa,
+  ehRegimeTributario,
+  Empresa,
+  REGIMES_TRIBUTARIOS,
+  type RegimeTributario,
+} from "./cadastros/Empresa.js";
 export { type DadosFornecedor, Fornecedor } from "./cadastros/Fornecedor.js";
 
 // ── Catálogo ────────────────────────────────────────────────────────────
@@ -75,6 +82,14 @@ export {
 } from "./catalogo/eventos.js";
 export { type DadosProduto, Produto, type TipoProduto } from "./catalogo/Produto.js";
 export { ReferenciaProduto, type TipoReferencia } from "./catalogo/ReferenciaProduto.js";
+
+// ── Compras ─────────────────────────────────────────────────────────────
+export { type DadosItemDaNota, ItemDaNota } from "./compras/ItemDaNota.js";
+export {
+  type DadosNotaDeCompra,
+  NotaDeCompra,
+  type StatusNota,
+} from "./compras/NotaDeCompra.js";
 
 // ── Estoque ─────────────────────────────────────────────────────────────
 export {

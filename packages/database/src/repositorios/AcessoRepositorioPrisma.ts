@@ -103,6 +103,26 @@ export class UsuarioRepositorioPrisma implements UsuarioRepository {
     return linha === null ? undefined : usuarioParaDominio(linha);
   }
 
+  /**
+   * Todos os usuários, para a tela de gestão.
+   *
+   * Sem paginação de propósito: uma loja tem dezenas de funcionários, não
+   * milhares, e paginar uma lista de vinte linhas é complexidade que só serve
+   * para o desenvolvedor.
+   */
+  async listar(): Promise<readonly Usuario[]> {
+    const linhas = await this.prisma.usuario.findMany({
+      include: INCLUIR_USUARIO,
+      orderBy: { nome: "asc" },
+    });
+
+    return linhas.map((linha) => usuarioParaDominio(linha));
+  }
+
+  async quantidade(): Promise<number> {
+    return this.prisma.usuario.count();
+  }
+
   async salvar(usuario: Usuario): Promise<void> {
     const linha = usuarioParaLinha(usuario);
 

@@ -1,13 +1,20 @@
 import { Botao, Carregando } from "@erp/ui";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
+import { BarreiraDeErro } from "./BarreiraDeErro.js";
 import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
-import { Fornecedores } from "./telas/Fornecedores.js";
+import { Compras } from "./telas/Compras.js";
+import { Empresa } from "./telas/Empresa.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
+import { Estoque } from "./telas/Estoque.js";
+import { Fornecedores } from "./telas/Fornecedores.js";
 import { Login } from "./telas/Login.js";
+import { PrimeiroAcesso } from "./telas/PrimeiroAcesso.js";
+import { Produtos } from "./telas/Produtos.js";
+import { Usuarios } from "./telas/Usuarios.js";
 
 /**
  * Raiz da retaguarda.
@@ -18,13 +25,52 @@ import { Login } from "./telas/Login.js";
  * senha sem precisar.
  */
 export function App(): ReactNode {
-  const { usuario, restaurando } = useSessao();
+  const { cliente, usuario, restaurando } = useSessao();
 
-  if (restaurando) {
+  // `undefined` enquanto a pergunta não foi respondida: mostrar o login antes
+  // de saber faria a instalação nova piscar uma tela que ninguém consegue usar.
+  const [precisaConfiguracao, setPrecisaConfiguracao] = useState<boolean | undefined>(
+    undefined,
+  );
+  const jaPerguntou = useRef(false);
+
+  useEffect(() => {
+    if (jaPerguntou.current) return;
+    jaPerguntou.current = true;
+
+    void cliente
+      // `unknown`, e não `boolean`: o tipo é uma promessa sobre a resposta, e a
+      // resposta vem da rede. Declará-la `boolean` faria o compilador garantir
+      // algo que ele não pode verificar.
+      .requisitar<{ precisaConfiguracao?: unknown }>("/api/instalacao/situacao")
+      .then((situacao) => {
+        // Resposta sem o campo, ou com ele em outro formato, deixaria o estado
+        // indefinido e a tela presa em "carregando" para sempre. Na dúvida,
+        // segue para o login — que sabe se recuperar.
+        setPrecisaConfiguracao(situacao.precisaConfiguracao === true);
+      })
+      .catch(() => {
+        // Servidor fora do ar na primeira carga. Segue para o login, que tem
+        // tratamento de erro próprio — travar aqui deixaria a tela em branco.
+        setPrecisaConfiguracao(false);
+      });
+  });
+
+  if (restaurando || precisaConfiguracao === undefined) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Carregando oQue="sua sessão" />
       </main>
+    );
+  }
+
+  if (usuario === undefined && precisaConfiguracao) {
+    return (
+      <PrimeiroAcesso
+        aoConcluir={() => {
+          setPrecisaConfiguracao(false);
+        }}
+      />
     );
   }
 
@@ -44,10 +90,20 @@ export function App(): ReactNode {
  */
 const SECOES = [
   { chave: "PRODUTOS", rotulo: "Produtos", permissao: undefined },
+  // Separada do cadastro de propósito: aqui se bipa o código e o preço aparece
+  // grande, para responder ao cliente que perguntou no balcão. A lista de
+  // cadastro responde outra pergunta — "que produtos eu tenho".
+  { chave: "CONSULTA", rotulo: "Consulta de preço", permissao: undefined },
+  { chave: "ESTOQUE", rotulo: "Estoque", permissao: undefined },
+  { chave: "COMPRAS", rotulo: "Compras", permissao: "estoque:entrada" },
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
+  { chave: "USUARIOS", rotulo: "Usuários", permissao: "usuario:criar" },
   { chave: "CAIXAS", rotulo: "Caixas", permissao: "relatorio:vendas" },
+  // Sem permissão declarada: todo mundo consulta o cabeçalho da loja, que sai
+  // impresso em cada cupom. Só o `PUT` exige `config:empresa`, no servidor.
+  { chave: "EMPRESA", rotulo: "Empresa", permissao: undefined },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -91,7 +147,15 @@ function Retaguarda(): ReactNode {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Conteudo secao={secao} />
+        {/*
+          A barreira envolve só o conteúdo, e não a página: se uma tela quebra,
+          o cabeçalho e a navegação continuam de pé e o usuário troca de seção
+          em vez de ficar preso. `key` a reinicia ao mudar de aba — sem isso,
+          uma tela que quebrou deixaria a barreira aberta sobre a seguinte.
+        */}
+        <BarreiraDeErro key={secao}>
+          <Conteudo secao={secao} />
+        </BarreiraDeErro>
       </main>
     </div>
   );
@@ -105,9 +169,19 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Fornecedores />;
     case "CATEGORIAS":
       return <Categorias />;
+    case "USUARIOS":
+      return <Usuarios />;
     case "CAIXAS":
       return <Caixas />;
-    default:
+    case "EMPRESA":
+      return <Empresa />;
+    case "CONSULTA":
       return <ConsultarProduto />;
+    case "ESTOQUE":
+      return <Estoque />;
+    case "COMPRAS":
+      return <Compras />;
+    default:
+      return <Produtos />;
   }
 }

@@ -9,9 +9,13 @@ import { rotasDeAcesso } from "./rotas/acesso.js";
 import { rotasDeCadastros } from "./rotas/cadastros.js";
 import { rotasDeCaixa } from "./rotas/caixa.js";
 import { rotasDeCatalogo } from "./rotas/catalogo.js";
+import { rotasDeCompras } from "./rotas/compras.js";
+import { rotasDeEmpresa } from "./rotas/empresa.js";
+import { rotasDeEstoque } from "./rotas/estoque.js";
 import { rotasDeProdutos } from "./rotas/produtos.js";
 import { rotasDeSaude } from "./rotas/saude.js";
 import { rotasDeSincronizacao } from "./rotas/sincronizacao.js";
+import { rotasDeUsuarios } from "./rotas/usuarios.js";
 import { rotasDeVendas } from "./rotas/vendas.js";
 
 /**
@@ -73,7 +77,11 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   rotasDeVendas(servidor, container);
   rotasDeCadastros(servidor, container);
   rotasDeSincronizacao(servidor, container);
+  rotasDeUsuarios(servidor, container);
   rotasDeCatalogo(servidor, container);
+  rotasDeEstoque(servidor, container);
+  rotasDeCompras(servidor, container);
+  rotasDeEmpresa(servidor, container);
 
   return servidor;
 }

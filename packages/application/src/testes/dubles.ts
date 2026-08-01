@@ -6,12 +6,14 @@ import {
   type Documento,
   type DomainError,
   type DomainEvent,
+  type Empresa,
   err,
   type Fornecedor,
   type Identificador,
   type Matricula,
   montarUuidV7,
   type MovimentoEstoque,
+  type NotaDeCompra,
   type Papel,
   type Produto,
   type Result,
@@ -21,6 +23,7 @@ import {
   type Usuario,
   type Venda,
 } from "@erp/domain";
+import { normalizarParaBusca } from "@erp/utils";
 
 import { ErroInfraestrutura } from "../erros/ErroInfraestrutura.js";
 import type { GeradorId } from "../portas/infraestrutura/GeradorId.js";
@@ -30,6 +33,7 @@ import type { UnitOfWork } from "../portas/infraestrutura/UnitOfWork.js";
 import type {
   CaixaRepository,
   EstoqueRepository,
+  NotaDeCompraRepository,
   OutboxRepository,
   ProdutoRepository,
   Repositorios,
@@ -38,6 +42,7 @@ import type {
 import type {
   CategoriaRepository,
   ClienteRepository,
+  EmpresaRepository,
   FiltroBusca,
   FornecedorRepository,
 } from "../portas/repositorios/RepositoriosCadastros.js";
@@ -99,11 +104,42 @@ export class ProdutoRepositorioEmMemoria implements ProdutoRepository {
     return Promise.resolve(undefined);
   }
 
+  porSku(sku: string): Promise<Produto | undefined> {
+    for (const produto of this.itens.values()) {
+      if (produto.sku === sku.trim()) return Promise.resolve(produto);
+    }
+    return Promise.resolve(undefined);
+  }
+
+  porCodigoBarras(codigo: string): Promise<Produto | undefined> {
+    for (const produto of this.itens.values()) {
+      if (produto.codigoBarras?.valor === codigo) return Promise.resolve(produto);
+    }
+    return Promise.resolve(undefined);
+  }
+
   porCodigoBalanca(codigo: string): Promise<Produto | undefined> {
     for (const produto of this.itens.values()) {
       if (produto.codigoBalanca === codigo) return Promise.resolve(produto);
     }
     return Promise.resolve(undefined);
+  }
+
+  buscar(filtro: FiltroBusca): Promise<readonly Produto[]> {
+    const termo = normalizarParaBusca(filtro.termo ?? "");
+
+    const encontrados = [...this.itens.values()]
+      .filter((produto) => !(filtro.apenasAtivos === true && !produto.ativo))
+      .filter(
+        (produto) =>
+          termo === "" ||
+          produto.descricaoBusca.includes(termo) ||
+          produto.correspondeAoCodigo(filtro.termo ?? ""),
+      )
+      .sort((um, outro) => um.descricao.localeCompare(outro.descricao, "pt-BR"))
+      .slice(0, filtro.limite);
+
+    return Promise.resolve(encontrados);
   }
 
   salvar(produto: Produto): Promise<void> {
@@ -149,6 +185,37 @@ export class EstoqueRepositorioEmMemoria implements EstoqueRepository {
 
   registrar(movimento: MovimentoEstoque): Promise<void> {
     this.movimentos.push(movimento);
+    return Promise.resolve();
+  }
+}
+
+export class NotaDeCompraRepositorioEmMemoria implements NotaDeCompraRepository {
+  readonly itens = new Map<string, NotaDeCompra>();
+
+  porId(id: Identificador): Promise<NotaDeCompra | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porChave(
+    fornecedorId: Identificador,
+    numero: string,
+    serie: string | undefined,
+  ): Promise<NotaDeCompra | undefined> {
+    for (const nota of this.itens.values()) {
+      const mesma =
+        !nota.estaCancelada &&
+        nota.fornecedorId.equals(fornecedorId) &&
+        nota.numero === numero.trim() &&
+        (nota.serie ?? "") === (serie?.trim() ?? "");
+
+      if (mesma) return Promise.resolve(nota);
+    }
+
+    return Promise.resolve(undefined);
+  }
+
+  salvar(nota: NotaDeCompra): Promise<void> {
+    this.itens.set(nota.id.valor, nota);
     return Promise.resolve();
   }
 }
@@ -246,6 +313,14 @@ export class UsuarioRepositorioEmMemoria implements UsuarioRepository {
     return Promise.resolve(undefined);
   }
 
+  listar(): Promise<readonly Usuario[]> {
+    return Promise.resolve([...this.itens.values()]);
+  }
+
+  quantidade(): Promise<number> {
+    return Promise.resolve(this.itens.size);
+  }
+
   salvar(usuario: Usuario): Promise<void> {
     this.itens.set(usuario.id.valor, usuario);
     return Promise.resolve();
@@ -303,6 +378,31 @@ export class SessaoAcessoRepositorioEmMemoria implements SessaoAcessoRepository 
     for (const sessao of this.itens.values()) {
       if (sessao.usuarioId.equals(usuarioId)) sessao.revogar(agora);
     }
+    return Promise.resolve();
+  }
+}
+
+/**
+ * A empresa da instalação, em memória.
+ *
+ * Guarda **uma** referência, não um mapa: é a mesma garantia que o índice único
+ * dá no banco, e um dublê que aceitasse duas esconderia o defeito que o índice
+ * existe para pegar.
+ */
+export class EmpresaRepositorioEmMemoria implements EmpresaRepository {
+  #empresa: Empresa | undefined;
+
+  definir(empresa: Empresa): void {
+    this.#empresa = empresa;
+  }
+
+  atual(): Promise<Empresa | undefined> {
+    return Promise.resolve(this.#empresa);
+  }
+
+  salvar(empresa: Empresa): Promise<void> {
+    this.#empresa = empresa;
+
     return Promise.resolve();
   }
 }
@@ -449,9 +549,11 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly usuarios: UsuarioRepositorioEmMemoria;
   readonly papeis: PapelRepositorioEmMemoria;
   readonly sessoes: SessaoAcessoRepositorioEmMemoria;
+  readonly empresa: EmpresaRepositorioEmMemoria;
   readonly categorias: CategoriaRepositorioEmMemoria;
   readonly clientes: ClienteRepositorioEmMemoria;
   readonly fornecedores: FornecedorRepositorioEmMemoria;
+  readonly notasDeCompra: NotaDeCompraRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -465,9 +567,11 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const usuarios = new UsuarioRepositorioEmMemoria();
   const papeis = new PapelRepositorioEmMemoria();
   const sessoes = new SessaoAcessoRepositorioEmMemoria();
+  const empresa = new EmpresaRepositorioEmMemoria();
   const categorias = new CategoriaRepositorioEmMemoria();
   const clientes = new ClienteRepositorioEmMemoria();
   const fornecedores = new FornecedorRepositorioEmMemoria();
+  const notasDeCompra = new NotaDeCompraRepositorioEmMemoria();
 
   return {
     produtos,
@@ -478,9 +582,11 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     usuarios,
     papeis,
     sessoes,
+    empresa,
     categorias,
     clientes,
     fornecedores,
+    notasDeCompra,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -491,9 +597,11 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       usuarios,
       papeis,
       sessoes,
+      empresa,
       categorias,
       clientes,
       fornecedores,
+      notasDeCompra,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

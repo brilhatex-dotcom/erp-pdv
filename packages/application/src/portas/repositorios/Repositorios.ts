@@ -1,5 +1,7 @@
+import type { FiltroBusca } from "./FiltroBusca.js";
 import type {
   CategoriaRepository,
+  EmpresaRepository,
   ClienteRepository,
   FornecedorRepository,
 } from "./RepositoriosCadastros.js";
@@ -13,6 +15,7 @@ import type {
   DomainEvent,
   Identificador,
   MovimentoEstoque,
+  NotaDeCompra,
   Produto,
   SaldoEstoque,
   SessaoCaixa,
@@ -37,8 +40,31 @@ export interface ProdutoRepository {
    */
   porCodigo(codigo: string): Promise<Produto | undefined>;
 
+  /**
+   * Busca **só** pelo SKU, em igualdade exata.
+   *
+   * Separado de `porCodigo` porque serve a outra pergunta: `porCodigo` responde
+   * "que produto o operador bipou", e aceitar uma referência de fabricante ali
+   * é justamente o que se quer. Já a conferência de unicidade do cadastro
+   * precisa saber se **este SKU** já existe — usar `porCodigo` acusaria
+   * conflito porque outro produto tem uma referência parecida.
+   */
+  porSku(sku: string): Promise<Produto | undefined>;
+
+  /** Busca pelo código de barras principal, em igualdade exata. */
+  porCodigoBarras(codigo: string): Promise<Produto | undefined>;
+
   /** Busca pelo código interno usado na balança. */
   porCodigoBalanca(codigo: string): Promise<Produto | undefined>;
+
+  /**
+   * Busca por texto para a lista da retaguarda.
+   *
+   * **Não** é o caminho quente: quem está no balcão bipa, e a bipada cai em
+   * `porCodigo`. Aqui é quem está sentado na retaguarda procurando "coca" para
+   * conferir um preço.
+   */
+  buscar(filtro: FiltroBusca): Promise<readonly Produto[]>;
 
   salvar(produto: Produto): Promise<void>;
 }
@@ -54,6 +80,27 @@ export interface EstoqueRepository {
   /** Saldo projetado do produto. */
   saldo(produtoId: Identificador, unidade: CodigoUnidade): Promise<SaldoEstoque>;
   registrar(movimento: MovimentoEstoque): Promise<void>;
+}
+
+export interface NotaDeCompraRepository {
+  porId(id: Identificador): Promise<NotaDeCompra | undefined>;
+
+  /**
+   * Localiza a nota **lançada** com a identificação que o fornecedor deu a ela.
+   *
+   * É a consulta que impede a mesma nota de entrar duas vezes — o defeito mais
+   * comum da entrada de mercadoria, e o que dobra o estoque sem ninguém notar.
+   *
+   * Ignora as canceladas: quem digitou a quantidade errada cancela e relança
+   * com o mesmo número, e considerar a cancelada travaria a correção.
+   */
+  porChave(
+    fornecedorId: Identificador,
+    numero: string,
+    serie: string | undefined,
+  ): Promise<NotaDeCompra | undefined>;
+
+  salvar(nota: NotaDeCompra): Promise<void>;
 }
 
 export interface CaixaRepository {
@@ -84,7 +131,9 @@ export interface Repositorios {
   readonly usuarios: UsuarioRepository;
   readonly papeis: PapelRepository;
   readonly sessoes: SessaoAcessoRepository;
+  readonly empresa: EmpresaRepository;
   readonly categorias: CategoriaRepository;
   readonly clientes: ClienteRepository;
   readonly fornecedores: FornecedorRepository;
+  readonly notasDeCompra: NotaDeCompraRepository;
 }

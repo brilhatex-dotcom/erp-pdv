@@ -313,6 +313,20 @@ describe("SaldoEstoque — custo médio ponderado móvel", () => {
     expect(saldo.custoMedio.formatar()).toBe("R$ 3,00");
   });
 
+  it("🔑 assume o custo da entrada quando o custo anterior nunca foi informado", () => {
+    // Zero significa "não informado", não "de graça". Ponderar 10 unidades a
+    // custo zero contra 10 a R$ 3,00 daria R$ 1,50 — metade do que a loja
+    // pagou. O relatório mostraria o dobro da margem real, que é o pior tipo
+    // de erro: o que faz o número parecer melhor.
+    const saldo = SaldoEstoque.projetar(PRODUTO, "UN", [
+      movimento("ENTRADA", "10"),
+      movimento("ENTRADA", "10", { custoUnitario: reais("3,00") }),
+    ]).unwrap();
+
+    expect(saldo.custoMedio.formatar()).toBe("R$ 3,00");
+    expect(saldo.quantidade.formatar()).toBe("20 un");
+  });
+
   it("assume o custo da entrada quando o saldo estava negativo", () => {
     const saldo = SaldoEstoque.projetar(PRODUTO, "UN", [
       movimento("SAIDA", "5"),

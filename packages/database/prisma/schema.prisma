@@ -53,11 +53,12 @@ model Produto {
   criadoEm           DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
   atualizadoEm       DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
-  referencias ReferenciaProduto[]
-  embalagens  Embalagem[]
-  movimentos  MovimentoEstoque[]
-  saldo       SaldoEstoque?
-  itensVenda  VendaItem[]
+  referencias    ReferenciaProduto[]
+  embalagens     Embalagem[]
+  movimentos     MovimentoEstoque[]
+  saldo          SaldoEstoque?
+  itensVenda     VendaItem[]
+  itensDeCompra  ItemNotaCompra[]
 
   // Só produtos ativos aparecem na busca do PDV; o índice parcial mantém a
   // estrutura pequena e o plano previsível (RNF-02).
@@ -536,6 +537,45 @@ model Cliente {
   @@map("clientes")
 }
 
+/// A empresa que opera esta instalação.
+///
+/// **Uma linha, sempre** (ADR-0024). A garantia não é convenção: `unica` é uma
+/// coluna com valor fixo e índice único, então a segunda inserção falha no
+/// banco. Confiar só no código deixaria a porta aberta para o dia em que um
+/// caminho novo esquecer de conferir — e duas empresas na mesma instalação
+/// fariam todo relatório somar dois cabeçalhos diferentes.
+model Empresa {
+  id                 String  @id @db.Uuid
+  razaoSocial        String  @map("razao_social") @db.VarChar(60)
+  nomeFantasia       String? @map("nome_fantasia") @db.VarChar(60)
+  razaoSocialBusca   String  @map("razao_social_busca")
+  /// Só CNPJ: quem emite documento fiscal não emite com CPF.
+  cnpj               String  @unique @db.VarChar(14)
+  inscricaoEstadual  String? @map("inscricao_estadual") @db.VarChar(20)
+  inscricaoMunicipal String? @map("inscricao_municipal") @db.VarChar(20)
+  regimeTributario   String  @map("regime_tributario") @db.VarChar(30)
+  telefone           String? @db.VarChar(11)
+  email              String? @db.VarChar(160)
+
+  /// Endereço **obrigatório**: é o do emitente, e vai no cupom e na nota.
+  logradouro          String  @db.VarChar(120)
+  numero              String  @db.VarChar(10)
+  complemento         String? @db.VarChar(60)
+  bairro              String  @db.VarChar(60)
+  municipio           String  @db.VarChar(60)
+  codigoMunicipioIbge String? @map("codigo_municipio_ibge") @db.VarChar(7)
+  uf                  String  @db.VarChar(2)
+  cep                 String  @db.VarChar(8)
+
+  /// Sempre `true`. Existe só para o índice único garantir a linha única.
+  unica Boolean @unique @default(true)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@map("empresas")
+}
+
 model Fornecedor {
   id                String  @id @db.Uuid
   razaoSocial       String  @map("razao_social") @db.VarChar(120)
@@ -563,6 +603,8 @@ model Fornecedor {
   criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
+  notasDeCompra NotaDeCompra[]
+
   @@index([razaoSocialBusca(ops: raw("text_pattern_ops"))], map: "ix_fornecedor_razao_busca", type: BTree)
   @@map("fornecedores")
 }
@@ -584,4 +626,74 @@ model VendaImportada {
 
   @@index([estacaoId, criadoEm], map: "ix_venda_importada_estacao")
   @@map("vendas_importadas")
+}
+
+enum StatusNotaCompra {
+  LANCADA
+  CANCELADA
+}
+
+/// Nota de entrada de mercadoria.
+///
+/// É o documento que responde de onde veio o estoque. Os movimentos apontam
+/// para ela por `origem_documento_id`, e é essa corrente — saldo → movimento →
+/// nota → fornecedor — que permite conferir uma divergência de inventário sem
+/// passo faltando.
+model NotaDeCompra {
+  id             String           @id @db.Uuid
+  fornecedorId   String           @map("fornecedor_id") @db.Uuid
+  numero         String           @db.VarChar(20)
+  /// Vazio significa "sem série", e **não** nulo: no PostgreSQL dois `NULL` são
+  /// distintos, e o índice único deixaria passar a mesma nota duas vezes —
+  /// justamente o defeito que ele existe para impedir.
+  serie          String           @default("") @db.VarChar(5)
+  emitidaEm      DateTime         @map("emitida_em") @db.Timestamptz(3)
+  recebidaEm     DateTime         @map("recebida_em") @db.Timestamptz(3)
+  /// Centavos — total impresso na nota, guardado para conferência de digitação.
+  totalDeclarado BigInt           @map("total_declarado")
+  usuarioId      String           @map("usuario_id") @db.Uuid
+  observacao     String?          @db.VarChar(500)
+  status         StatusNotaCompra @default(LANCADA)
+  canceladaEm        DateTime? @map("cancelada_em") @db.Timestamptz(3)
+  motivoCancelamento String?   @map("motivo_cancelamento") @db.VarChar(500)
+  criadoEm           DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  fornecedor Fornecedor       @relation(fields: [fornecedorId], references: [id])
+  itens      ItemNotaCompra[]
+
+  /// A unicidade de fornecedor + número + série é **parcial**: vale só para as
+  /// notas `LANCADA`. Está em SQL cru na migração porque o Prisma não declara
+  /// índice parcial no esquema.
+  ///
+  /// Parcial, e não total, por um caso concreto: quem digitou a quantidade
+  /// errada cancela a nota e precisa relançá-la com o mesmo número. Com índice
+  /// total, a chave ficaria presa pela nota cancelada e a correção seria
+  /// impossível sem mexer no banco.
+  @@index([fornecedorId, numero, serie], map: "idx_notas_fornecedor_numero_serie")
+  @@index([recebidaEm], map: "idx_notas_recebida")
+  @@map("notas_compra")
+}
+
+model ItemNotaCompra {
+  notaId        String @map("nota_id") @db.Uuid
+  /// Sequencial dentro da nota.
+  numero        Int
+  produtoId     String @map("produto_id") @db.Uuid
+  /// Congelada no lançamento — renomear o produto não reescreve a nota.
+  descricao     String @db.VarChar(120)
+  /// Milésimos, na unidade em que a mercadoria chegou.
+  quantidade    BigInt
+  unidade       String @db.VarChar(6)
+  /// Centavos, por unidade **da nota** — não da unidade base do produto.
+  custoUnitario BigInt @map("custo_unitario")
+  /// Centavos — desconto dado nesta linha pelo fornecedor.
+  desconto      BigInt @default(0)
+
+  nota    NotaDeCompra @relation(fields: [notaId], references: [id], onDelete: Cascade)
+  produto Produto      @relation(fields: [produtoId], references: [id])
+
+  // Chave natural: o item só existe dentro da nota e não tem identidade própria.
+  @@id([notaId, numero])
+  @@index([produtoId], map: "idx_itens_nota_produto")
+  @@map("itens_nota_compra")
 }

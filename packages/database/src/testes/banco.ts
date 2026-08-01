@@ -51,6 +51,8 @@ export function criarClienteDeTeste(): PrismaClient {
 export async function limparBanco(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "itens_nota_compra",
+      "notas_compra",
       "eventos_outbox",
       "pagamentos",
       "venda_itens",
@@ -70,7 +72,8 @@ export async function limparBanco(prisma: PrismaClient): Promise<void> {
       "papeis",
       "categorias",
       "clientes",
-      "fornecedores"
+      "fornecedores",
+      "empresas"
     RESTART IDENTITY CASCADE
   `);
 }

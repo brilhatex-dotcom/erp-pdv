@@ -19,11 +19,13 @@ export {
   UsuarioRepositorioPrisma,
 } from "./repositorios/AcessoRepositorioPrisma.js";
 export { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
+export { CompraRepositorioPrisma } from "./repositorios/CompraRepositorioPrisma.js";
 export {
   CategoriaRepositorioPrisma,
   ClienteRepositorioPrisma,
   FornecedorRepositorioPrisma,
 } from "./repositorios/CadastroRepositorioPrisma.js";
+export { EmpresaRepositorioPrisma } from "./repositorios/EmpresaRepositorioPrisma.js";
 export { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 export { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 export { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";
@@ -35,6 +37,19 @@ export {
   type CatalogoParaReplica,
   type ProdutoParaReplica,
 } from "./consultas/catalogoParaReplica.js";
+export {
+  type FiltroNotas,
+  type NotaNaLista,
+  notasDeCompra,
+} from "./consultas/compras.js";
+export {
+  extratoDeEstoque,
+  type FiltroSaldos,
+  type MovimentoDoExtrato,
+  type SaldoDeProduto,
+  saldosDeEstoque,
+  type SituacaoDeSaldo,
+} from "./consultas/estoque.js";
 export {
   type FiltroSessoes,
   type SessaoDeCaixa,

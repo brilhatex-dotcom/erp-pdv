@@ -4,6 +4,15 @@ export interface UsuarioRepository {
   porId(id: Identificador): Promise<Usuario | undefined>;
   /** Busca pela matrícula digitada no balcão. */
   porMatricula(matricula: Matricula): Promise<Usuario | undefined>;
+  /** Todos, para a tela de gestão. Uma loja tem dezenas, não milhares. */
+  listar(): Promise<readonly Usuario[]>;
+  /**
+   * Quantos existem.
+   *
+   * Zero tem significado próprio: é a instalação recém-feita, e é a **única**
+   * situação em que o primeiro administrador pode ser criado sem autenticação.
+   */
+  quantidade(): Promise<number>;
   salvar(usuario: Usuario): Promise<void>;
 }
 
