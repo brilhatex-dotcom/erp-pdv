@@ -46,6 +46,10 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 |---|---|---|
 | `claude/agente-local` | 2 commits à frente de `main`, 0 atrás | Implementa o **ADR-0023**: move `apps/pdv/src/principal/**` para um `apps/agente/` novo e cria `packages/agente-contrato`. Toca impressão, fila offline e catálogo replicado |
 
+> `claude/gestao-de-usuarios` esteve nesta lista e **já foi mesclada** — o módulo
+> de usuários está em `main`. A branch some assim que puder ser apagada no
+> GitHub (o ambiente de desenvolvimento recusa a exclusão remota).
+
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
 produz um conflito grande, porque ela **move arquivos de lugar** — e conflito de
@@ -68,6 +72,7 @@ movimentação é o pior de resolver.
 | Persistência PostgreSQL + `UnitOfWork` | ✅ Completo | `packages/database/src/` |
 | API HTTP (Fastify) com autenticação | ✅ Completo | `apps/server/src/rotas/` |
 | Retaguarda web (React) | ✅ Completo | `apps/web/src/` |
+| **Usuários — gestão e primeiro acesso** | ✅ Completo, ponta a ponta | `casos-de-uso/usuarios/`, `rotas/usuarios.ts`, `telas/Usuarios.tsx`, `telas/PrimeiroAcesso.tsx` |
 | Design system | ✅ Completo | `packages/ui/src/` |
 | Cliente HTTP + sessão compartilhados | ✅ Completo | `packages/cliente-api/src/` |
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
@@ -80,7 +85,7 @@ movimentação é o pior de resolver.
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**1.903 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.980 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
