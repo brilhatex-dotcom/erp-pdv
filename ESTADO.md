@@ -5,15 +5,14 @@
 >
 > Última atualização: **01/08/2026** · Ramo de referência: **`main`**
 >
-> ✅ **Não há trabalho fora de `main`.** Uma única branch remota existe: `main`.
+> ⚠️ **Há trabalho vivo fora de `main`.** Confira a §0.1 antes de começar qualquer coisa
+> que toque o PDV, a impressão ou a contingência offline.
 
 ---
 
 ## 0. Regra de ouro para quem chega agora
 
-**Tudo o que existe está em `main`.** Não há trabalho vivo em outra branch.
-
-Se você é uma sessão nova:
+**`main` é a fonte da verdade.** Comece dela, sempre:
 
 ```bash
 git fetch origin main
@@ -26,6 +25,35 @@ E ao terminar: commit → push → PR → merge em `main` → **apaga a branch**
 saber uma da outra, porque `main` estava vazia e cada sessão criou sua própria branch.
 As duas implementaram autenticação — o mesmo módulo, duas vezes, com modelos diferentes.
 A unificação custou uma tarde. `main` sempre atualizada é o que impede a repetição.
+
+**E se repetiu.** Em 01/08/2026 aconteceu de novo, duas vezes: uma sessão construiu
+ferramentas de impressão enquanto outra ligava a contingência à tela, e uma terceira
+mexia no fechamento de caixa. Desta vez o custo foi baixo — as áreas quase não se
+cruzaram e o merge saiu limpo. Foi sorte, não processo.
+
+### 0.1 O que está fora de `main` agora
+
+**Conferir isto é o primeiro passo de qualquer sessão.** A lista abaixo envelhece; o
+comando não:
+
+```bash
+git fetch origin --prune
+git branch -r                       # o que existe
+git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
+```
+
+| Branch | Situação em 01/08/2026 | O que ela mexe |
+|---|---|---|
+| `claude/agente-local` | 2 commits à frente de `main`, 0 atrás | Implementa o **ADR-0023**: move `apps/pdv/src/principal/**` para um `apps/agente/` novo e cria `packages/agente-contrato`. Toca impressão, fila offline e catálogo replicado |
+
+**Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
+antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
+produz um conflito grande, porque ela **move arquivos de lugar** — e conflito de
+movimentação é o pior de resolver.
+
+> **Quando esta seção ficar desatualizada, corrija-a.** Um `ESTADO.md` que afirma "não
+> há trabalho fora de `main`" quando há é pior que nenhum: ele dá permissão explícita
+> para a sessão nova ignorar o que existe.
 
 ---
 
@@ -80,6 +108,8 @@ Duas frentes que destravam o resto:
   impressão, da fila offline e do catálogo replicado. `FilaDeVendas`,
   `ReplicaCatalogo` e `Sincronizador` **mudam de casa, não são reescritos** — hoje
   vivem no processo principal do Electron.
+  🔶 **Já está em andamento** na branch `claude/agente-local` (§0.1). Não comece
+  do zero: parta dela ou espere o merge.
 
 ### 2.2 Módulos do ERP, na ordem pedida
 
