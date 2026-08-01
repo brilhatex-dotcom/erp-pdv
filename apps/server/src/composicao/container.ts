@@ -9,6 +9,11 @@ import {
   RegistrarSangria,
   RegistrarSuprimento,
   AdicionarItemPorCodigo,
+  AlterarUsuario,
+  CadastrarUsuario,
+  CriarPrimeiroAdministrador,
+  DefinirCredencial,
+  InstalacaoPrecisaConfiguracao,
   AlterarCategoria,
   AlterarCliente,
   AlterarFornecedor,
@@ -74,6 +79,12 @@ export interface Container {
   readonly autenticar: Autenticar;
   readonly renovarSessao: RenovarSessao;
   readonly autorizarOperacao: AutorizarOperacao;
+
+  readonly cadastrarUsuario: CadastrarUsuario;
+  readonly alterarUsuario: AlterarUsuario;
+  readonly definirCredencial: DefinirCredencial;
+  readonly criarPrimeiroAdministrador: CriarPrimeiroAdministrador;
+  readonly instalacaoPrecisaConfiguracao: InstalacaoPrecisaConfiguracao;
 
   readonly abrirCaixa: AbrirCaixa;
   readonly registrarSangria: RegistrarSangria;
@@ -154,6 +165,16 @@ export function montarContainer(ambiente: Ambiente): Container {
       gerarRefresh,
     ),
     autorizarOperacao: autorizar,
+
+    cadastrarUsuario: new CadastrarUsuario(unitOfWork, geradorId, hasher),
+    alterarUsuario: new AlterarUsuario(unitOfWork, geradorId),
+    definirCredencial: new DefinirCredencial(unitOfWork, hasher),
+    criarPrimeiroAdministrador: new CriarPrimeiroAdministrador(
+      unitOfWork,
+      geradorId,
+      hasher,
+    ),
+    instalacaoPrecisaConfiguracao: new InstalacaoPrecisaConfiguracao(unitOfWork),
 
     abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
     registrarSangria: new RegistrarSangria(unitOfWork, relogio, geradorId, autorizar),

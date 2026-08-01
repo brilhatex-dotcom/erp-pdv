@@ -18,6 +18,19 @@ export type {
 // ── Casos de uso ────────────────────────────────────────────────────────
 export { AbrirCaixa, type EntradaAbrirCaixa } from "./casos-de-uso/caixa/AbrirCaixa.js";
 export {
+  CriarPrimeiroAdministrador,
+  type EntradaPrimeiroAdministrador,
+  InstalacaoPrecisaConfiguracao,
+} from "./casos-de-uso/usuarios/CriarPrimeiroAdministrador.js";
+export {
+  AlterarUsuario,
+  CadastrarUsuario,
+  DefinirCredencial,
+  type EntradaAlterarUsuario,
+  type EntradaCadastrarUsuario,
+  type EntradaDefinirCredencial,
+} from "./casos-de-uso/usuarios/GerirUsuarios.js";
+export {
   type EntradaFecharCaixa,
   FecharCaixa,
   type ResultadoFechamento,

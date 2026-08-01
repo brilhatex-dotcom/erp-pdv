@@ -246,6 +246,14 @@ export class UsuarioRepositorioEmMemoria implements UsuarioRepository {
     return Promise.resolve(undefined);
   }
 
+  listar(): Promise<readonly Usuario[]> {
+    return Promise.resolve([...this.itens.values()]);
+  }
+
+  quantidade(): Promise<number> {
+    return Promise.resolve(this.itens.size);
+  }
+
   salvar(usuario: Usuario): Promise<void> {
     this.itens.set(usuario.id.valor, usuario);
     return Promise.resolve();

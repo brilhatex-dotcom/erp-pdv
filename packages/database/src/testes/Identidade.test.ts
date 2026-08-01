@@ -378,3 +378,49 @@ describe("Hasher Argon2id", () => {
     await expect(hasher.gastarTempoEquivalente()).resolves.toBeUndefined();
   });
 });
+
+describe("Listagem de usuários", () => {
+  it("lista em ordem de nome, para a tela de gestão", async () => {
+    const usuarios = new UsuarioRepositorioPrisma(prisma);
+    const papeis = new PapelRepositorioPrisma(prisma);
+    const papel = operador();
+    await papeis.salvar(papel);
+
+    for (const [indice, nome] of ["Carla", "Ana", "Bruno"].entries()) {
+      await usuarios.salvar(
+        Usuario.criar({
+          id: Identificador.criar(
+            `018f3a2b-7c1d-7e4f-8a9b-1c2d3e51b00${String(indice)}`,
+          ).unwrap(),
+          matricula: Matricula.criar(String(10 + indice)).unwrap(),
+          nome,
+          papel,
+          hashPin: hash(),
+          precisaTrocarCredencial: false,
+        }).unwrap(),
+      );
+    }
+
+    expect((await usuarios.listar()).map((u) => u.nome)).toEqual([
+      "Ana",
+      "Bruno",
+      "Carla",
+    ]);
+  });
+
+  it("🔑 zero usuários é o sinal de instalação nova", async () => {
+    // É o que autoriza a criação do primeiro administrador sem autenticação —
+    // e o que a tranca depois do primeiro.
+    const usuarios = new UsuarioRepositorioPrisma(prisma);
+
+    expect(await usuarios.quantidade()).toBe(0);
+
+    const papeis = new PapelRepositorioPrisma(prisma);
+    const papel = operador();
+    await papeis.salvar(papel);
+    await usuarios.salvar(usuario(papel));
+
+    expect(await usuarios.quantidade()).toBe(1);
+    expect(await usuarios.listar()).toHaveLength(1);
+  });
+});
