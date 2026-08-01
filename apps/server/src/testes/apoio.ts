@@ -11,6 +11,7 @@ import {
   Matricula,
   Papel,
   papelPadrao,
+  type Permissao,
   Produto,
   Usuario,
 } from "@erp/domain";
@@ -88,6 +89,7 @@ export function prepararBanco(): void {
 export async function limparBanco(container: Container): Promise<void> {
   await container.prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "itens_nota_compra", "notas_compra",
       "vendas_importadas",
       "eventos_outbox", "pagamentos", "venda_itens", "vendas",
       "recebimentos_caixa", "movimentos_caixa", "sessoes_caixa",
@@ -194,4 +196,45 @@ export async function logar(
     cookies: resposta.cookies.map((c) => `${c.name}=${c.value}`).join("; "),
     corpo,
   };
+}
+
+/**
+ * Cadastra um usuário com papel **feito na hora**, com as permissões pedidas.
+ *
+ * Existe porque nem toda combinação que uma loja monta está entre os papéis de
+ * fábrica — e é justamente a combinação incomum que revela buraco de
+ * autorização: quem edita produto sem poder ver custo, por exemplo.
+ */
+export async function cadastrarUsuarioComPermissoes(
+  container: Container,
+  dados: {
+    readonly matricula: string;
+    readonly nome: string;
+    readonly pin: string;
+    readonly permissoes: readonly Permissao[];
+  },
+): Promise<Usuario> {
+  const papel = Papel.criar({
+    id: proximoId(),
+    codigo: `TESTE_${dados.matricula}`,
+    nome: `Papel de ${dados.nome}`,
+    permissoes: dados.permissoes,
+    limites: {},
+    padrao: false,
+  }).unwrap();
+
+  await new PapelRepositorioPrisma(container.prisma).salvar(papel);
+
+  const usuario = Usuario.criar({
+    id: proximoId(),
+    matricula: Matricula.criar(dados.matricula).unwrap(),
+    nome: dados.nome,
+    papel,
+    hashPin: await new HasherArgon2().hash(dados.pin),
+    precisaTrocarCredencial: false,
+  }).unwrap();
+
+  await new UsuarioRepositorioPrisma(container.prisma).salvar(usuario);
+
+  return usuario;
 }

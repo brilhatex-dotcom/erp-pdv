@@ -3,8 +3,10 @@ import {
   Botao,
   CampoTexto,
   Carregando,
+  centavosParaReais,
   ErroDeTela,
   formatarDinheiro,
+  reaisParaCentavos,
   Vazio,
 } from "@erp/ui";
 import { type ReactNode, type SyntheticEvent, useEffect, useRef, useState } from "react";
@@ -365,27 +367,4 @@ function Formulario({
 
 function ehCnpj(documento: string): boolean {
   return documento.replace(/\D/g, "").length > 11;
-}
-
-/** `"1990"` → `"19,90"`. */
-function centavosParaReais(centavos: string): string {
-  const valor = BigInt(centavos);
-  return `${(valor / 100n).toString()},${(valor % 100n).toString().padStart(2, "0")}`;
-}
-
-/**
- * `"19,90"` → `"1990"`.
- *
- * Como no PDV, número **sem separador é reais**: `"2000"` é R$ 2.000,00. A
- * interpretação inversa daria ao cliente um limite cem vezes menor que o
- * pretendido, e o erro só apareceria quando a venda a prazo fosse recusada no
- * balcão.
- */
-function reaisParaCentavos(texto: string): string | undefined {
-  const limpo = texto.trim().replace(/\./g, ",");
-
-  if (!/^\d+(,\d{0,2})?$/.test(limpo)) return undefined;
-
-  const [inteiro = "0", decimais = ""] = limpo.split(",");
-  return (BigInt(inteiro) * 100n + BigInt(decimais.padEnd(2, "0") || "0")).toString();
 }

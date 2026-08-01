@@ -157,3 +157,25 @@ export function exigirPermissao(container: Container, permissao: Permissao) {
     }
   };
 }
+
+/**
+ * Responde se o autenticado tem uma permissão — sem recusar a requisição.
+ *
+ * Serve à decisão **por campo**, que é diferente da decisão por rota. Esconder
+ * o custo só na interface seria acordo de cavalheiros: quem abrir a aba de rede
+ * do navegador veria a margem da loja inteira. Já negar a rota impediria o
+ * operador de consultar o preço, que é justamente o que ele precisa fazer.
+ */
+export async function autenticadoTem(
+  container: Container,
+  requisicao: FastifyRequest,
+  permissao: Permissao,
+): Promise<boolean> {
+  const autenticado = requisicao.autenticado;
+  /* v8 ignore next -- inalcançável: sempre chamado após exigirAutenticacao */
+  if (autenticado === undefined) return false;
+
+  const usuario = await container.leitura.usuarios.porId(autenticado.usuarioId);
+
+  return usuario?.temPermissao(permissao) === true;
+}

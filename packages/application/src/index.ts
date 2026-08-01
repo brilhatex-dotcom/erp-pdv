@@ -3,12 +3,14 @@ export { agregarErros } from "./erros/agregarErros.js";
 export { ErroInfraestrutura } from "./erros/ErroInfraestrutura.js";
 
 // ── Portas ──────────────────────────────────────────────────────────────
+export type { FiltroBusca } from "./portas/repositorios/FiltroBusca.js";
 export type { GeradorId } from "./portas/infraestrutura/GeradorId.js";
 export type { Relogio } from "./portas/infraestrutura/Relogio.js";
 export type { UnitOfWork } from "./portas/infraestrutura/UnitOfWork.js";
 export type {
   CaixaRepository,
   EstoqueRepository,
+  NotaDeCompraRepository,
   OutboxRepository,
   ProdutoRepository,
   Repositorios,
@@ -18,9 +20,22 @@ export type {
 // ── Casos de uso ────────────────────────────────────────────────────────
 export { AbrirCaixa, type EntradaAbrirCaixa } from "./casos-de-uso/caixa/AbrirCaixa.js";
 export {
+  CriarPrimeiroAdministrador,
+  type EntradaPrimeiroAdministrador,
+  InstalacaoPrecisaConfiguracao,
+} from "./casos-de-uso/usuarios/CriarPrimeiroAdministrador.js";
+export {
   DefinirEmpresa,
   type EntradaDefinirEmpresa,
 } from "./casos-de-uso/cadastros/DefinirEmpresa.js";
+export {
+  AlterarUsuario,
+  CadastrarUsuario,
+  DefinirCredencial,
+  type EntradaAlterarUsuario,
+  type EntradaCadastrarUsuario,
+  type EntradaDefinirCredencial,
+} from "./casos-de-uso/usuarios/GerirUsuarios.js";
 export {
   type EntradaFecharCaixa,
   FecharCaixa,
@@ -77,12 +92,46 @@ export {
   type SaidaRenovarSessao,
 } from "./casos-de-uso/acesso/RenovarSessao.js";
 
+// ── Catálogo ────────────────────────────────────────────────────────────
+export {
+  AlterarPrecoDoProduto,
+  type EntradaAlterarPreco,
+} from "./casos-de-uso/catalogo/AlterarPrecoDoProduto.js";
+export {
+  AlterarProduto,
+  type EntradaAlterarProduto,
+} from "./casos-de-uso/catalogo/AlterarProduto.js";
+export {
+  CadastrarProduto,
+  type EntradaCadastrarProduto,
+} from "./casos-de-uso/catalogo/CadastrarProduto.js";
+export type {
+  EmbalagemBruta,
+  ReferenciaBruta,
+} from "./casos-de-uso/catalogo/interpretarProduto.js";
+
+// ── Compras ─────────────────────────────────────────────────────────────
+export {
+  CancelarNotaDeCompra,
+  type EntradaCancelarNota,
+} from "./casos-de-uso/compras/CancelarNotaDeCompra.js";
+export {
+  type EntradaLancarNota,
+  type ItemBruto,
+  LancarNotaDeCompra,
+} from "./casos-de-uso/compras/LancarNotaDeCompra.js";
+
+// ── Estoque ─────────────────────────────────────────────────────────────
+export {
+  type EntradaMovimento,
+  RegistrarMovimento,
+} from "./casos-de-uso/estoque/RegistrarMovimento.js";
+
 // ── Cadastros ───────────────────────────────────────────────────────────
 export type {
   CategoriaRepository,
   ClienteRepository,
   EmpresaRepository,
-  FiltroBusca,
   FornecedorRepository,
 } from "./portas/repositorios/RepositoriosCadastros.js";
 export {

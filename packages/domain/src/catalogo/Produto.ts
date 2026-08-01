@@ -188,32 +188,6 @@ export class Produto extends AggregateRoot {
       );
     }
 
-    // O código da balança é o miolo da etiqueta, e a balança só imprime dígitos.
-    // Letra ou separador aqui produz uma etiqueta que nenhum leitor encontra —
-    // e o operador descobre no balcão, com fila.
-    const codigoBalanca = dados.codigoBalanca?.trim();
-    if (codigoBalanca !== undefined && codigoBalanca !== "") {
-      if (!/^\d+$/.test(codigoBalanca)) {
-        erros.push(
-          new ErroValidacao(
-            "PRODUTO_CODIGO_BALANCA_INVALIDO",
-            "O código da balança deve conter apenas números.",
-            { codigoBalanca },
-          ),
-        );
-      }
-
-      if (dados.tipo !== "PESAVEL") {
-        erros.push(
-          new ErroValidacao(
-            "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
-            "Só produto pesável tem código de balança.",
-            { tipo: dados.tipo },
-          ),
-        );
-      }
-    }
-
     const custo = dados.custo ?? Dinheiro.zero();
     if (custo.ehNegativo()) {
       erros.push(
@@ -222,48 +196,12 @@ export class Produto extends AggregateRoot {
     }
 
     // Invariante 2: referências não se duplicam.
-    const referencias = dados.referencias ?? [];
-    // `entries()` em vez de índice: a leitura por índice viria tipada como
-    // possivelmente ausente e exigiria um `continue` que jamais executa.
-    for (const [i, atual] of referencias.entries()) {
-      const duplicada = referencias
-        .slice(0, i)
-        .some((anterior) => anterior.equals(atual));
-      if (duplicada) {
-        erros.push(
-          new ErroValidacao(
-            "PRODUTO_REFERENCIA_DUPLICADA",
-            `A referência ${atual.valor} está repetida.`,
-            { referencia: atual.valor, tipo: atual.tipo },
-          ),
-        );
-      }
-    }
+    erros.push(...conferirReferencias(dados.referencias ?? []));
 
     // Invariante 3: embalagens coerentes e sem repetição de unidade.
-    const embalagens = dados.embalagens ?? [];
-    for (const [i, atual] of embalagens.entries()) {
-      if (atual.unidade.codigo === unidade.codigo) {
-        erros.push(
-          new ErroValidacao(
-            "PRODUTO_EMBALAGEM_IGUAL_A_BASE",
-            `A embalagem não pode usar a mesma unidade do produto (${unidade.descricao.toLowerCase()}).`,
-            { unidade: unidade.codigo },
-          ),
-        );
-      }
+    erros.push(...conferirEmbalagens(dados.embalagens ?? [], unidade));
 
-      const duplicada = embalagens.slice(0, i).some((anterior) => anterior.equals(atual));
-      if (duplicada) {
-        erros.push(
-          new ErroValidacao(
-            "PRODUTO_EMBALAGEM_DUPLICADA",
-            `Já existe uma embalagem em ${atual.unidade.descricao.toLowerCase()}.`,
-            { unidade: atual.unidade.codigo },
-          ),
-        );
-      }
-    }
+    erros.push(...conferirCodigoBalanca(dados.codigoBalanca, dados.tipo));
 
     if (erros.length > 0) {
       return err(erros);
@@ -562,6 +500,36 @@ export class Produto extends AggregateRoot {
     });
   }
 
+  /**
+   * Corrige o código interno.
+   *
+   * Trocar SKU é raro e legítimo: quem digitou errado no cadastro descobre no
+   * dia seguinte. O que **não** muda depois de criado é tipo e unidade base —
+   * o produto já tem saldo de estoque e itens de venda naquela unidade, e
+   * trocá-la reinterpretaria todo o histórico sem converter nada.
+   */
+  alterarSku(sku: string): Result<void, ErroValidacao> {
+    const limpo = sku.trim();
+
+    if (limpo === "") {
+      return err(new ErroValidacao("PRODUTO_SKU_VAZIO", "Informe o código do produto."));
+    }
+
+    if (limpo.length > TAMANHO_MAXIMO_SKU) {
+      return err(
+        new ErroValidacao(
+          "PRODUTO_SKU_LONGO",
+          `O código deve ter no máximo ${String(TAMANHO_MAXIMO_SKU)} caracteres.`,
+          { tamanho: limpo.length },
+        ),
+      );
+    }
+
+    this.#sku = limpo;
+
+    return ok(undefined);
+  }
+
   alterarDescricao(
     descricao: string,
     descricaoPdv?: string,
@@ -604,4 +572,145 @@ export class Produto extends AggregateRoot {
   definirCodigoBarras(codigoBarras: CodigoBarras | undefined): void {
     this.#codigoBarras = codigoBarras;
   }
+
+  definirCodigoBalanca(codigo: string | undefined): Result<void, ErroValidacao[]> {
+    const problemas = conferirCodigoBalanca(codigo, this.#tipo);
+    if (problemas.length > 0) return err(problemas);
+
+    const limpo = codigo?.trim();
+    this.#codigoBalanca = limpo === undefined || limpo === "" ? undefined : limpo;
+
+    return ok(undefined);
+  }
+
+  /**
+   * Troca a lista inteira de referências.
+   *
+   * Existe porque a tela de cadastro é um formulário que se abre, edita e
+   * salva: o que chega é o estado final, não "adicione esta e remova aquela".
+   * Reconstruir a diferença no cliente é onde esse tipo de tela apaga uma
+   * referência sem ninguém perceber — e em autopeças a referência apagada é a
+   * peça que o balconista deixa de encontrar.
+   *
+   * Só substitui se a lista inteira for válida: metade aplicada seria pior que
+   * nada aplicado.
+   */
+  substituirReferencias(
+    referencias: readonly ReferenciaProduto[],
+  ): Result<void, ErroValidacao[]> {
+    const problemas = conferirReferencias(referencias);
+    if (problemas.length > 0) return err(problemas);
+
+    this.#referencias.splice(0, this.#referencias.length, ...referencias);
+
+    return ok(undefined);
+  }
+
+  /** Troca a lista inteira de embalagens. Mesmo raciocínio das referências. */
+  substituirEmbalagens(embalagens: readonly Embalagem[]): Result<void, ErroValidacao[]> {
+    const problemas = conferirEmbalagens(embalagens, this.#unidadeBase);
+    if (problemas.length > 0) return err(problemas);
+
+    this.#embalagens.splice(0, this.#embalagens.length, ...embalagens);
+
+    return ok(undefined);
+  }
+}
+
+// ── Invariantes compartilhadas ───────────────────────────────────────────
+//
+// Moram fora da classe porque valem tanto na criação quanto na substituição da
+// lista inteira. Duplicá-las nos dois lugares é como as duas cópias divergem no
+// dia em que uma regra muda.
+
+function conferirReferencias(referencias: readonly ReferenciaProduto[]): ErroValidacao[] {
+  const erros: ErroValidacao[] = [];
+
+  // `entries()` em vez de índice: a leitura por índice viria tipada como
+  // possivelmente ausente e exigiria um `continue` que jamais executa.
+  for (const [i, atual] of referencias.entries()) {
+    const duplicada = referencias.slice(0, i).some((anterior) => anterior.equals(atual));
+
+    if (duplicada) {
+      erros.push(
+        new ErroValidacao(
+          "PRODUTO_REFERENCIA_DUPLICADA",
+          `A referência ${atual.valor} está repetida.`,
+          { referencia: atual.valor, tipo: atual.tipo },
+        ),
+      );
+    }
+  }
+
+  return erros;
+}
+
+function conferirEmbalagens(
+  embalagens: readonly Embalagem[],
+  unidadeBase: UnidadeMedida,
+): ErroValidacao[] {
+  const erros: ErroValidacao[] = [];
+
+  for (const [i, atual] of embalagens.entries()) {
+    if (atual.unidade.codigo === unidadeBase.codigo) {
+      erros.push(
+        new ErroValidacao(
+          "PRODUTO_EMBALAGEM_IGUAL_A_BASE",
+          `A embalagem não pode usar a mesma unidade do produto (${unidadeBase.descricao.toLowerCase()}).`,
+          { unidade: unidadeBase.codigo },
+        ),
+      );
+    }
+
+    const duplicada = embalagens.slice(0, i).some((anterior) => anterior.equals(atual));
+
+    if (duplicada) {
+      erros.push(
+        new ErroValidacao(
+          "PRODUTO_EMBALAGEM_DUPLICADA",
+          `Já existe uma embalagem em ${atual.unidade.descricao.toLowerCase()}.`,
+          { unidade: atual.unidade.codigo },
+        ),
+      );
+    }
+  }
+
+  return erros;
+}
+
+/**
+ * O código da balança é o miolo da etiqueta, e a balança só imprime dígitos.
+ * Letra ou separador aqui produz uma etiqueta que nenhum leitor encontra — e o
+ * operador descobre no balcão, com fila.
+ */
+function conferirCodigoBalanca(
+  bruto: string | undefined,
+  tipo: TipoProduto,
+): ErroValidacao[] {
+  const codigo = bruto?.trim();
+  if (codigo === undefined || codigo === "") return [];
+
+  const erros: ErroValidacao[] = [];
+
+  if (!/^\d+$/.test(codigo)) {
+    erros.push(
+      new ErroValidacao(
+        "PRODUTO_CODIGO_BALANCA_INVALIDO",
+        "O código da balança deve conter apenas números.",
+        { codigoBalanca: codigo },
+      ),
+    );
+  }
+
+  if (tipo !== "PESAVEL") {
+    erros.push(
+      new ErroValidacao(
+        "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
+        "Só produto pesável tem código de balança.",
+        { tipo },
+      ),
+    );
+  }
+
+  return erros;
 }

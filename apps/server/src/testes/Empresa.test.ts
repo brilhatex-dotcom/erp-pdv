@@ -133,6 +133,51 @@ describe("PUT /api/empresa", () => {
     });
   });
 
+  it("🔑 devolve todo campo opcional que foi preenchido", async () => {
+    // Campo que entra no cadastro e some na resposta é o defeito que a tela não
+    // acusa: o lojista salva, recarrega e encontra o telefone em branco sem
+    // nenhum erro ter aparecido.
+    const resposta = await put(
+      await comoPapel("GERENTE"),
+      corpo({
+        inscricaoMunicipal: "998877",
+        telefone: "1938887777",
+        email: "contato@bompreco.com.br",
+        endereco: {
+          logradouro: "Rua das Flores",
+          numero: "120",
+          complemento: "Loja 2",
+          bairro: "Centro",
+          municipio: "Campinas",
+          codigoMunicipioIbge: "3509502",
+          uf: "SP",
+          cep: "13010000",
+        },
+      }),
+    );
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toMatchObject({
+      nomeFantasia: "Bom Preço",
+      inscricaoEstadual: "110042490114",
+      inscricaoMunicipal: "998877",
+      telefone: "1938887777",
+      email: "contato@bompreco.com.br",
+      endereco: { complemento: "Loja 2", codigoMunicipioIbge: "3509502" },
+    });
+  });
+
+  it("campo opcional em branco volta ausente, não vazio", async () => {
+    const resposta = await put(
+      await comoPapel("GERENTE"),
+      corpo({ nomeFantasia: undefined }),
+    );
+
+    expect(resposta.json()).not.toHaveProperty("nomeFantasia");
+    // Sem fantasia, o cupom sai com a razão social — nunca em branco.
+    expect(resposta.json()).toMatchObject({ exibicao: "Mercadinho Bom Preço Ltda" });
+  });
+
   it("🔑 o operador de caixa não altera o emitente", async () => {
     // 403, e não 401: a sessão vale — falta alçada. 401 faria o cliente tentar
     // renovar a sessão e despejar o operador na tela de login.
@@ -165,6 +210,19 @@ describe("PUT /api/empresa", () => {
         mensagem: expect.stringContaining("endereço"),
       },
     });
+  });
+
+  it("🔑 CNPJ com dígito verificador errado é recusado pelo domínio", async () => {
+    // Passa pelo Zod, que só confere o tamanho, e morre no objeto de valor. É o
+    // caminho de um dígito trocado na digitação — e a mensagem que volta é a do
+    // domínio, escrita para o lojista, não um erro técnico.
+    const resposta = await put(
+      await comoPapel("GERENTE"),
+      corpo({ cnpj: "11222333000182" }),
+    );
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json()).toMatchObject({ erro: { codigo: "CNPJ_INVALIDO" } });
   });
 
   it("recusa regime tributário que não existe", async () => {

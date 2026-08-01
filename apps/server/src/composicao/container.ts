@@ -9,8 +9,19 @@ import {
   RegistrarSangria,
   RegistrarSuprimento,
   AdicionarItemPorCodigo,
+  AlterarUsuario,
+  CadastrarUsuario,
+  CriarPrimeiroAdministrador,
+  DefinirCredencial,
+  InstalacaoPrecisaConfiguracao,
   AlterarCategoria,
   AlterarCliente,
+  AlterarPrecoDoProduto,
+  AlterarProduto,
+  CadastrarProduto,
+  CancelarNotaDeCompra,
+  LancarNotaDeCompra,
+  RegistrarMovimento,
   AlterarFornecedor,
   CadastrarCategoria,
   CadastrarCliente,
@@ -76,6 +87,12 @@ export interface Container {
   readonly renovarSessao: RenovarSessao;
   readonly autorizarOperacao: AutorizarOperacao;
 
+  readonly cadastrarUsuario: CadastrarUsuario;
+  readonly alterarUsuario: AlterarUsuario;
+  readonly definirCredencial: DefinirCredencial;
+  readonly criarPrimeiroAdministrador: CriarPrimeiroAdministrador;
+  readonly instalacaoPrecisaConfiguracao: InstalacaoPrecisaConfiguracao;
+
   readonly abrirCaixa: AbrirCaixa;
   readonly registrarSangria: RegistrarSangria;
   readonly registrarSuprimento: RegistrarSuprimento;
@@ -84,6 +101,15 @@ export interface Container {
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
   readonly finalizarVenda: FinalizarVenda;
+
+  readonly registrarMovimento: RegistrarMovimento;
+
+  readonly lancarNotaDeCompra: LancarNotaDeCompra;
+  readonly cancelarNotaDeCompra: CancelarNotaDeCompra;
+
+  readonly cadastrarProduto: CadastrarProduto;
+  readonly alterarProduto: AlterarProduto;
+  readonly alterarPrecoDoProduto: AlterarPrecoDoProduto;
 
   readonly cadastrarCategoria: CadastrarCategoria;
   readonly alterarCategoria: AlterarCategoria;
@@ -157,6 +183,16 @@ export function montarContainer(ambiente: Ambiente): Container {
     ),
     autorizarOperacao: autorizar,
 
+    cadastrarUsuario: new CadastrarUsuario(unitOfWork, geradorId, hasher),
+    alterarUsuario: new AlterarUsuario(unitOfWork, geradorId),
+    definirCredencial: new DefinirCredencial(unitOfWork, hasher),
+    criarPrimeiroAdministrador: new CriarPrimeiroAdministrador(
+      unitOfWork,
+      geradorId,
+      hasher,
+    ),
+    instalacaoPrecisaConfiguracao: new InstalacaoPrecisaConfiguracao(unitOfWork),
+
     abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
     registrarSangria: new RegistrarSangria(unitOfWork, relogio, geradorId, autorizar),
     registrarSuprimento: new RegistrarSuprimento(unitOfWork, relogio, geradorId),
@@ -165,6 +201,15 @@ export function montarContainer(ambiente: Ambiente): Container {
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),
     finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
+
+    registrarMovimento: new RegistrarMovimento(unitOfWork, relogio, geradorId),
+
+    lancarNotaDeCompra: new LancarNotaDeCompra(unitOfWork, relogio, geradorId),
+    cancelarNotaDeCompra: new CancelarNotaDeCompra(unitOfWork, relogio, geradorId),
+
+    cadastrarProduto: new CadastrarProduto(unitOfWork, geradorId),
+    alterarProduto: new AlterarProduto(unitOfWork, relogio),
+    alterarPrecoDoProduto: new AlterarPrecoDoProduto(unitOfWork, relogio),
 
     cadastrarCategoria: new CadastrarCategoria(unitOfWork, geradorId),
     alterarCategoria: new AlterarCategoria(unitOfWork),

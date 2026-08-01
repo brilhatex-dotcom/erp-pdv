@@ -692,3 +692,117 @@ describe("Produto — código de balança", () => {
     expect(produto.codigoBalanca).toBe("012345");
   });
 });
+
+describe("Produto — substituição de listas", () => {
+  const ORIGINAL = ReferenciaProduto.criar("ORIGINAL", "90919-01210").unwrap();
+  const SIMILAR = ReferenciaProduto.criar("SIMILAR", "F7TC").unwrap();
+  const CAIXA = Embalagem.criar("CX", 12n).unwrap();
+  const FARDO = Embalagem.criar("FD", 6n).unwrap();
+
+  it("troca a lista inteira de referências", () => {
+    const produto = criar({ referencias: [ORIGINAL] });
+
+    const resultado = produto.substituirReferencias([SIMILAR]);
+
+    expect(resultado.isOk()).toBe(true);
+    expect(produto.referencias.map((r) => r.valor)).toEqual(["F7TC"]);
+  });
+
+  it("esvazia a lista de referências", () => {
+    const produto = criar({ referencias: [ORIGINAL, SIMILAR] });
+
+    expect(produto.substituirReferencias([]).isOk()).toBe(true);
+    expect(produto.referencias).toHaveLength(0);
+  });
+
+  it("recusa referência repetida sem tocar na lista atual", () => {
+    const produto = criar({ referencias: [ORIGINAL] });
+
+    const resultado = produto.substituirReferencias([SIMILAR, SIMILAR]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_REFERENCIA_DUPLICADA",
+      );
+    }
+    // A lista antiga continua de pé: metade aplicada seria pior que nada.
+    expect(produto.referencias.map((r) => r.valor)).toEqual(["90919-01210"]);
+  });
+
+  it("troca a lista inteira de embalagens", () => {
+    const produto = criar({ embalagens: [CAIXA] });
+
+    expect(produto.substituirEmbalagens([FARDO]).isOk()).toBe(true);
+    expect(produto.embalagens.map((e) => e.unidade.codigo)).toEqual(["FD"]);
+  });
+
+  it("recusa embalagem na mesma unidade do produto", () => {
+    const produto = criar({ embalagens: [CAIXA] });
+    const emUnidade = Embalagem.criar("UN", 10n).unwrap();
+
+    const resultado = produto.substituirEmbalagens([emUnidade]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_EMBALAGEM_IGUAL_A_BASE",
+      );
+    }
+    expect(produto.embalagens.map((e) => e.unidade.codigo)).toEqual(["CX"]);
+  });
+
+  it("recusa duas embalagens na mesma unidade", () => {
+    const produto = criar();
+
+    const resultado = produto.substituirEmbalagens([
+      CAIXA,
+      Embalagem.criar("CX", 24n).unwrap(),
+    ]);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_EMBALAGEM_DUPLICADA",
+      );
+    }
+  });
+});
+
+describe("Produto — código de balança depois de cadastrado", () => {
+  it("define o código num produto pesável", () => {
+    const produto = criar({ tipo: "PESAVEL", unidadeBase: "KG" });
+
+    expect(produto.definirCodigoBalanca("  0421  ").isOk()).toBe(true);
+    expect(produto.codigoBalanca).toBe("0421");
+  });
+
+  it("limpa o código quando recebe vazio", () => {
+    const produto = criar({ tipo: "PESAVEL", unidadeBase: "KG", codigoBalanca: "0421" });
+
+    expect(produto.definirCodigoBalanca("").isOk()).toBe(true);
+    expect(produto.codigoBalanca).toBeUndefined();
+  });
+
+  it("recusa código com letra e preserva o anterior", () => {
+    const produto = criar({ tipo: "PESAVEL", unidadeBase: "KG", codigoBalanca: "0421" });
+
+    const resultado = produto.definirCodigoBalanca("04A1");
+
+    expect(resultado.isErr()).toBe(true);
+    expect(produto.codigoBalanca).toBe("0421");
+  });
+
+  it("recusa código de balança em produto que não é pesável", () => {
+    const produto = criar();
+
+    const resultado = produto.definirCodigoBalanca("0421");
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((e) => e.codigo)).toContain(
+        "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
+      );
+    }
+  });
+});

@@ -1,51 +1,53 @@
-import { type ReactNode, type Ref, type SelectHTMLAttributes, useId } from "react";
+import { type ReactNode, useId } from "react";
 
-import { juntarClasses } from "../juntarClasses.js";
-
-export interface OpcaoSelecao {
+export interface OpcaoDeSelecao {
   readonly valor: string;
   readonly rotulo: string;
 }
 
-export interface PropsCampoSelecao extends Omit<
-  SelectHTMLAttributes<HTMLSelectElement>,
-  "id" | "children"
-> {
-  readonly ref?: Ref<HTMLSelectElement>;
+export interface PropsCampoSelecao {
   readonly rotulo: string;
-  readonly opcoes: readonly OpcaoSelecao[];
-  /** Mensagem de erro. Presente = campo inválido. */
-  readonly erro?: string;
-  /** Explicação curta abaixo do campo. Some quando há erro. */
-  readonly ajuda?: string;
+  /** Explicação curta abaixo do campo. */
+  readonly ajuda?: string | undefined;
+  readonly valor: string;
+  readonly opcoes: readonly OpcaoDeSelecao[];
+  readonly aoMudar: (valor: string) => void;
+  readonly required?: boolean | undefined;
+  /**
+   * Campo travado.
+   *
+   * Existe para a tela que o usuário **pode ver e não pode alterar** — o
+   * cadastro da empresa aberto por quem não tem `config:empresa`. Esconder o
+   * valor esconderia informação que ele precisa conferir; deixá-lo editável
+   * produziria um erro do servidor depois de tudo preenchido.
+   */
+  readonly disabled?: boolean | undefined;
 }
 
 /**
- * Seleção entre opções conhecidas.
+ * Escolha entre opções conhecidas, com rótulo visível.
  *
- * É `<select>` nativo, e não uma lista construída à mão. A lista custom parece
- * melhor na captura de tela e é pior em tudo o que importa aqui: o nativo abre
- * com o teclado, filtra ao digitar a primeira letra, é lido corretamente por
- * leitor de tela e vira roda de rolagem no celular sem uma linha de código.
+ * `<select>` nativo de propósito. Uma lista customizada teria que reimplementar
+ * teclado, leitor de tela e o comportamento de rolagem do celular — e o
+ * resultado seria pior que o nativo em todos os três. O produto atende balcão,
+ * onde a mão vai do teclado ao leitor de código: componente que só responde a
+ * mouse é veto do papel UX.
  *
- * Não há opção vazia automática: quando o campo é obrigatório, quem chama passa
- * um valor inicial. "Selecione…" como estado válido é o que produz cadastro
- * salvo pela metade quando alguém esquece de conferir no servidor.
+ * O rótulo é obrigatório e sempre visível, pelo mesmo motivo de `CampoTexto`:
+ * quem foi interrompido no meio do preenchimento não descobre mais o que aquele
+ * campo pedia.
  */
 export function CampoSelecao({
-  ref,
   rotulo,
-  opcoes,
-  erro,
   ajuda,
-  className,
+  valor,
+  opcoes,
+  aoMudar,
   required,
-  ...resto
+  disabled,
 }: PropsCampoSelecao): ReactNode {
   const id = useId();
-  const idErro = `${id}-erro`;
   const idAjuda = `${id}-ajuda`;
-  const invalido = erro !== undefined && erro !== "";
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -63,18 +65,15 @@ export function CampoSelecao({
       </label>
 
       <select
-        ref={ref}
         id={id}
         required={required}
-        aria-invalid={invalido || undefined}
-        aria-describedby={invalido ? idErro : ajuda !== undefined ? idAjuda : undefined}
-        className={juntarClasses(
-          "min-h-alvo rounded-md border bg-papel px-3 text-base text-tinta",
-          "disabled:cursor-not-allowed disabled:opacity-55",
-          invalido ? "border-erro" : "border-borda",
-          className,
-        )}
-        {...resto}
+        disabled={disabled}
+        value={valor}
+        aria-describedby={ajuda === undefined ? undefined : idAjuda}
+        onChange={(evento) => {
+          aoMudar(evento.target.value);
+        }}
+        className="min-h-alvo rounded-md border border-borda bg-papel px-3 text-base text-tinta disabled:cursor-not-allowed disabled:opacity-55"
       >
         {opcoes.map((opcao) => (
           <option key={opcao.valor} value={opcao.valor}>
@@ -83,16 +82,10 @@ export function CampoSelecao({
         ))}
       </select>
 
-      {invalido ? (
-        <p id={idErro} role="alert" className="text-sm text-erro">
-          {erro}
+      {ajuda !== undefined && (
+        <p id={idAjuda} className="text-sm text-tinta-suave">
+          {ajuda}
         </p>
-      ) : (
-        ajuda !== undefined && (
-          <p id={idAjuda} className="text-sm text-tinta-suave">
-            {ajuda}
-          </p>
-        )
       )}
     </div>
   );

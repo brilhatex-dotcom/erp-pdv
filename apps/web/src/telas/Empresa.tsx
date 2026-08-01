@@ -5,7 +5,7 @@ import {
   CampoTexto,
   Carregando,
   ErroDeTela,
-  type OpcaoSelecao,
+  type OpcaoDeSelecao,
 } from "@erp/ui";
 import { type ReactNode, type SyntheticEvent, useEffect, useRef, useState } from "react";
 
@@ -60,7 +60,7 @@ type Estado =
   | { readonly fase: "PRONTO"; readonly empresa: EmpresaCadastrada | undefined }
   | { readonly fase: "FALHOU"; readonly mensagem: string };
 
-const REGIMES: readonly OpcaoSelecao[] = [
+const REGIMES: readonly OpcaoDeSelecao[] = [
   { valor: "SIMPLES_NACIONAL", rotulo: "Simples Nacional" },
   {
     valor: "SIMPLES_EXCESSO_SUBLIMITE",
@@ -70,7 +70,7 @@ const REGIMES: readonly OpcaoSelecao[] = [
   { valor: "MEI", rotulo: "MEI — Microempreendedor Individual" },
 ];
 
-const UFS: readonly OpcaoSelecao[] = [
+const UFS: readonly OpcaoDeSelecao[] = [
   "AC",
   "AL",
   "AM",
@@ -326,10 +326,8 @@ function Formulario({ empresa, somenteLeitura, aoSalvar }: PropsFormulario): Rea
           opcoes={REGIMES}
           disabled={somenteLeitura}
           ajuda="Na dúvida, confirme com o contador."
-          value={regime}
-          onChange={(evento) => {
-            setRegime(evento.target.value);
-          }}
+          valor={regime}
+          aoMudar={setRegime}
         />
 
         <CampoTexto
@@ -417,10 +415,8 @@ function Formulario({ empresa, somenteLeitura, aoSalvar }: PropsFormulario): Rea
             required
             opcoes={UFS}
             disabled={somenteLeitura}
-            value={uf}
-            onChange={(evento) => {
-              setUf(evento.target.value);
-            }}
+            valor={uf}
+            aoMudar={setUf}
           />
 
           <CampoTexto
