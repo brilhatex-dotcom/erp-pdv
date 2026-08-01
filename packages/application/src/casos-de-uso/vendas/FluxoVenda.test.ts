@@ -1,4 +1,5 @@
 import {
+  Cliente,
   CodigoBarras,
   Dinheiro,
   Identificador,
@@ -71,6 +72,17 @@ function montar() {
 
   ambiente.produtos.adicionar(refrigerante());
   ambiente.produtos.adicionar(picanha());
+
+  // O cliente precisa existir de verdade: a venda a prazo grava o nome dele no
+  // título, e o nome sai do cadastro (ADR-0025).
+  void ambiente.clientes.salvar(
+    Cliente.criar({
+      id: CLIENTE,
+      nome: "Ana Maria de Souza",
+      tipoPessoa: "FISICA",
+      limiteCredito: reais("500,00"),
+    }).unwrap(),
+  );
 
   return {
     ...ambiente,
@@ -443,7 +455,9 @@ describe("Fluxo de venda — crediário", () => {
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
-    await sistema.finalizarVenda.executar({ vendaId: venda.id });
+    const fechada = await sistema.finalizarVenda.executar({ vendaId: venda.id });
+
+    expect(fechada.isOk()).toBe(true);
 
     const caixa = (await sistema.caixas.porId(CAIXA_ID))!;
 
@@ -452,6 +466,144 @@ describe("Fluxo de venda — crediário", () => {
 
     const evento = sistema.outbox.eventos[0] as VendaFinalizada;
     expect(evento.valorAReceber.formatar()).toBe("R$ 9,90");
+  });
+
+  it("🔑 a venda a prazo nasce com a conta a receber, na mesma transação", async () => {
+    // Se a venda gravasse e o título não, o lojista teria entregado mercadoria
+    // sem registro da dívida — o defeito que o módulo existe para corrigir
+    // (ADR-0025).
+    const venda = (
+      await sistema.iniciarVenda.executar({
+        estacaoId: ESTACAO,
+        operadorId: OPERADOR,
+        clienteId: CLIENTE,
+      })
+    ).unwrap();
+
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.registrarPagamento.executar({
+      vendaId: venda.id,
+      forma: "CREDIARIO",
+      valor: reais("9,90"),
+    });
+
+    const fechada = await sistema.finalizarVenda.executar({ vendaId: venda.id });
+
+    const [titulo] = fechada.unwrap().titulos;
+    expect(titulo?.valorOriginal.formatar()).toBe("R$ 9,90");
+    expect(titulo?.tipo).toBe("RECEBER");
+    expect(titulo?.contraparteNome).toBe("Ana Maria de Souza");
+    // Trinta dias: é o "acerto no mês que vem" do bairro.
+    expect(titulo?.vencimento.toISOString()).toBe("2026-08-29T12:00:00.000Z");
+    expect(titulo?.parcela).toBeUndefined();
+
+    // E está gravado, não só devolvido.
+    expect(await sistema.titulos.porDocumento(venda.id)).toHaveLength(1);
+  });
+
+  it("🔑 o operador pode parcelar o crediário", async () => {
+    const venda = (
+      await sistema.iniciarVenda.executar({
+        estacaoId: ESTACAO,
+        operadorId: OPERADOR,
+        clienteId: CLIENTE,
+      })
+    ).unwrap();
+
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.registrarPagamento.executar({
+      vendaId: venda.id,
+      forma: "CREDIARIO",
+      valor: reais("29,70"),
+    });
+
+    const fechada = await sistema.finalizarVenda.executar({
+      vendaId: venda.id,
+      crediario: { parcelas: 3 },
+    });
+
+    const titulos = fechada.unwrap().titulos;
+    expect(titulos).toHaveLength(3);
+    expect(titulos.map((titulo) => titulo.valorOriginal.formatar())).toEqual([
+      "R$ 9,90",
+      "R$ 9,90",
+      "R$ 9,90",
+    ]);
+    expect(titulos[1]?.parcela).toEqual({ numero: 2, de: 3 });
+  });
+
+  it("🔑 crediário para cliente que sumiu do cadastro derruba a venda inteira", async () => {
+    // Acontece quando o cadastro é apagado entre o início e o fechamento da
+    // venda. Gravar a venda sem o título deixaria mercadoria entregue sem
+    // registro da dívida — a transação inteira é desfeita, de propósito.
+    const outroCliente = Identificador.criar(
+      "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f6099",
+    ).unwrap();
+
+    const venda = (
+      await sistema.iniciarVenda.executar({
+        estacaoId: ESTACAO,
+        operadorId: OPERADOR,
+        clienteId: outroCliente,
+      })
+    ).unwrap();
+
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.registrarPagamento.executar({
+      vendaId: venda.id,
+      forma: "CREDIARIO",
+      valor: reais("9,90"),
+    });
+
+    const fechada = await sistema.finalizarVenda.executar({ vendaId: venda.id });
+
+    expect(fechada.isErr()).toBe(true);
+    if (fechada.isErr()) {
+      expect(fechada.error.codigo).toBe("CLIENTE_NAO_ENCONTRADO");
+    }
+  });
+
+  it("parcelamento impossível recusa a venda em vez de gerar título torto", async () => {
+    const venda = (
+      await sistema.iniciarVenda.executar({
+        estacaoId: ESTACAO,
+        operadorId: OPERADOR,
+        clienteId: CLIENTE,
+      })
+    ).unwrap();
+
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.registrarPagamento.executar({
+      vendaId: venda.id,
+      forma: "CREDIARIO",
+      valor: reais("9,90"),
+    });
+
+    const fechada = await sistema.finalizarVenda.executar({
+      vendaId: venda.id,
+      crediario: { parcelas: 99 },
+    });
+
+    expect(fechada.isErr()).toBe(true);
+  });
+
+  it("venda à vista não gera título nenhum", async () => {
+    const venda = (
+      await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
+    ).unwrap();
+
+    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.registrarPagamento.executar({
+      vendaId: venda.id,
+      forma: "DINHEIRO",
+      valor: reais("10,00"),
+    });
+
+    const fechada = await sistema.finalizarVenda.executar({ vendaId: venda.id });
+
+    expect(fechada.unwrap().titulos).toHaveLength(0);
   });
 
   it("recusa crediário sem cliente identificado", async () => {

@@ -22,6 +22,8 @@ import {
   type SessaoCaixa,
   type Usuario,
   type Venda,
+  type TipoTitulo,
+  type Titulo,
 } from "@erp/domain";
 import { normalizarParaBusca } from "@erp/utils";
 
@@ -51,6 +53,10 @@ import type {
   SessaoAcessoRepository,
   UsuarioRepository,
 } from "../portas/repositorios/RepositoriosAcesso.js";
+import type {
+  FiltroTitulos,
+  TituloRepository,
+} from "../portas/repositorios/RepositoriosFinanceiro.js";
 
 /**
  * Dublês em memória das portas.
@@ -185,6 +191,72 @@ export class EstoqueRepositorioEmMemoria implements EstoqueRepository {
 
   registrar(movimento: MovimentoEstoque): Promise<void> {
     this.movimentos.push(movimento);
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Títulos em memória.
+ *
+ * Guarda o agregado, e não uma cópia — como os demais dublês. A armadilha já
+ * registrada no `ESTADO.md` vale aqui: quem verifica algo **antes** de mutar
+ * precisa fazê-lo antes mesmo, porque a leitura devolve a mesma instância que o
+ * caso de uso acabou de alterar.
+ */
+export class TituloRepositorioEmMemoria implements TituloRepository {
+  readonly itens = new Map<string, Titulo>();
+
+  porId(id: Identificador): Promise<Titulo | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porDocumento(documentoId: Identificador): Promise<readonly Titulo[]> {
+    return Promise.resolve(
+      [...this.itens.values()].filter(
+        (titulo) => titulo.documentoId?.equals(documentoId) === true,
+      ),
+    );
+  }
+
+  emAbertoDaContraparte(
+    contraparteId: Identificador,
+    tipo: TipoTitulo,
+  ): Promise<readonly Titulo[]> {
+    return Promise.resolve(
+      [...this.itens.values()].filter(
+        (titulo) =>
+          titulo.contraparteId?.equals(contraparteId) === true &&
+          titulo.tipo === tipo &&
+          !titulo.estaCancelado &&
+          !titulo.estaQuitado,
+      ),
+    );
+  }
+
+  buscar(filtro: FiltroTitulos): Promise<readonly Titulo[]> {
+    const achados = [...this.itens.values()]
+      .filter((titulo) => filtro.tipo === undefined || titulo.tipo === filtro.tipo)
+      .filter(
+        (titulo) =>
+          filtro.contraparteId === undefined ||
+          titulo.contraparteId?.equals(filtro.contraparteId) === true,
+      )
+      .filter(
+        (titulo) =>
+          filtro.apenasEmAberto !== true ||
+          (!titulo.estaCancelado && !titulo.estaQuitado),
+      )
+      .filter(
+        (titulo) =>
+          filtro.vencidosAte === undefined || titulo.estaVencidoEm(filtro.vencidosAte),
+      )
+      .sort((um, outro) => um.vencimento.getTime() - outro.vencimento.getTime());
+
+    return Promise.resolve(achados.slice(0, filtro.limite));
+  }
+
+  salvar(titulo: Titulo): Promise<void> {
+    this.itens.set(titulo.id.valor, titulo);
     return Promise.resolve();
   }
 }
@@ -554,6 +626,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly clientes: ClienteRepositorioEmMemoria;
   readonly fornecedores: FornecedorRepositorioEmMemoria;
   readonly notasDeCompra: NotaDeCompraRepositorioEmMemoria;
+  readonly titulos: TituloRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -572,6 +645,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const clientes = new ClienteRepositorioEmMemoria();
   const fornecedores = new FornecedorRepositorioEmMemoria();
   const notasDeCompra = new NotaDeCompraRepositorioEmMemoria();
+  const titulos = new TituloRepositorioEmMemoria();
 
   return {
     produtos,
@@ -587,6 +661,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     clientes,
     fornecedores,
     notasDeCompra,
+    titulos,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -602,6 +677,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       clientes,
       fornecedores,
       notasDeCompra,
+      titulos,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

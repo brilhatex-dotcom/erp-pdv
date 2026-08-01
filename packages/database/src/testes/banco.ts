@@ -51,6 +51,8 @@ export function criarClienteDeTeste(): PrismaClient {
 export async function limparBanco(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "baixas_titulo",
+      "titulos",
       "itens_nota_compra",
       "notas_compra",
       "eventos_outbox",

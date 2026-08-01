@@ -53,12 +53,12 @@ model Produto {
   criadoEm           DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
   atualizadoEm       DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
-  referencias    ReferenciaProduto[]
-  embalagens     Embalagem[]
-  movimentos     MovimentoEstoque[]
-  saldo          SaldoEstoque?
-  itensVenda     VendaItem[]
-  itensDeCompra  ItemNotaCompra[]
+  referencias   ReferenciaProduto[]
+  embalagens    Embalagem[]
+  movimentos    MovimentoEstoque[]
+  saldo         SaldoEstoque?
+  itensVenda    VendaItem[]
+  itensDeCompra ItemNotaCompra[]
 
   // Só produtos ativos aparecem na busca do PDV; o índice parcial mantém a
   // estrutura pequena e o plano previsível (RNF-02).
@@ -640,23 +640,23 @@ enum StatusNotaCompra {
 /// nota → fornecedor — que permite conferir uma divergência de inventário sem
 /// passo faltando.
 model NotaDeCompra {
-  id             String           @id @db.Uuid
-  fornecedorId   String           @map("fornecedor_id") @db.Uuid
-  numero         String           @db.VarChar(20)
+  id                 String           @id @db.Uuid
+  fornecedorId       String           @map("fornecedor_id") @db.Uuid
+  numero             String           @db.VarChar(20)
   /// Vazio significa "sem série", e **não** nulo: no PostgreSQL dois `NULL` são
   /// distintos, e o índice único deixaria passar a mesma nota duas vezes —
   /// justamente o defeito que ele existe para impedir.
-  serie          String           @default("") @db.VarChar(5)
-  emitidaEm      DateTime         @map("emitida_em") @db.Timestamptz(3)
-  recebidaEm     DateTime         @map("recebida_em") @db.Timestamptz(3)
+  serie              String           @default("") @db.VarChar(5)
+  emitidaEm          DateTime         @map("emitida_em") @db.Timestamptz(3)
+  recebidaEm         DateTime         @map("recebida_em") @db.Timestamptz(3)
   /// Centavos — total impresso na nota, guardado para conferência de digitação.
-  totalDeclarado BigInt           @map("total_declarado")
-  usuarioId      String           @map("usuario_id") @db.Uuid
-  observacao     String?          @db.VarChar(500)
-  status         StatusNotaCompra @default(LANCADA)
-  canceladaEm        DateTime? @map("cancelada_em") @db.Timestamptz(3)
-  motivoCancelamento String?   @map("motivo_cancelamento") @db.VarChar(500)
-  criadoEm           DateTime  @default(now()) @map("criado_em") @db.Timestamptz(3)
+  totalDeclarado     BigInt           @map("total_declarado")
+  usuarioId          String           @map("usuario_id") @db.Uuid
+  observacao         String?          @db.VarChar(500)
+  status             StatusNotaCompra @default(LANCADA)
+  canceladaEm        DateTime?        @map("cancelada_em") @db.Timestamptz(3)
+  motivoCancelamento String?          @map("motivo_cancelamento") @db.VarChar(500)
+  criadoEm           DateTime         @default(now()) @map("criado_em") @db.Timestamptz(3)
 
   fornecedor Fornecedor       @relation(fields: [fornecedorId], references: [id])
   itens      ItemNotaCompra[]
@@ -696,4 +696,105 @@ model ItemNotaCompra {
   @@id([notaId, numero])
   @@index([produtoId], map: "idx_itens_nota_produto")
   @@map("itens_nota_compra")
+}
+
+/// Título a receber ou a pagar.
+///
+/// É a caderneta do lojista — o fiado que hoje mora num caderno e é onde o dono
+/// mais perde dinheiro (`ANALISE-SEGMENTOS.md` §3.3).
+///
+/// **Não há coluna de saldo nem de situação.** As duas são derivadas das baixas
+/// (princípio 5): saldo é o valor original menos a soma delas, e a situação sai
+/// do saldo. Guardar qualquer uma criaria um segundo lugar onde a verdade mora,
+/// e no dia em que discordassem ninguém saberia qual está certa.
+model Titulo {
+  id     String       @id @db.Uuid
+  tipo   TipoTitulo
+  origem OrigemTitulo
+
+  /// Venda ou nota de compra que o gerou. Nulo quando lançado à mão.
+  ///
+  /// Sem chave estrangeira de propósito: aponta para **duas** tabelas
+  /// diferentes conforme a origem, e o PostgreSQL não tem FK polimórfica. A
+  /// integridade é garantida no caso de uso, que só grava o id de um documento
+  /// que acabou de ler.
+  documentoId String? @map("documento_id") @db.Uuid
+
+  /// Cliente (a receber) ou fornecedor (a pagar). Nulo na conta de luz, que não
+  /// tem cadastro — exigi-lo faria o lojista cadastrar a concessionária.
+  contraparteId   String? @map("contraparte_id") @db.Uuid
+  /// Congelado no lançamento: renomear o cliente não reescreve a caderneta.
+  contraparteNome String  @map("contraparte_nome") @db.VarChar(120)
+
+  /// Centavos. Nunca muda — o que muda é quanto já foi baixado.
+  valorOriginal BigInt   @map("valor_original")
+  vencimento    DateTime @db.Timestamptz(3)
+  emitidoEm     DateTime @map("emitido_em") @db.Timestamptz(3)
+
+  /// `2 de 6` no carnê. Nulos no título único: `1 de 1` seria ruído.
+  parcelaNumero Int? @map("parcela_numero")
+  parcelaDe     Int? @map("parcela_de")
+
+  descricao String? @db.VarChar(200)
+
+  canceladoEm        DateTime? @map("cancelado_em") @db.Timestamptz(3)
+  motivoCancelamento String?   @map("motivo_cancelamento") @db.VarChar(500)
+
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  baixas BaixaTitulo[]
+
+  /// Cobre a pergunta do balcão — "quanto o seu José deve?" — e a da tela de
+  /// cobrança, que lista por vencimento.
+  @@index([tipo, contraparteId], map: "idx_titulos_tipo_contraparte")
+  @@index([tipo, vencimento], map: "idx_titulos_tipo_vencimento")
+  @@index([documentoId], map: "idx_titulos_documento")
+  @@map("titulos")
+}
+
+/// Um lançamento no título: recebimento ou estorno.
+///
+/// **Append-only.** Corrigir um recebimento errado grava um `ESTORNO`, nunca um
+/// `UPDATE` — o cliente que pagou R$ 50 e viu o valor sumir do extrato não
+/// confia mais na caderneta do sistema do que confiava na de papel. Um gatilho
+/// no banco recusa `UPDATE` e `DELETE`, como em `movimentos_estoque`.
+model BaixaTitulo {
+  id       String    @id @db.Uuid
+  tituloId String    @map("titulo_id") @db.Uuid
+  tipo     TipoBaixa
+
+  /// Centavos. No estorno, repete o valor da baixa que ele desfaz.
+  valor      BigInt
+  ocorridaEm DateTime @map("ocorrida_em") @db.Timestamptz(3)
+  usuarioId  String   @map("usuario_id") @db.Uuid
+  /// Como o dinheiro entrou. Nulo no estorno.
+  forma      String?  @db.VarChar(30)
+  observacao String?  @db.VarChar(500)
+  /// Preenchido no estorno: qual recebimento ele desfaz.
+  estornaId  String?  @map("estorna_id") @db.Uuid
+
+  titulo Titulo @relation(fields: [tituloId], references: [id], onDelete: Cascade)
+
+  /// Um recebimento só é estornado uma vez. Sem isto, dois cliques no botão
+  /// devolveriam o dobro ao saldo e a dívida do cliente cresceria sozinha.
+  @@unique([estornaId], map: "uq_baixa_estorno_unico")
+  @@index([tituloId, ocorridaEm], map: "idx_baixas_titulo_data")
+  @@map("baixas_titulo")
+}
+
+enum TipoTitulo {
+  RECEBER
+  PAGAR
+}
+
+enum OrigemTitulo {
+  VENDA
+  COMPRA
+  MANUAL
+}
+
+enum TipoBaixa {
+  PAGAMENTO
+  ESTORNO
 }

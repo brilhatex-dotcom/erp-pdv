@@ -18,6 +18,7 @@ import { EmpresaRepositorioPrisma } from "./repositorios/EmpresaRepositorioPrism
 import { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 import { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 import { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";
+import { TituloRepositorioPrisma } from "./repositorios/TituloRepositorioPrisma.js";
 import { VendaRepositorioPrisma } from "./repositorios/VendaRepositorioPrisma.js";
 
 /** Erro interno usado só para forçar o `ROLLBACK` — nunca escapa desta classe. */
@@ -114,6 +115,7 @@ export function montarRepositorios(tx: Prisma.TransactionClient): Repositorios {
     papeis: new PapelRepositorioPrisma(tx),
     sessoes: new SessaoAcessoRepositorioPrisma(tx),
     empresa: new EmpresaRepositorioPrisma(tx),
+    titulos: new TituloRepositorioPrisma(tx),
     categorias: new CategoriaRepositorioPrisma(tx),
     clientes: new ClienteRepositorioPrisma(tx),
     fornecedores: new FornecedorRepositorioPrisma(tx),

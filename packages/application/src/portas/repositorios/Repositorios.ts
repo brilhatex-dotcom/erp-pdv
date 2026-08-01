@@ -1,4 +1,5 @@
 import type { FiltroBusca } from "./FiltroBusca.js";
+import type { TituloRepository } from "./RepositoriosFinanceiro.js";
 import type {
   CategoriaRepository,
   EmpresaRepository,
@@ -136,4 +137,5 @@ export interface Repositorios {
   readonly clientes: ClienteRepository;
   readonly fornecedores: FornecedorRepository;
   readonly notasDeCompra: NotaDeCompraRepository;
+  readonly titulos: TituloRepository;
 }
