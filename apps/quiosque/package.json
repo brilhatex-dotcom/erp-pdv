@@ -1,0 +1,23 @@
+{
+  "name": "@erp/quiosque",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Casca Electron opcional: abre a PWA do PDV em tela cheia, sem lógica",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "pnpm build && electron dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "electron": "^33.4.11",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

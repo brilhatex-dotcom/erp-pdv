@@ -44,10 +44,10 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 01/08/2026 | O que ela mexe |
 |---|---|---|
-| `claude/agente-local` | Aguardando merge (PR #9) | Implementa o **ADR-0023**: move `apps/pdv/src/principal/**` para um `apps/agente/` novo e cria `packages/agente-contrato`. Toca impressão, fila offline e catálogo replicado. **Ao mesclar, apague-a e esvazie esta tabela** |
+| `claude/pwa-e-quiosque` | Aguardando merge | Manifesto e service worker do PDV (`apps/pdv/src/sw/`) e a casca de quiosque (`apps/quiosque/`). **Ao mesclar, apague-a e esvazie esta tabela** |
 
-> Já mescladas e apagadas: `claude/gestao-de-usuarios` e
-> `claude/cadastro-de-empresa`.
+> Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`
+> e `claude/agente-local`.
 
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
@@ -89,10 +89,11 @@ movimentação é o pior de resolver.
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
+| **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
+| **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 
-**2.449 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (20 tarefas —
-entraram `@erp/agente` e `@erp/agente-contrato`). O grafo de dependências ficou **sem
-nenhum órfão**: os dois avisos que sobravam eram do processo Electron, que saiu.
+**2.483 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (21 tarefas).
+O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
 
@@ -129,9 +130,14 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 da venda **já grava o título**, então o que falta é a baixa, o extrato e a
 cobrança — não o registro.
 
-Dois candidatos baratos podem entrar antes, se a preferência for fechar
-pendências curtas: o **manifesto PWA** (módulo 18) encerra o ADR-0023, e a
-**casca Electron de quiosque** é trabalho de poucas horas. Ambos em §2.4.
+Os dois itens curtos que estavam aqui — manifesto PWA e casca de quiosque —
+foram feitos. O **ADR-0023 está encerrado**.
+
+> ⚠️ **O servidor da loja ainda não serve a PWA.** Hoje a PWA sobe pelo Vite em
+> desenvolvimento; em produção quem entrega `index.html`, `sw.js` e os ícones é o
+> servidor da loja, e isso ainda não existe. Sem esse passo o service worker não
+> registra: ele só vale para conteúdo servido pela mesma origem. **É parte do
+> módulo 16 (Instalação)** e está listado em §2.4.
 
 ### 2.2 Módulos do ERP, na ordem pedida
 
@@ -154,7 +160,7 @@ pendências curtas: o **manifesto PWA** (módulo 18) encerra o ADR-0023, e a
 | 15 | **Backup** | ⬜ Nada existe |
 | 16 | **Instalação** | ⬜ Instalador Windows com PostgreSQL e Agente Local embarcados. **Não depende do fiscal** (ADR-0022) |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
-| 18 | **PWA** | ⬜ Manifesto, service worker e instalação na área de trabalho |
+| 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
 | 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto no Agente; faltam Bematech, Elgin, Epson e Daruma |
 
@@ -176,10 +182,14 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
-- **A casca Electron de quiosque ainda não existe** (ADR-0023). O processo
-  principal antigo foi removido junto com a migração para o Agente; a casca fina
-  — que só abre a PWA em tela cheia — é trabalho de poucas horas, para quando
-  houver instalador. Ela não pode ganhar lógica.
+- **O servidor da loja não serve a PWA.** `apps/pdv` gera `dist/` com
+  `index.html`, `sw.js`, manifesto e ícones, e ninguém os entrega em produção —
+  não há servidor de estáticos em `apps/server`. **Consequência direta: o service
+  worker não registra**, porque ele exige mesma origem. Entra no módulo 16
+  (Instalação), junto com a decisão de onde o `dist/` mora depois de instalado.
+- **O ícone do PWA é provisório.** Gerado por `apps/pdv/scripts/gerar-icones.mjs`,
+  um cupom estilizado sem tipografia. Serve para a instalabilidade; a marca do
+  produto substitui os três PNG sem tocar em código.
 - **O segredo do Agente vem de `VITE_SEGREDO_AGENTE` no build da PWA.** É
   provisório e está marcado como tal em `balcao.ts`: o certo é o servidor da loja
   entregá-lo junto com a sessão, para não viajar dentro de um bundle público.
