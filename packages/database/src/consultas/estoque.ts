@@ -156,6 +156,19 @@ const ENTRADAS: ReadonlySet<string> = new Set([
  * É a resposta para "por que o saldo está assim" — a pergunta que aparece
  * sempre que a contagem física não bate. Sem extrato, a resposta seria mexer no
  * banco na loja do cliente.
+ *
+ * ### O desempate pelo id não é detalhe
+ *
+ * Uma nota de entrada com cinco itens grava os cinco movimentos na **mesma
+ * transação**, com o mesmo `ocorrido_em`. Ordenar só por instante deixa a ordem
+ * a cargo do plano de execução: a mesma consulta devolve uma sequência hoje e
+ * outra amanhã, quando a tabela crescer e as estatísticas mudarem. Quem confere
+ * o estoque veria a lista dançar entre duas atualizações da tela e desconfiaria
+ * do sistema — com razão.
+ *
+ * O id é UUIDv7 (ADR-0008), monotônico no tempo por construção, então ele
+ * desempata **na ordem em que os movimentos foram criados** — não numa ordem
+ * arbitrária qualquer.
  */
 export async function extratoDeEstoque(
   prisma: PrismaClient,
@@ -164,7 +177,7 @@ export async function extratoDeEstoque(
 ): Promise<readonly MovimentoDoExtrato[]> {
   const linhas = await prisma.movimentoEstoque.findMany({
     where: { produtoId },
-    orderBy: { ocorridoEm: "desc" },
+    orderBy: [{ ocorridoEm: "desc" }, { id: "desc" }],
     take: opcoes.limite,
   });
 

@@ -124,6 +124,11 @@ function preencher(rotulo: RegExp, valor: string): void {
   fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } });
 }
 
+/** Mesma ideia para `<select>`. A escolha por teclado tem teste no `@erp/ui`. */
+function selecionar(rotulo: RegExp | string, valor: string): void {
+  fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } });
+}
+
 describe("primeira abertura", () => {
   it("🔑 instalação sem cadastro abre o formulário em branco", async () => {
     // 204, não 404: a loja recém-instalada não perdeu um cadastro. Dizer "não
@@ -172,8 +177,8 @@ describe("primeira abertura", () => {
     preencher(/Telefone/, "(19) 3888-7777");
     preencher(/E-mail/, "contato@paoquente.com.br");
 
-    await userEvent.selectOptions(screen.getByLabelText(/Regime tributário/), "MEI");
-    await userEvent.selectOptions(screen.getByLabelText("UF *(obrigatório)"), "MG");
+    selecionar(/Regime tributário/, "MEI");
+    selecionar("UF *(obrigatório)", "MG");
 
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
@@ -181,8 +186,7 @@ describe("primeira abertura", () => {
     expect(put?.corpo).toEqual({
       razaoSocial: "Padaria Pão Quente Ltda",
       nomeFantasia: "Pão Quente",
-      // Máscara digitada, dígitos enviados: o servidor não deve receber pontuação.
-      // A pontuação foi digitada e não chega ao servidor: a máscara é da tela.
+      // A pontuação foi preenchida e não chega ao servidor: a máscara é da tela.
       cnpj: "11222333000181",
       regimeTributario: "MEI",
       inscricaoEstadual: "110042490114",
@@ -200,7 +204,12 @@ describe("primeira abertura", () => {
         cep: "13400000",
       },
     });
-  });
+    // Teto de 20 s só para este caso. Ele monta e preenche o maior formulário
+    // do produto dentro do jsdom, e o runner do CI roda dez pacotes em paralelo
+    // em duas vCPUs — o mesmo caso leva menos de meio segundo numa máquina
+    // ociosa. O limite existe para acusar travamento, não para medir a
+    // velocidade da máquina que passou a rodar a suíte.
+  }, 20_000);
 });
 
 describe("falha ao carregar", () => {
