@@ -1,5 +1,5 @@
 import { ClienteApi, ProvedorSessao, Sessao } from "@erp/cliente-api";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,6 +113,17 @@ beforeEach(() => {
   globalThis.localStorage.clear();
 });
 
+/**
+ * Define o valor de um campo de uma vez, sem simular teclado.
+ *
+ * O `onChange` da tela roda igual — inclusive a máscara que descarta a
+ * pontuação. O que não roda é um re-render por caractere, que é o que torna o
+ * preenchimento do formulário inteiro lento demais para o limite do CI.
+ */
+function preencher(rotulo: RegExp, valor: string): void {
+  fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } });
+}
+
 describe("primeira abertura", () => {
   it("🔑 instalação sem cadastro abre o formulário em branco", async () => {
     // 204, não 404: a loja recém-instalada não perdeu um cadastro. Dizer "não
@@ -130,32 +141,39 @@ describe("primeira abertura", () => {
   });
 
   it("🔑 preenche o cadastro inteiro e manda tudo de uma vez", async () => {
-    // Este é o caminho da implantação: o técnico abre a tela uma vez, digita
+    // Este é o caminho da implantação: o técnico abre a tela uma vez, preenche
     // tudo e vai embora. Um campo que não chega ao servidor só aparece meses
     // depois, no cabeçalho errado de um relatório.
+    //
+    // `fireEvent.change` em vez de `userEvent.type`: são dezesseis campos, e
+    // digitar tecla a tecla re-renderiza o formulário inteiro a cada
+    // caractere — o teste levava mais de 5 s no CI, estourava o limite e
+    // contaminava os dois casos seguintes. O que se verifica aqui é o
+    // **mapeamento de estado para corpo**, não a digitação; as máscaras têm
+    // testes próprios, com poucos campos e teclado de verdade.
     const { chamadas } = montar(undefined);
 
-    await userEvent.type(
-      await screen.findByLabelText(/Razão social/),
-      "Padaria Pão Quente Ltda",
-    );
-    await userEvent.type(screen.getByLabelText(/Nome fantasia/), "Pão Quente");
-    await userEvent.type(screen.getByLabelText(/CNPJ/), "11.222.333/0001-81");
+    await screen.findByLabelText(/Razão social/);
+
+    preencher(/Razão social/, "Padaria Pão Quente Ltda");
+    preencher(/Nome fantasia/, "Pão Quente");
+    preencher(/CNPJ/, "11.222.333/0001-81");
+    preencher(/Inscrição estadual/, "110042490114");
+    preencher(/Inscrição municipal/, "998877");
+
+    preencher(/Logradouro/, "Rua das Acácias");
+    preencher(/Número/, "45");
+    preencher(/Complemento/, "Loja 2");
+    preencher(/Bairro/, "Vila Nova");
+    preencher(/Município/, "Piracicaba");
+    preencher(/CEP/, "13400-000");
+    preencher(/Código IBGE/, "3538709");
+
+    preencher(/Telefone/, "(19) 3888-7777");
+    preencher(/E-mail/, "contato@paoquente.com.br");
+
     await userEvent.selectOptions(screen.getByLabelText(/Regime tributário/), "MEI");
-    await userEvent.type(screen.getByLabelText(/Inscrição estadual/), "110042490114");
-    await userEvent.type(screen.getByLabelText(/Inscrição municipal/), "998877");
-
-    await userEvent.type(screen.getByLabelText(/Logradouro/), "Rua das Acácias");
-    await userEvent.type(screen.getByLabelText(/Número/), "45");
-    await userEvent.type(screen.getByLabelText(/Complemento/), "Loja 2");
-    await userEvent.type(screen.getByLabelText(/Bairro/), "Vila Nova");
-    await userEvent.type(screen.getByLabelText(/Município/), "Piracicaba");
     await userEvent.selectOptions(screen.getByLabelText("UF *(obrigatório)"), "MG");
-    await userEvent.type(screen.getByLabelText(/CEP/), "13400-000");
-    await userEvent.type(screen.getByLabelText(/Código IBGE/), "3538709");
-
-    await userEvent.type(screen.getByLabelText(/Telefone/), "(19) 3888-7777");
-    await userEvent.type(screen.getByLabelText(/E-mail/), "contato@paoquente.com.br");
 
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
@@ -164,6 +182,7 @@ describe("primeira abertura", () => {
       razaoSocial: "Padaria Pão Quente Ltda",
       nomeFantasia: "Pão Quente",
       // Máscara digitada, dígitos enviados: o servidor não deve receber pontuação.
+      // A pontuação foi digitada e não chega ao servidor: a máscara é da tela.
       cnpj: "11222333000181",
       regimeTributario: "MEI",
       inscricaoEstadual: "110042490114",
@@ -259,7 +278,10 @@ describe("salvamento", () => {
     // Poupa o operador de esperar o servidor para saber que faltou um dígito.
     const { chamadas } = montar(undefined);
 
-    await userEvent.type(await screen.findByLabelText(/Razão social/), "Loja Teste");
+    await screen.findByLabelText(/Razão social/);
+    preencher(/Razão social/, "Loja Teste");
+    // Só o CNPJ vai por teclado: é o campo que este caso investiga, e é onde a
+    // máscara de dígitos precisa rodar tecla a tecla.
     await userEvent.type(screen.getByLabelText(/CNPJ/), "112223330001");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
