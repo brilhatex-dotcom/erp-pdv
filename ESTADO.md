@@ -116,7 +116,7 @@ Duas frentes que destravam o resto:
 | # | Módulo | Situação |
 |---|---|---|
 | 1 | Login | ✅ Pronto |
-| 2 | Usuários | ⚠️ Domínio e API prontos; **falta a tela** de gestão na retaguarda |
+| 2 | Usuários | ✅ Pronto — domínio, casos de uso, rotas, tela e **primeiro acesso da instalação** |
 | 3 | **Empresas** | ⬜ §2.1 |
 | 4 | Clientes | ✅ Pronto |
 | 5 | Fornecedores | ✅ Pronto |

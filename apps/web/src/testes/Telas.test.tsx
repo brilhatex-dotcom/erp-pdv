@@ -1401,3 +1401,607 @@ describe("Formulário de fornecedor — campos opcionais", () => {
     expect(corpos).toHaveLength(antes);
   });
 });
+
+const ADMIN = {
+  ...USUARIO_GERENTE,
+  nome: "Ana Administradora",
+  papel: "ADMIN",
+  permissoes: ["usuario:criar", "usuario:editar_permissoes"],
+};
+
+const OPERADOR_NA_LISTA = {
+  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0007",
+  matricula: "42",
+  nome: "Maria da Silva",
+  papel: "OPERADOR_CAIXA",
+  ativo: true,
+  precisaTrocarCredencial: false,
+  temPin: true,
+  temSenha: false,
+};
+
+describe("Primeiro acesso da instalação", () => {
+  it("🔑 instalação sem usuários abre a configuração, não o login", async () => {
+    // Mostrar o login numa instalação vazia é oferecer uma porta que ninguém
+    // consegue abrir: criar usuário exige permissão, e ter permissão exige
+    // usuário.
+    montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Configurar o sistema" })).toBeVisible();
+    });
+
+    expect(screen.queryByLabelText(/Senha/)).toBeVisible();
+    expect(screen.getByText(/não tem recuperação por e-mail/)).toBeVisible();
+  });
+
+  it("🔑 instalação já configurada mostra o login, sem piscar a configuração", async () => {
+    montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: false }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Entrar" })).toBeVisible();
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: "Configurar o sistema" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("🔑 servidor fora do ar na primeira carga não deixa a tela em branco", async () => {
+    // Travar aqui seria pior que o login com erro: o login sabe se recuperar.
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Entrar" })).toBeVisible();
+    });
+  });
+
+  it("cria o administrador com as duas senhas iguais", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/instalacao/primeiro-administrador": () => json(201, ADMIN),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Seu nome/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana Administradora");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "cavalo bateria grampo");
+    await userEvent.type(
+      screen.getByLabelText(/Repita a senha/),
+      "cavalo bateria grampo",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    // Por URL, e não só por método: a restauração de sessão também faz um POST
+    // (`/api/acesso/renovar`), e ele viria primeiro na lista.
+    const criacao = "/api/instalacao/primeiro-administrador";
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.url === criacao)).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.url === criacao)?.corpo).toMatchObject({
+      nome: "Ana Administradora",
+      matricula: "1",
+      senha: "cavalo bateria grampo",
+    });
+  });
+
+  it("🔑 senhas diferentes são recusadas antes da rede", async () => {
+    // É a única rede de proteção que existe: não há recuperação por e-mail.
+    const { corpos } = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Seu nome/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "cavalo bateria grampo");
+    await userEvent.type(screen.getByLabelText(/Repita a senha/), "outra coisa aqui");
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("não são iguais");
+    });
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("senha curta e nome vazio são recusados antes da rede", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Seu nome/)).toBeVisible();
+    });
+
+    const antes = corpos.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Informe o seu nome");
+    });
+
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "curta");
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("12 caracteres");
+    });
+
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("recusa do servidor aparece sem perder o preenchido", async () => {
+    montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/instalacao/primeiro-administrador": () =>
+        json(409, {
+          erro: {
+            codigo: "INSTALACAO_JA_CONFIGURADA",
+            mensagem: "Esta instalação já tem usuários.",
+          },
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Seu nome/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "cavalo bateria grampo");
+    await userEvent.type(
+      screen.getByLabelText(/Repita a senha/),
+      "cavalo bateria grampo",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("já tem usuários");
+    });
+    expect(screen.getByLabelText(/Seu nome/)).toHaveValue("Ana");
+  });
+});
+
+describe("Gestão de usuários", () => {
+  async function abrirUsuarios(extras: Record<string, () => Response> = {}) {
+    const arnes = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: false }),
+      "GET /api/acesso/eu": () => json(200, ADMIN),
+      "GET /api/usuarios": () => json(200, { itens: [OPERADOR_NA_LISTA] }),
+      ...extras,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Usuários" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Usuários" }));
+
+    return arnes;
+  }
+
+  it("lista com matrícula, papel legível e forma de acesso", async () => {
+    await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByText("Maria da Silva")).toBeVisible();
+    });
+
+    expect(screen.getByText("42")).toBeVisible();
+    // O papel aparece com o nome que o lojista usa, não com o código.
+    expect(screen.getByText("Operador de caixa")).toBeVisible();
+    expect(screen.queryByText("OPERADOR_CAIXA")).not.toBeInTheDocument();
+    expect(screen.getByText("Só PIN")).toBeVisible();
+  });
+
+  it("🔑 cada papel vem com o que ele alcança", async () => {
+    // Sem isso, escolhe-se pelo nome que soa mais importante — e todo mundo na
+    // loja vira gerente.
+    await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    expect(screen.getByText("Tudo, incluindo usuários")).toBeVisible();
+    expect(screen.getByText("Somente leitura")).toBeVisible();
+  });
+
+  it("cadastra operador com PIN", async () => {
+    const { corpos } = await abrirUsuarios({
+      "POST /api/usuarios": () => json(201, OPERADOR_NA_LISTA),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "42");
+    await userEvent.type(screen.getByLabelText(/^Nome/), "Maria da Silva");
+    await userEvent.type(screen.getByLabelText(/PIN do balcão/), "999888");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      matricula: "42",
+      nome: "Maria da Silva",
+      papel: "OPERADOR_CAIXA",
+      pin: "999888",
+    });
+  });
+
+  it("🔑 usuário sem credencial nenhuma é recusado antes da rede", async () => {
+    // Cadastrar sem credencial cria alguém que nunca entra, e a falha só
+    // aparece quando a pessoa tenta trabalhar.
+    const { corpos } = await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "42");
+    await userEvent.type(screen.getByLabelText(/^Nome/), "Maria");
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("PIN do balcão, a senha");
+    });
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("editar não mostra matrícula nem credencial — são outras operações", async () => {
+    await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    expect(screen.getByLabelText(/^Nome/)).toHaveValue("Maria da Silva");
+    expect(screen.queryByLabelText(/Matrícula/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/PIN do balcão/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Acesso ativo")).toBeChecked();
+  });
+
+  it("altera papel e desativa", async () => {
+    const { corpos } = await abrirUsuarios({
+      "PUT /api/usuarios/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0007": () =>
+        json(200, OPERADOR_NA_LISTA),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+
+    await userEvent.click(screen.getByLabelText(/Supervisor/));
+    await userEvent.click(screen.getByLabelText("Acesso ativo"));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({
+      papel: "SUPERVISOR",
+      ativo: false,
+    });
+  });
+
+  it("🔑 repor credencial é o chamado mais comum, e tem tela própria", async () => {
+    const { corpos } = await abrirUsuarios({
+      "PUT /api/usuarios/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0007/credencial": () =>
+        new Response(null, { status: 204 }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Credencial" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Credencial" }));
+
+    expect(screen.getByText(/bloqueio por tentativas erradas é liberado/)).toBeVisible();
+
+    await userEvent.type(screen.getByLabelText(/Novo PIN/), "111222");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({
+      pin: "111222",
+    });
+  });
+
+  it("credencial em branco é recusada antes da rede", async () => {
+    const { corpos } = await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Credencial" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Credencial" }));
+
+    const antes = corpos.length;
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Informe o PIN");
+    });
+    expect(corpos).toHaveLength(antes);
+  });
+
+  it("cancelar volta para a lista, nas duas telas", async () => {
+    await abrirUsuarios();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Credencial" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Credencial" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+  });
+
+  it("marca quem está inativo e quem tem troca pendente", async () => {
+    await abrirUsuarios({
+      "GET /api/usuarios": () =>
+        json(200, {
+          itens: [
+            { ...OPERADOR_NA_LISTA, ativo: false },
+            {
+              ...OPERADOR_NA_LISTA,
+              id: "outro",
+              matricula: "43",
+              nome: "João",
+              precisaTrocarCredencial: true,
+            },
+            {
+              ...OPERADOR_NA_LISTA,
+              id: "terceiro",
+              matricula: "44",
+              nome: "Carla",
+              temSenha: true,
+            },
+          ],
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Inativo")).toBeVisible();
+    });
+    expect(screen.getByText("Troca pendente")).toBeVisible();
+    expect(screen.getByText("PIN e senha")).toBeVisible();
+  });
+
+  it("🔑 quem não gere usuários não vê a aba", async () => {
+    montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: false }),
+      "GET /api/acesso/eu": () => json(200, USUARIO_OPERADOR),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Produtos" })).toBeVisible();
+    });
+
+    expect(screen.queryByRole("button", { name: "Usuários" })).not.toBeInTheDocument();
+  });
+
+  it("falha ao listar oferece repetir", async () => {
+    let falhar = true;
+
+    await abrirUsuarios({
+      "GET /api/usuarios": () =>
+        falhar
+          ? json(500, { erro: { codigo: "X", mensagem: "Servidor indisponível." } })
+          : json(200, { itens: [OPERADOR_NA_LISTA] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Servidor indisponível.");
+    });
+
+    falhar = false;
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Maria da Silva")).toBeVisible();
+    });
+  });
+
+  it("lista vazia é estado vazio", async () => {
+    await abrirUsuarios({ "GET /api/usuarios": () => json(200, { itens: [] }) });
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhum usuário")).toBeVisible();
+    });
+  });
+});
+
+describe("Usuários — caminhos da retaguarda", () => {
+  it("matrícula diferente de 1 no primeiro acesso", async () => {
+    // O padrão é 1, mas quem instala pode preferir outro número.
+    const { corpos } = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/instalacao/primeiro-administrador": () => json(201, ADMIN),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Matrícula/)).toBeVisible();
+    });
+
+    await userEvent.clear(screen.getByLabelText(/Matrícula/));
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "99");
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "cavalo bateria grampo");
+    await userEvent.type(
+      screen.getByLabelText(/Repita a senha/),
+      "cavalo bateria grampo",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    const criacao = "/api/instalacao/primeiro-administrador";
+    await waitFor(() => {
+      expect(corpos.some((c) => c.url === criacao)).toBe(true);
+    });
+    expect(corpos.find((c) => c.url === criacao)?.corpo).toMatchObject({
+      matricula: "99",
+    });
+  });
+
+  async function abrirGestao(extras: Record<string, () => Response> = {}) {
+    const arnes = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: false }),
+      "GET /api/acesso/eu": () => json(200, ADMIN),
+      "GET /api/usuarios": () => json(200, { itens: [OPERADOR_NA_LISTA] }),
+      ...extras,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Usuários" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Usuários" }));
+
+    return arnes;
+  }
+
+  it("cadastra usuário só de retaguarda, com senha e sem PIN", async () => {
+    // O estoquista nunca opera caixa: dar-lhe PIN só aumenta a superfície.
+    const { corpos } = await abrirGestao({
+      "POST /api/usuarios": () => json(201, OPERADOR_NA_LISTA),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Novo usuário" }));
+
+    await userEvent.type(screen.getByLabelText(/Matrícula/), "50");
+    await userEvent.type(screen.getByLabelText(/^Nome/), "Carlos Estoquista");
+    await userEvent.click(screen.getByLabelText(/Estoquista/));
+    await userEvent.type(
+      screen.getByLabelText(/Senha da retaguarda/),
+      "cavalo bateria grampo",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.url === "/api/usuarios" && c.metodo === "POST")).toBe(
+        true,
+      );
+    });
+
+    const enviado = corpos.find((c) => c.url === "/api/usuarios" && c.metodo === "POST")
+      ?.corpo as Record<string, unknown>;
+
+    expect(enviado).toMatchObject({
+      papel: "ESTOQUISTA",
+      senha: "cavalo bateria grampo",
+    });
+    expect(enviado).not.toHaveProperty("pin");
+  });
+
+  it("repõe a senha da retaguarda de outra pessoa", async () => {
+    const { corpos } = await abrirGestao({
+      "PUT /api/usuarios/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0007/credencial": () =>
+        new Response(null, { status: 204 }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Credencial" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Credencial" }));
+
+    await userEvent.type(
+      screen.getByLabelText(/Nova senha da retaguarda/),
+      "outra frase bem longa",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "PUT")?.corpo as Record<
+      string,
+      unknown
+    >;
+    expect(enviado["senha"]).toBe("outra frase bem longa");
+    expect(enviado).not.toHaveProperty("pin");
+  });
+
+  it("🔑 a própria linha do administrador é marcada", async () => {
+    // Deixa óbvio de quem é a conta antes de ele desativar a si mesmo por
+    // engano — o servidor recusa, mas o aviso na tela vem antes.
+    await abrirGestao({
+      "GET /api/usuarios": () =>
+        json(200, {
+          itens: [
+            OPERADOR_NA_LISTA,
+            {
+              ...OPERADOR_NA_LISTA,
+              id: ADMIN.id,
+              matricula: "1",
+              nome: "Ana Administradora",
+              papel: "ADMIN",
+            },
+          ],
+        }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("(você)")).toBeVisible();
+    });
+  });
+});
