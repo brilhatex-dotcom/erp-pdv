@@ -30,7 +30,10 @@ import type { EstadoConexaoNaPonte } from "../contrato-ponte.js";
 const INTERVALO_MS = 3000;
 
 export function IndicadorConexao(): ReactNode {
-  const [estado, setEstado] = useState<EstadoConexaoNaPonte>({ tipo: "CONECTADO" });
+  const [estado, setEstado] = useState<EstadoConexaoNaPonte>({
+    tipo: "CONECTADO",
+    pendentes: 0,
+  });
 
   useEffect(() => {
     const ponte = balcao();

@@ -5,6 +5,9 @@ import {
   type Hasher,
   IniciarVenda,
   AbrirCaixa,
+  FecharCaixa,
+  RegistrarSangria,
+  RegistrarSuprimento,
   AdicionarItemPorCodigo,
   AlterarCategoria,
   AlterarCliente,
@@ -73,6 +76,9 @@ export interface Container {
   readonly autorizarOperacao: AutorizarOperacao;
 
   readonly abrirCaixa: AbrirCaixa;
+  readonly registrarSangria: RegistrarSangria;
+  readonly registrarSuprimento: RegistrarSuprimento;
+  readonly fecharCaixa: FecharCaixa;
   readonly iniciarVenda: IniciarVenda;
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
@@ -125,6 +131,10 @@ export function montarContainer(ambiente: Ambiente): Container {
   const hasher = new HasherArgon2();
   const relogio = relogioDoSistema;
   const geradorId = geradorUuidV7;
+  // Uma instância só: a política de autorização é a mesma para todo caso de uso
+  // que precisa dela, e duplicá-la abriria a porta para duas configurarem
+  // diferente sem ninguém notar.
+  const autorizar = new AutorizarOperacao(relogio, hasher);
 
   return {
     ambiente,
@@ -143,9 +153,12 @@ export function montarContainer(ambiente: Ambiente): Container {
       hasher,
       gerarRefresh,
     ),
-    autorizarOperacao: new AutorizarOperacao(relogio, hasher),
+    autorizarOperacao: autorizar,
 
     abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
+    registrarSangria: new RegistrarSangria(unitOfWork, relogio, geradorId, autorizar),
+    registrarSuprimento: new RegistrarSuprimento(unitOfWork, relogio, geradorId),
+    fecharCaixa: new FecharCaixa(unitOfWork, relogio),
     iniciarVenda: new IniciarVenda(unitOfWork, relogio, geradorId),
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
     registrarPagamento: new RegistrarPagamento(unitOfWork),

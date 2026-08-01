@@ -45,11 +45,14 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
+| Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
 | Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
+| **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
+| Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**1.797 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.903 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -63,20 +66,19 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ## 2. O que falta — em ordem de risco crescente
 
-### 2.1 ⬅️ PRÓXIMO — fechamento de caixa
+### 2.1 ⬅️ PRÓXIMO — fiscal, ou relatório de vendas
 
-Existem `/api/caixa/abrir` e `/api/caixa/aberto`. **Não existe fechamento** — nem rota,
-nem tela. A loja abre o caixa e nunca o fecha, o que deixa três coisas no ar:
+Duas frentes, e a escolha é de negócio:
 
-- **Conferência do dia**: contar o dinheiro na gaveta contra o que o sistema registrou.
-- **Sangria e suprimento** já existem no domínio (`packages/domain`, etapa 3c) e não
-  têm rota nem tela.
-- **Bloquear o fechamento com fila pendente** — item que saiu do escopo da 9c porque
-  não havia o que bloquear. Conferir o dinheiro com venda ainda não enviada produz
-  diferença que ninguém consegue explicar, e é o caminho mais curto para o operador
-  desconfiar do sistema.
+- **Relatório de vendas** (baixo risco): o gerente vê os caixas, mas não vê o que
+  foi vendido — produto mais girado, venda por hora, ticket médio. É leitura pura,
+  no mesmo padrão de `sessoesDeCaixa`.
+- **Fiscal** (§2.2): o que falta para o produto poder ser vendido de verdade a um
+  lojista. Sem NFC-e não há operação legal no varejo brasileiro.
 
-Ler antes: `SessaoCaixa` no domínio, que já tem as regras — falta a borda.
+Recomendação: **fiscal**. O relatório agrega conveniência; o fiscal remove o
+impedimento legal — e é o item de maior prazo, porque depende de contratar a API
+fiscal e de um certificado de teste.
 
 ### 2.2 Fiscal — risco médio
 
@@ -97,7 +99,18 @@ de bytes, sem depender de equipamento. Falta:
 Não encerrar esta etapa sem uma impressora na mesa: o teste de bytes prova que o
 comando está certo, não que a impressora daquele modelo o entende.
 
-### 2.4 Instalador e operação — etapa 10
+### 2.4 Dívidas conhecidas, pequenas e nomeadas
+
+- **`sessoes_caixa.operador_id` não tem FK.** O papel do DBA tem veto sobre FK
+  ausente (`CLAUDE.md` §1), e esta escapou. A consulta de sessões já lida com o
+  caso (mostra `—`), mas a integridade real depende da migração. Fazer junto com
+  a próxima migração de caixa, no padrão expand-contract e com reversão testada.
+- **Reabertura de caixa não existe.** A permissão `caixa:reabrir` está definida e
+  não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
+  status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
+  um evento de correção — e isso exige ADR.
+
+### 2.5 Instalador e operação — etapa 10
 
 Instalador Windows com PostgreSQL embarcado, auto-update com rollback, backup
 automático e verificação de saúde. É o que separa "roda aqui" de "o lojista instala".
@@ -126,6 +139,9 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`BigInt(texto)` de arquivo externo** | Exceção não tratada em vez de recusa | `BigInt("abc")` **lança**. Todo centavo lido de disco ou rede passa por `/^\d+$/` antes |
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |
+| **Docker morre no reinício do contêiner** | `P1001: Can't reach database server` e testes pulados em silêncio | `nohup dockerd > /tmp/dockerd.log 2>&1 &` e `docker compose up -d`. Suíte que não alcança o banco é **pulada**, não reprovada — verde enganoso |
+| **`corpos[0]` capturando a chamada errada** | Teste "não chamou nada" falha sem motivo aparente | `ProvedorSessao` consulta `/api/acesso/eu` ao montar. Filtre o dublê de `fetch` pela rota que interessa |
+| **403 confundido com 401** | Cliente tenta renovar token e joga o operador no login | Sem token é **401**; sem alçada é **403**. Trocar faz o operador achar que a sessão caiu |
 
 ---
 
@@ -143,6 +159,13 @@ Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
 - Escopo é **varejo apenas**. Serviços, Ordem de Serviço e NFS-e estão **fora**
   (ADR-0014). Emite só NFC-e (65) e NF-e (55).
 - Um papel por usuário (ADR-0018). PIN no PDV, senha forte na retaguarda (ADR-0011).
+- **Sem a permissão base, limite não se discute**: o operador de caixa não sangra
+  a gaveta nem com supervisor ao lado — ele **chama** o supervisor, que executa com
+  a própria conta. A escalação por supervisor só vale para quem tem a permissão e
+  estoura o teto de valor (`PoliticaAutorizacao`).
+- **A contagem do fechamento é às cegas.** Nem a tela nem a API entregam o esperado
+  em dinheiro antes de o operador contar — conferência com a resposta à vista não
+  detecta falta nenhuma.
 - Dinheiro em centavos `bigint` (ADR-0009). Quantidade em milésimos. Percentual em
   centésimos de por cento — 5% é `500`.
 

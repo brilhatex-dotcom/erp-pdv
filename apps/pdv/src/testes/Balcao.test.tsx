@@ -765,3 +765,39 @@ describe("cupom no fechamento da venda", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
+
+describe("entrada no fechamento", () => {
+  it("🔑 o botão de fechar caixa some durante a venda", async () => {
+    // Oferecê-lo no meio de um atendimento é convidar ao clique errado com a
+    // fila esperando — e o operador perderia o carrinho.
+    montar(VENDENDO);
+
+    const usuario = userEvent.setup();
+    const campo = await esperarCampoDeCodigo();
+
+    expect(screen.getByRole("button", { name: "Fechar caixa" })).toBeVisible();
+
+    await usuario.type(campo, "7891000315507{Enter}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Fechar caixa" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("abre a conferência e volta sem perder o balcão", async () => {
+    montar(VENDENDO);
+
+    const usuario = userEvent.setup();
+    await esperarCampoDeCodigo();
+
+    await usuario.click(screen.getByRole("button", { name: "Fechar caixa" }));
+
+    expect(await screen.findByText("Fechamento de caixa")).toBeVisible();
+
+    await usuario.click(screen.getByRole("button", { name: "Voltar" }));
+
+    expect(await esperarCampoDeCodigo()).toBeVisible();
+  });
+});

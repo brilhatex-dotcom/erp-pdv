@@ -33,7 +33,7 @@ describe("IndicadorConexao", () => {
   it("🔑 não mostra nada quando está conectado", async () => {
     // Selo verde permanente vira parte do cenário em dois dias, e o dia em que
     // mudar de cor ninguém repara.
-    instalarPonte({ tipo: "CONECTADO" });
+    instalarPonte({ tipo: "CONECTADO", pendentes: 0 });
 
     const { container } = render(<IndicadorConexao />);
 

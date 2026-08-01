@@ -38,7 +38,9 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 9b — PDV offline** | ✅ **Concluída** — fila durável, catálogo replicado, sincronização idempotente e rota de caixa. 1.714 testes |
 | **Etapa 9c — Contingência na tela** | ✅ **Concluída** — indicador, venda pela fila, catálogo replicado e sincronização automática |
 | **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100 |
-| Etapa 9d — Fechamento de caixa: conferência, sangria e suprimento | ⬜ Próxima |
+| **Etapa 9d — Fechamento de caixa** | ✅ **Concluída** — sangria com alçada, suprimento e conferência às cegas |
+| **Etapa 9e — Conferência dos caixas** | ✅ **Concluída** — sessões do período com divergência recalculada, na retaguarda |
+| Etapa 11 — Fiscal: NFC-e via provedor externo | ⬜ Próxima |
 | Etapa 10 — Instalador, auto-update e backup | ⬜ |
 
 ## Requisitos
