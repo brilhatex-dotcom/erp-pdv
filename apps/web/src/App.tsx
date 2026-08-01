@@ -1,5 +1,5 @@
 import { Botao, Carregando } from "@erp/ui";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
 import { Caixas } from "./telas/Caixas.js";
@@ -8,6 +8,8 @@ import { Clientes } from "./telas/Clientes.js";
 import { Fornecedores } from "./telas/Fornecedores.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Login } from "./telas/Login.js";
+import { PrimeiroAcesso } from "./telas/PrimeiroAcesso.js";
+import { Usuarios } from "./telas/Usuarios.js";
 
 /**
  * Raiz da retaguarda.
@@ -18,13 +20,52 @@ import { Login } from "./telas/Login.js";
  * senha sem precisar.
  */
 export function App(): ReactNode {
-  const { usuario, restaurando } = useSessao();
+  const { cliente, usuario, restaurando } = useSessao();
 
-  if (restaurando) {
+  // `undefined` enquanto a pergunta não foi respondida: mostrar o login antes
+  // de saber faria a instalação nova piscar uma tela que ninguém consegue usar.
+  const [precisaConfiguracao, setPrecisaConfiguracao] = useState<boolean | undefined>(
+    undefined,
+  );
+  const jaPerguntou = useRef(false);
+
+  useEffect(() => {
+    if (jaPerguntou.current) return;
+    jaPerguntou.current = true;
+
+    void cliente
+      // `unknown`, e não `boolean`: o tipo é uma promessa sobre a resposta, e a
+      // resposta vem da rede. Declará-la `boolean` faria o compilador garantir
+      // algo que ele não pode verificar.
+      .requisitar<{ precisaConfiguracao?: unknown }>("/api/instalacao/situacao")
+      .then((situacao) => {
+        // Resposta sem o campo, ou com ele em outro formato, deixaria o estado
+        // indefinido e a tela presa em "carregando" para sempre. Na dúvida,
+        // segue para o login — que sabe se recuperar.
+        setPrecisaConfiguracao(situacao.precisaConfiguracao === true);
+      })
+      .catch(() => {
+        // Servidor fora do ar na primeira carga. Segue para o login, que tem
+        // tratamento de erro próprio — travar aqui deixaria a tela em branco.
+        setPrecisaConfiguracao(false);
+      });
+  });
+
+  if (restaurando || precisaConfiguracao === undefined) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Carregando oQue="sua sessão" />
       </main>
+    );
+  }
+
+  if (usuario === undefined && precisaConfiguracao) {
+    return (
+      <PrimeiroAcesso
+        aoConcluir={() => {
+          setPrecisaConfiguracao(false);
+        }}
+      />
     );
   }
 
@@ -47,6 +88,7 @@ const SECOES = [
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
+  { chave: "USUARIOS", rotulo: "Usuários", permissao: "usuario:criar" },
   { chave: "CAIXAS", rotulo: "Caixas", permissao: "relatorio:vendas" },
 ] as const;
 
@@ -105,6 +147,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Fornecedores />;
     case "CATEGORIAS":
       return <Categorias />;
+    case "USUARIOS":
+      return <Usuarios />;
     case "CAIXAS":
       return <Caixas />;
     default:
