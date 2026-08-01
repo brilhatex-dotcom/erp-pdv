@@ -180,6 +180,9 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | Emissão fiscal | Assíncrona via Outbox, nunca bloqueando a venda | ADR-0006 · §15 |
 | **Comunicação fiscal** | **Via API fiscal externa, atrás da porta `ProvedorFiscal`. Sem SEFAZ direto.** O ERP nunca conhece o fornecedor | **ADR-0015** · `docs/fiscal/ARQUITETURA-FISCAL.md` |
 | **Módulo fiscal** | **Opcional por empresa**, via Null Object na composição. O domínio **não** tem `if (fiscalHabilitado)` | **ADR-0016** |
+| **Fiscal no roteiro** | **Não bloqueia a entrega.** Todo o ERP é concluído antes; até lá, `ProvedorFiscalSimulado` cobre emissão, rejeição, cancelamento, inutilização, XML, DANFE, contingência e eventos. **O instalador não depende do fiscal** | **ADR-0022** |
+| **PDV** | **PWA** servida pelo servidor da loja + **Agente Local** instalado, dono da impressão, da fila offline e do catálogo. Casca Electron **de quiosque** é opcional e não pode ter lógica | **ADR-0023** (supersede 0005) |
+| **Empresas** | **Uma empresa por instalação.** Nenhuma tabela leva `empresa_id`; duas lojas são duas instalações | **ADR-0024** |
 | Certificado digital | **É do cliente.** Custódia no provedor quando possível; o ERP guarda só hash, titular e validade | ADR-0015 · §6 |
 | Numeração fiscal | Controlada pelo **ERP**, não pelo provedor. Uma série por estação de PDV | §8 do doc fiscal |
 | Estoque | Eventos comutativos, sem coluna de saldo mutável | ADR-0007 · §11.4 |
@@ -248,6 +251,9 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 - Persistir certificado digital de cliente quando o provedor puder custodiá-lo.
 - Exibir stack trace ou erro técnico ao operador de caixa.
 - Introduzir dependência nova sem justificar frente aos nove papéis.
+- Fazer a entrega da primeira versão depender de contratar API fiscal (ADR-0022).
+- Acrescentar `empresa_id` a qualquer tabela sem novo ADR (ADR-0024).
+- Guardar a fila de vendas offline no navegador: a garantia de `fsync` é do Agente Local (ADR-0023).
 - Marcar tarefa como concluída com teste falhando ou implementação parcial.
 
 ---

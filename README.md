@@ -40,8 +40,10 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100 |
 | **Etapa 9d — Fechamento de caixa** | ✅ **Concluída** — sangria com alçada, suprimento e conferência às cegas |
 | **Etapa 9e — Conferência dos caixas** | ✅ **Concluída** — sessões do período com divergência recalculada, na retaguarda |
-| Etapa 11 — Fiscal: NFC-e via provedor externo | ⬜ Próxima |
-| Etapa 10 — Instalador, auto-update e backup | ⬜ |
+| **Estratégia revista em 01/08/2026** | 🧭 Fiscal **fora do caminho crítico** ([ADR-0022](docs/adr/0022-fiscal-fora-do-caminho-critico.md)) · PDV vira **PWA + Agente Local** ([ADR-0023](docs/adr/0023-pdv-como-pwa-com-agente-local.md)) · **uma empresa por instalação** ([ADR-0024](docs/adr/0024-uma-empresa-por-instalacao.md)) |
+| Próximo — Empresa e Agente Local | ⬜ Ver [`ESTADO.md`](ESTADO.md) §2.1 |
+| Depois — Compras, Financeiro, Dashboard, Backup, Instalador, PWA, drivers por marca | ⬜ Ordem em [`ESTADO.md`](ESTADO.md) §2.2 |
+| Por último — Fiscal com provedor real | ⬜ Até lá, `ProvedorFiscalSimulado` |
 
 ## Requisitos
 

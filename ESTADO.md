@@ -64,40 +64,55 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ---
 
-## 2. O que falta — em ordem de risco crescente
+## 2. O que falta — na ordem decidida em 01/08/2026
 
-### 2.1 ⬅️ PRÓXIMO — fiscal, ou relatório de vendas
+> **A ordem abaixo é decisão do responsável pelo produto, não sugestão técnica.**
+> O fiscal deixou de ser bloqueador (ADR-0022): entra **depois** de tudo isto.
 
-Duas frentes, e a escolha é de negócio:
+### 2.1 ⬅️ PRÓXIMO — Empresa e Agente Local
 
-- **Relatório de vendas** (baixo risco): o gerente vê os caixas, mas não vê o que
-  foi vendido — produto mais girado, venda por hora, ticket médio. É leitura pura,
-  no mesmo padrão de `sessoesDeCaixa`.
-- **Fiscal** (§2.2): o que falta para o produto poder ser vendido de verdade a um
-  lojista. Sem NFC-e não há operação legal no varejo brasileiro.
+Duas frentes que destravam o resto:
 
-Recomendação: **fiscal**. O relatório agrega conveniência; o fiscal remove o
-impedimento legal — e é o item de maior prazo, porque depende de contratar a API
-fiscal e de um certificado de teste.
+- **Cadastro da empresa** (ADR-0024): CNPJ, razão social, endereço, logotipo,
+  regime tributário. Uma linha, uma instalação. É o cabeçalho de todo relatório e
+  o emitente quando o fiscal entrar. **Nenhuma outra tabela ganha `empresa_id`.**
+- **Agente Local** (ADR-0023): o processo instalado que passa a ser dono da
+  impressão, da fila offline e do catálogo replicado. `FilaDeVendas`,
+  `ReplicaCatalogo` e `Sincronizador` **mudam de casa, não são reescritos** — hoje
+  vivem no processo principal do Electron.
 
-### 2.2 Fiscal — risco médio
+### 2.2 Módulos do ERP, na ordem pedida
 
-Motor tributário e Outbox, testáveis contra um `ProvedorFiscal` falso, sem SEFAZ.
-Muita regra de negócio, mas 100% verificável em máquina de desenvolvimento.
-**Exige 100% de cobertura no motor tributário** (`CLAUDE.md` §7, sem exceção).
-Ler antes: ADR-0015, ADR-0016 e `docs/fiscal/ARQUITETURA-FISCAL.md`.
+| # | Módulo | Situação |
+|---|---|---|
+| 1 | Login | ✅ Pronto |
+| 2 | Usuários | ⚠️ Domínio e API prontos; **falta a tela** de gestão na retaguarda |
+| 3 | **Empresas** | ⬜ §2.1 |
+| 4 | Clientes | ✅ Pronto |
+| 5 | Fornecedores | ✅ Pronto |
+| 6 | Produtos | ⚠️ Domínio, banco e consulta prontos; **falta a tela de cadastro** |
+| 7 | Estoque | ⚠️ Domínio pronto (eventos comutativos); **falta rota e tela** |
+| 8 | **Compras** | ⬜ Nada existe. Entrada de mercadoria, que alimenta o estoque |
+| 9 | Vendas | ✅ Pronto |
+| 10 | PDV | ⚠️ Pronto como Electron; **vira PWA** (ADR-0023) |
+| 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
+| 12 | **Financeiro** | ⬜ Nada existe. Contas a pagar e a receber; o crediário da venda já grava o título |
+| 13 | Relatórios | ⚠️ Só a conferência de caixa |
+| 14 | **Dashboard** | ⬜ Nada existe |
+| 15 | **Backup** | ⬜ Nada existe |
+| 16 | **Instalação** | ⬜ Instalador Windows com PostgreSQL e Agente Local embarcados. **Não depende do fiscal** (ADR-0022) |
+| 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
+| 18 | **PWA** | ⬜ Manifesto, service worker e instalação na área de trabalho |
+| 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
+| 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto; faltam Bematech, Elgin, Epson e Daruma |
 
-### 2.3 Hardware — risco alto
+### 2.3 Só depois de tudo acima — fiscal com provedor real
 
-Casca Electron, cupom ESC/POS e gaveta **já estão prontos** e testados por comparação
-de bytes, sem depender de equipamento. Falta:
+Até lá o produto usa `ProvedorFiscalSimulado` (ADR-0022), que cobre emissão,
+rejeição, cancelamento, inutilização, XML, DANFE, contingência e eventos.
 
-- **Balança** — protocolo por porta serial, e cada fabricante fala o seu.
-- **Validação com equipamento real.** Nenhum cupom foi impresso em impressora física
-  até hoje. Alinhamento de coluna e acentuação em CP860 só se confirmam no papel.
-
-Não encerrar esta etapa sem uma impressora na mesa: o teste de bytes prova que o
-comando está certo, não que a impressora daquele modelo o entende.
+**Instalação com simulado é válida para demonstração, homologação e implantação —
+não para uma loja operar legalmente.** Quem vender o produto precisa saber disso.
 
 ### 2.4 Dívidas conhecidas, pequenas e nomeadas
 
@@ -109,13 +124,11 @@ comando está certo, não que a impressora daquele modelo o entende.
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
-
-### 2.5 Instalador e operação — etapa 10
-
-Instalador Windows com PostgreSQL embarcado, auto-update com rollback, backup
-automático e verificação de saúde. É o que separa "roda aqui" de "o lojista instala".
-
----
+- **A casca Electron vira quiosque fino** (ADR-0023): abre a PWA em tela cheia e
+  não contém lógica nenhuma. O processo principal de hoje — dono de fila,
+  catálogo e impressão — migra para o Agente Local. Casca que ganha lógica volta
+  a ser uma segunda aplicação, e aí todo defeito precisa ser reproduzido duas
+  vezes.
 
 ## 3. Armadilhas já pagas — não caia de novo
 
