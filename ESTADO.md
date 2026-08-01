@@ -3,10 +3,9 @@
 > **Leia este arquivo primeiro.** Ele existe para que qualquer sessão nova de
 > desenvolvimento continue de onde a anterior parou, sem reimplementar o que já existe.
 >
-> Última atualização: **31/07/2026** · Ramo de referência: **`main`**
+> Última atualização: **01/08/2026** · Ramo de referência: **`main`**
 >
-> ⚠️ **Há trabalho em andamento fora de `main`**: branch
-> `claude/sessao-recomendacao-continuacao-tsx6ew`. Ver §2.0 antes de qualquer coisa.
+> ✅ **Não há trabalho fora de `main`.** Uma única branch remota existe: `main`.
 
 ---
 
@@ -43,9 +42,13 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | Retaguarda web (React) | ✅ Completo | `apps/web/src/` |
 | Design system | ✅ Completo | `packages/ui/src/` |
 | Cliente HTTP + sessão compartilhados | ✅ Completo | `packages/cliente-api/src/` |
-| **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo (navegador) | `apps/pdv/src/` |
+| **PDV — balcão, do primeiro bipe ao troco** | ✅ Completo | `apps/pdv/src/` |
+| Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
+| Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
+| Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
+| **Contingência offline do PDV** | ✅ Motor completo — **falta a tela (§2.1)** | fila, catálogo replicado, sincronização |
 
-**1.296 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes.
+**1.714 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -59,79 +62,27 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ## 2. O que falta — em ordem de risco crescente
 
-### 2.0 ⏸️ EM ANDAMENTO — cadastros de categoria, cliente e fornecedor
+### 2.1 ⬅️ PRÓXIMO — etapa 9c: ligar a contingência à tela
 
-**Branch: `claude/sessao-recomendacao-continuacao-tsx6ew`.** A sessão parou por limite de
-uso, não por problema técnico. **Continue nesta branch**, não recomece do zero.
+O motor da contingência offline está pronto e testado (fila durável, catálogo
+replicado, sincronização idempotente). **O operador ainda não vê nada disso.**
 
-#### O que já está pronto e commitado (commit `745042b`)
+Falta, em `apps/pdv/src/`:
 
-| Camada | Situação | Onde |
-|---|---|---|
-| Objetos de valor: `Documento`, `Endereco`, `Telefone`, `Email`, `InscricaoEstadual`, `UF` | ✅ 100% de cobertura | `packages/domain/src/valores/` |
-| Agregados `Categoria`, `Cliente`, `Fornecedor` | ✅ 100% de cobertura | `packages/domain/src/cadastros/` |
-| Portas `CategoriaRepository`, `ClienteRepository`, `FornecedorRepository` | ✅ | `packages/application/src/portas/repositorios/RepositoriosCadastros.ts` |
-| 6 casos de uso (Cadastrar/Alterar × 3) | ✅ 100% de cobertura | `packages/application/src/casos-de-uso/cadastros/` |
-| `agregarErros` — leva a lista de campos errados até a fronteira | ✅ | `packages/application/src/erros/agregarErros.ts` |
-| Dublês em memória dos três repositórios | ✅ | `packages/application/src/testes/dubles.ts` |
-| `textoOpcional` em `@erp/utils` | ✅ | `packages/utils/src/texto.ts` |
+- **Indicador de estado** na tela de venda: online, offline, e quantas vendas
+  aguardam envio. Sem isso o operador não sabe se pode fechar o caixa.
+- **Venda pela fila** quando o servidor não responde: hoje o caminho existe na
+  camada de baixo, mas a tela ainda fala direto com a API.
+- **Sincronização automática** ao voltar a conexão, com o recuo exponencial que já
+  está implementado — e um aviso discreto quando a fila esvazia.
+- **Bloqueio do fechamento de caixa** enquanto houver venda na fila: conferir o
+  dinheiro com venda não enviada produz diferença que ninguém consegue explicar.
 
-Testes: **1.296 passando** (domínio 1.020 · aplicação 126 · demais inalterados).
-`lint`, `typecheck` e `format` verdes nos pacotes tocados.
+Ler antes: **ADR-0021** (por que arquivo e não SQLite) e a mensagem do commit
+`89b1f09`, que documenta as decisões da fila em detalhe.
 
-#### O que falta — nesta ordem
-
-1. **Persistência** (`packages/database/`) — é o próximo passo, e o trabalho estava
-   parado exatamente aqui:
-   - Modelos Prisma `Categoria`, `Cliente`, `Fornecedor` no `schema.prisma`.
-     Endereço **achatado** nas colunas do cliente/fornecedor (1:1, sempre lido junto —
-     tabela separada só custaria um join).
-   - `nome_busca` da categoria com **índice único**: é a garantia real contra
-     "Bebidas" e "bebidas" virarem duas linhas no relatório. A verificação no caso de
-     uso existe só para dar a mensagem certa; duas telas simultâneas passariam por ela.
-   - Documento do cliente e do fornecedor com índice único (nulo permitido no cliente).
-   - **Duas FKs que hoje faltam** (veto do DBA já identificado):
-     `produtos.categoria_id → categorias.id` e `vendas.cliente_id → clientes.id`.
-     ⚠️ Ao fechar a FK de vendas, `packages/database/src/testes/Persistencia.test.ts`
-     (linha ~335) quebra: ele grava uma venda com `clienteId` que não existe em lugar
-     nenhum. Cadastrar o cliente antes é a correção — não afrouxar a FK.
-   - Mapeadores e repositórios Prisma, no padrão de `produtoMapeador.ts`.
-   - Registrar os três em `montarRepositorios` (`UnitOfWorkPrisma.ts`) — sem isso
-     o `Repositorios` não compila, porque a interface já os exige.
-   - Acrescentar `categorias`, `clientes` e `fornecedores` ao `TRUNCATE` dos **dois**
-     helpers de teste: `packages/database/src/testes/banco.ts` e
-     `apps/server/src/testes/apoio.ts`.
-2. **API** (`apps/server/src/rotas/cadastros.ts`) — GET de busca/listagem, POST e PATCH
-   para os três. Exige permissões novas em `packages/domain/src/identidade/Permissao.ts`
-   (`cliente:ver/criar/editar`, `fornecedor:ver/criar/editar`, `categoria:gerenciar`) e a
-   distribuição delas em `papeisPadrao.ts`. Registrar em `servidor.ts`.
-   Acrescentar `"erros"` à lista `DETALHES_PUBLICOS` de `apps/server/src/http/erros.ts`
-   — sem isso o `DADOS_INVALIDOS` chega ao navegador sem os campos, e o formulário não
-   tem o que destacar.
-3. **Retaguarda** (`apps/web/src/telas/`) — lista + formulário para os três, mais
-   navegação no `App.tsx` (hoje ele mostra só a consulta de produto). Atenção ao portão:
-   a cobertura de `apps/web` mede `.tsx` **por arquivo**, mínimo de 90%.
-
-#### Decisões desta etapa (já tomadas, não reabrir sem motivo novo)
-
-- **Cliente e fornecedor são agregados separados**, não uma `Pessoa` com dois papéis.
-  Divergem no que importa (limite de crédito × documento obrigatório); o que é comum vai
-  para objetos de valor compartilhados, não para herança.
-- **Categoria é plana.** Hierarquia é aditiva depois (coluna anulável) — decisão
-  reversível pelo lado barato.
-- **Fornecedor exige documento; cliente não.** Fornecedor sustenta entrada de mercadoria,
-  e toda nota traz o CNPJ do emitente. No cliente, a LGPD pede minimização.
-- **`AlterarX` recebe o estado completo**, não campos parciais. Caso de uso que trata
-  ausente como "não mexer" torna impossível limpar um campo.
-- **Unicidade de documento é verificada antes de mexer no agregado.** Verificar depois
-  consulta um repositório onde o registro já carrega o documento novo, e ele encontra a
-  si mesmo — passando batido justamente no caso que a regra existe para pegar.
-- **Tipo de pessoa não muda** na alteração: invalidaria documento gravado e notas já
-  emitidas. O caminho é desativar e cadastrar de novo.
-
-### 2.1 Cadastros faltantes — risco baixo
-
-Coberto por §2.0 acima, em andamento.
+> ⚠️ A cobertura de `apps/pdv` é medida **por arquivo**, mínimo de 90%. Componente
+> novo sem teste reprova o portão mesmo com o resto verde.
 
 ### 2.2 Fiscal — risco médio
 
@@ -142,17 +93,20 @@ Ler antes: ADR-0015, ADR-0016 e `docs/fiscal/ARQUITETURA-FISCAL.md`.
 
 ### 2.3 Hardware — risco alto
 
-Electron, impressão ESC/POS, gaveta e balança. É a etapa com mais incógnitas: só se
-valida de verdade com equipamento real na mesa. Não começar sem hardware disponível.
+Casca Electron, cupom ESC/POS e gaveta **já estão prontos** e testados por comparação
+de bytes, sem depender de equipamento. Falta:
 
-### 2.4 Pendências fora do código
+- **Balança** — protocolo por porta serial, e cada fabricante fala o seu.
+- **Validação com equipamento real.** Nenhum cupom foi impresso em impressora física
+  até hoje. Alinhamento de coluna e acentuação em CP860 só se confirmam no papel.
 
-Estas dependem de ação humana no navegador, não de desenvolvimento:
+Não encerrar esta etapa sem uma impressora na mesa: o teste de bytes prova que o
+comando está certo, não que a impressora daquele modelo o entende.
 
-- [ ] Apagar as branches `claude/*` já mescladas em `main`.
-- [ ] Proteger `main`: **Settings → Branches → Add rule**, marcar
-      *Require status checks to pass* e escolher **Segurança** e **Qualidade**.
-      Sem isso, código quebrado consegue entrar em `main`.
+### 2.4 Instalador e operação — etapa 10
+
+Instalador Windows com PostgreSQL embarcado, auto-update com rollback, backup
+automático e verificação de saúde. É o que separa "roda aqui" de "o lojista instala".
 
 ---
 
@@ -172,6 +126,8 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **Dublê guarda referência, não cópia** | Teste de unicidade passa quando deveria falhar | O repositório em memória devolve a **mesma instância** que o caso de uso acabou de alterar. Verificação de duplicidade tem de vir **antes** da mutação — o que também é o certo contra o banco de verdade |
 | **`unbound-method` em fábrica de objeto de valor** | Lint reprova `interpretarOpcional(x, Telefone.criar, erros)` | Passar método estático solto desassocia o `this`. Embrulhe: `(valor) => Telefone.criar(valor)` |
 | **`/* v8 ignore next */` cobre uma linha só** | Guarda inalcançável de 3 linhas reprova a cobertura | Use `/* v8 ignore next 3 */` quando o `if` inalcançável tem corpo |
+| **`.env` sumido em ambiente novo** | `P1012: Environment variable not found: DATABASE_URL` | O `.env` é ignorado pelo git e não sobrevive a um contêiner novo. Recrie: `cp packages/database/.env.example packages/database/.env` |
+| **`prisma migrate dev` trava sem saída** | Comando fica parado; matá-lo deixa `P1002: timed out acquiring advisory lock` | `migrate dev` é **interativo** (pede nome da migração). Em sessão automatizada use `pnpm db:deploy`. Se já travou, mate o processo e derrube a conexão presa: `pg_terminate_backend` no banco |
 
 ---
 
@@ -180,7 +136,8 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
 
 - PostgreSQL 17 único, embarcado no instalador — **sem SQLite como sistema de registro**
-  (ADR-0013). SQLite existe apenas como cache de contingência do PDV.
+  (ADR-0013). A contingência do PDV é **arquivo append-only, não SQLite** (ADR-0021).
+- `@erp/cliente-api` é compartilhado entre retaguarda e PDV (ADR-0020).
 - Fiscal via **provedor externo** atrás da porta `ProvedorFiscal`; o ERP nunca fala com
   SEFAZ nem conhece o fornecedor (ADR-0015).
 - Módulo fiscal **opcional por empresa**, via Null Object. O domínio não tem
@@ -197,8 +154,9 @@ Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
 
 ```bash
 pnpm install
+cp packages/database/.env.example packages/database/.env   # não vem do git
 pnpm db:up          # PostgreSQL 17 na porta 55432 (três bancos)
-pnpm db:migrate
+pnpm db:deploy      # aplica migrações; `db:migrate` é interativo, ver §3
 pnpm verify         # suíte completa
 
 pnpm --filter @erp/server dev   # API   → 3000
@@ -241,3 +199,14 @@ DATABASE_URL="postgresql://erp:erp_dev_only@localhost:55432/erp_pdv" pnpm db:dep
 > **Manter este arquivo atualizado é parte da etapa 9 do fluxo** (`CLAUDE.md` §3:
 > "Documentar a etapa"). Uma sessão que avança e não atualiza o `ESTADO.md` recria
 > exatamente o problema que ele existe para evitar.
+
+### Isto já aconteceu — atualize ao final de cada etapa, não só ao parar
+
+Em 31/07 uma sessão escreveu aqui "trabalho em andamento na branch X, 1.296 testes" e
+seguiu por mais oito commits sem voltar. No dia seguinte a branch não existia mais, eram
+1.714 testes, e três itens listados como pendentes já estavam prontos — persistência, API
+e telas dos cadastros. Quem lesse refaria trabalho concluído.
+
+**Documento desatualizado engana com a autoridade de estar no lugar certo.** O `README.md`
+sobreviveu porque foi atualizado a cada etapa; este arquivo não foi. A regra prática:
+o commit que conclui uma etapa é o mesmo commit que atualiza o `ESTADO.md`.
