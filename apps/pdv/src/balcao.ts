@@ -1,5 +1,14 @@
 import type { DadosCupom } from "@erp/printing";
 
+import type {
+  EstadoConexaoNaPonte,
+  ResultadoFinalizacaoNaPonte,
+  ResultadoItemNaPonte,
+  ResultadoPagamentoNaPonte,
+  ResumoSincronizacaoNaPonte,
+  VendaNaPonte,
+} from "./contrato-ponte.js";
+
 /**
  * A ponte, vista de dentro da tela.
  *
@@ -14,6 +23,20 @@ export interface Balcao {
   }): Promise<AvisoDeImpressao>;
   abrirGaveta(): Promise<AvisoDeImpressao>;
   configuracao(): Promise<{ readonly api: string; readonly temImpressora: boolean }>;
+
+  estadoConexao(): Promise<EstadoConexaoNaPonte>;
+  iniciarVendaLocal(dados: {
+    readonly estacaoId: string;
+    readonly operadorId: string;
+  }): Promise<VendaNaPonte | undefined>;
+  itemLocal(dados: { readonly codigo: string }): Promise<ResultadoItemNaPonte>;
+  pagamentoLocal(dados: {
+    readonly forma: string;
+    readonly valor: string;
+  }): Promise<ResultadoPagamentoNaPonte>;
+  finalizarVendaLocal(): Promise<ResultadoFinalizacaoNaPonte>;
+  cancelarVendaLocal(): Promise<null>;
+  sincronizarAgora(): Promise<ResumoSincronizacaoNaPonte>;
 }
 
 export type AvisoDeImpressao =

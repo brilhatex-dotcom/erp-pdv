@@ -4,6 +4,16 @@ import type {
   DadosImpressaoCupom,
   ServicoImpressao,
 } from "./ponte-hardware/servicoImpressao.js";
+import type {
+  EstadoConexao,
+  ResumoSincronizacao,
+} from "./sincronizacao/sincronizador.js";
+import type {
+  ResultadoFinalizacao,
+  ResultadoItem,
+  ResultadoPagamento,
+  VendaLocalNaTela,
+} from "./venda-local/vendaLocal.js";
 
 /**
  * Os canais que a tela pode chamar.
@@ -17,6 +27,21 @@ export const CANAIS = {
   imprimirCupom: "balcao:imprimir-cupom",
   abrirGaveta: "balcao:abrir-gaveta",
   configuracao: "balcao:configuracao",
+
+  // Contingência. A superfície cresceu de três para sete canais, e isso é uma
+  // decisão de segurança, não uma conveniência: o renderizador carrega código
+  // servido pela rede da loja. Cada canal aqui é uma operação **nomeada** sobre
+  // a fila ou a réplica — nenhum recebe caminho de arquivo, e nenhum devolve
+  // objeto vivo. Expor "grave este arquivo" em vez de "enfileire esta venda"
+  // transformaria uma falha da retaguarda em escrita arbitrária no disco do
+  // caixa.
+  estadoConexao: "balcao:estado-conexao",
+  iniciarVendaLocal: "balcao:venda-local-iniciar",
+  itemLocal: "balcao:venda-local-item",
+  pagamentoLocal: "balcao:venda-local-pagamento",
+  finalizarVendaLocal: "balcao:venda-local-finalizar",
+  cancelarVendaLocal: "balcao:venda-local-cancelar",
+  sincronizarAgora: "balcao:sincronizar-agora",
 } as const;
 
 /**
@@ -76,4 +101,83 @@ export function registrarCanais(
     api: configuracao.api,
     temImpressora: configuracao.impressora.tipo !== "NENHUMA",
   }));
+}
+
+/** O que os canais de contingência precisam do processo principal. */
+export interface Contingencia {
+  estado(): EstadoConexao;
+  iniciar(estacaoId: string, operadorId: string): VendaLocalNaTela;
+  adicionarItem(codigo: string): ResultadoItem;
+  registrarPagamento(forma: string, valor: string): ResultadoPagamento;
+  finalizar(): ResultadoFinalizacao;
+  cancelar(): void;
+  sincronizar(): Promise<ResumoSincronizacao>;
+}
+
+/**
+ * Liga os canais da contingência.
+ *
+ * **Nenhum tratador daqui lança.** Vale mais aqui que na impressão: um `handle`
+ * que rejeita vira exceção dentro da tela, e a tela está no meio de uma venda
+ * offline — exatamente o momento em que não há para onde escalar o problema.
+ * Falha vira `ERRO` com mensagem que o operador entende.
+ */
+export function registrarCanaisDeContingencia(
+  ipc: RegistradorIpc,
+  contingencia: Contingencia,
+  registrar: (mensagem: string) => void = () => undefined,
+): void {
+  ipc.handle(CANAIS.estadoConexao, (): EstadoConexao => contingencia.estado());
+
+  ipc.handle(CANAIS.iniciarVendaLocal, (_evento, dados): VendaLocalNaTela | undefined => {
+    const pedido = dados as
+      { readonly estacaoId?: unknown; readonly operadorId?: unknown } | undefined;
+
+    if (typeof pedido?.estacaoId !== "string" || typeof pedido.operadorId !== "string") {
+      // Chamada malformada é defeito da tela. Devolver `undefined` deixa o
+      // caminho online assumir, em vez de derrubar o caixa.
+      registrar("Pedido de venda local sem estação ou operador.");
+      return undefined;
+    }
+
+    return contingencia.iniciar(pedido.estacaoId, pedido.operadorId);
+  });
+
+  ipc.handle(CANAIS.itemLocal, (_evento, dados): ResultadoItem => {
+    const codigo = (dados as { readonly codigo?: unknown } | undefined)?.codigo;
+
+    return typeof codigo === "string"
+      ? contingencia.adicionarItem(codigo)
+      : { tipo: "ERRO", mensagem: "Código inválido." };
+  });
+
+  ipc.handle(CANAIS.pagamentoLocal, (_evento, dados): ResultadoPagamento => {
+    const pedido = dados as
+      { readonly forma?: unknown; readonly valor?: unknown } | undefined;
+
+    return typeof pedido?.forma === "string" && typeof pedido.valor === "string"
+      ? contingencia.registrarPagamento(pedido.forma, pedido.valor)
+      : { tipo: "ERRO", mensagem: "Pagamento inválido." };
+  });
+
+  ipc.handle(CANAIS.finalizarVendaLocal, (): ResultadoFinalizacao =>
+    contingencia.finalizar(),
+  );
+
+  ipc.handle(CANAIS.cancelarVendaLocal, (): null => {
+    contingencia.cancelar();
+    // `null` e não `undefined`: o IPC do Electron serializa, e `undefined`
+    // chega do outro lado como promessa resolvida sem valor — indistinguível
+    // de canal inexistente.
+    return null;
+  });
+
+  ipc.handle(CANAIS.sincronizarAgora, async (): Promise<ResumoSincronizacao> => {
+    try {
+      return await contingencia.sincronizar();
+    } catch (causa) {
+      registrar(`Sincronização manual falhou: ${String(causa)}`);
+      return { enviadas: 0, recusadas: 0, interrompida: true };
+    }
+  });
 }

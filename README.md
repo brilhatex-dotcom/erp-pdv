@@ -36,8 +36,9 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 8d — Fornecedores e categorias** | ✅ **Concluída** — as três telas de cadastro, com abas por permissão. 1.555 testes |
 | **Etapa 9a — Cupom, gaveta e casca Electron** | ✅ **Concluída** — `@erp/printing`, ponte de hardware e impressão que nunca trava a venda. 1.647 testes |
 | **Etapa 9b — PDV offline** | ✅ **Concluída** — fila durável, catálogo replicado, sincronização idempotente e rota de caixa. 1.714 testes |
-| **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100. 1.741 testes |
-| Etapa 9c — Ligar a contingência à tela: indicador, fila em uso e sincronização automática | ⬜ Próxima |
+| **Etapa 9c — Contingência na tela** | ✅ **Concluída** — indicador, venda pela fila, catálogo replicado e sincronização automática |
+| **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100 |
+| Etapa 9d — Fechamento de caixa: conferência, sangria e suprimento | ⬜ Próxima |
 | Etapa 10 — Instalador, auto-update e backup | ⬜ |
 
 ## Requisitos
