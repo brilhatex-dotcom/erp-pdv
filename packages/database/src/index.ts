@@ -28,3 +28,10 @@ export { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrism
 export { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 export { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";
 export { VendaRepositorioPrisma } from "./repositorios/VendaRepositorioPrisma.js";
+
+// ── Consultas de leitura ────────────────────────────────────────────────
+export {
+  catalogoParaReplica,
+  type CatalogoParaReplica,
+  type ProdutoParaReplica,
+} from "./consultas/catalogoParaReplica.js";

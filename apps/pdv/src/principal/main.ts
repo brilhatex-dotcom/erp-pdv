@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 
 import { type ConfiguracaoDaEstacao, interpretarConfiguracao } from "./configuracao.js";
+import { montarContingencia } from "./contingencia.js";
 import { montarImpressora } from "./ponte-hardware/impressora.js";
 import { ServicoImpressao } from "./ponte-hardware/servicoImpressao.js";
-import { registrarCanais } from "./ponte-ipc.js";
+import { registrarCanais, registrarCanaisDeContingencia } from "./ponte-ipc.js";
 
 /**
  * Processo principal do PDV.
@@ -77,7 +78,27 @@ async function iniciar(): Promise<void> {
     },
   );
 
+  const contingencia = montarContingencia({
+    pasta: app.getPath("userData"),
+    api: configuracao.api,
+    registrar: (mensagem) => {
+      console.warn(`[contingencia] ${mensagem}`);
+    },
+  });
+
   registrarCanais(ipcMain, servico, configuracao);
+  registrarCanaisDeContingencia(ipcMain, contingencia, (mensagem) => {
+    console.warn(`[contingencia] ${mensagem}`);
+  });
+
+  // O catálogo é baixado sem bloquear a abertura: a janela sobe primeiro. Uma
+  // estação que espera a rede para mostrar a tela de login é uma estação que
+  // não abre quando a rede está ruim — que é quando a réplica mais importa.
+  void contingencia.atualizarCatalogo();
+  const pararRelogio = contingencia.iniciarRelogio();
+
+  app.on("will-quit", pararRelogio);
+
   abrirJanela(configuracao);
 
   app.on("activate", () => {
