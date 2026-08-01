@@ -50,8 +50,9 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
+| Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**1.848 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.903 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -65,17 +66,19 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ## 2. O que falta — em ordem de risco crescente
 
-### 2.1 ⬅️ PRÓXIMO — retaguarda do caixa e relatório do dia
+### 2.1 ⬅️ PRÓXIMO — fiscal, ou relatório de vendas
 
-O caixa fecha, mas **ninguém consegue olhar o resultado depois**. Falta:
+Duas frentes, e a escolha é de negócio:
 
-- **Consulta de sessões fechadas** na retaguarda: quem fechou, quando, e com que
-  diferença. Hoje a conferência aparece uma vez na tela do PDV e some.
-- **Relatório do dia**: vendas por forma de pagamento, sangrias e suprimentos.
-- **Reabertura de caixa** (`caixa:reabrir` já existe como permissão, sem rota).
+- **Relatório de vendas** (baixo risco): o gerente vê os caixas, mas não vê o que
+  foi vendido — produto mais girado, venda por hora, ticket médio. É leitura pura,
+  no mesmo padrão de `sessoesDeCaixa`.
+- **Fiscal** (§2.2): o que falta para o produto poder ser vendido de verdade a um
+  lojista. Sem NFC-e não há operação legal no varejo brasileiro.
 
-Nada disso é bloqueante para a loja operar — é o que o gerente precisa para
-conferir o que aconteceu.
+Recomendação: **fiscal**. O relatório agrega conveniência; o fiscal remove o
+impedimento legal — e é o item de maior prazo, porque depende de contratar a API
+fiscal e de um certificado de teste.
 
 ### 2.2 Fiscal — risco médio
 
@@ -96,7 +99,18 @@ de bytes, sem depender de equipamento. Falta:
 Não encerrar esta etapa sem uma impressora na mesa: o teste de bytes prova que o
 comando está certo, não que a impressora daquele modelo o entende.
 
-### 2.4 Instalador e operação — etapa 10
+### 2.4 Dívidas conhecidas, pequenas e nomeadas
+
+- **`sessoes_caixa.operador_id` não tem FK.** O papel do DBA tem veto sobre FK
+  ausente (`CLAUDE.md` §1), e esta escapou. A consulta de sessões já lida com o
+  caso (mostra `—`), mas a integridade real depende da migração. Fazer junto com
+  a próxima migração de caixa, no padrão expand-contract e com reversão testada.
+- **Reabertura de caixa não existe.** A permissão `caixa:reabrir` está definida e
+  não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
+  status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
+  um evento de correção — e isso exige ADR.
+
+### 2.5 Instalador e operação — etapa 10
 
 Instalador Windows com PostgreSQL embarcado, auto-update com rollback, backup
 automático e verificação de saúde. É o que separa "roda aqui" de "o lojista instala".

@@ -1,3 +1,4 @@
+import { sessoesDeCaixa } from "@erp/database";
 import { type ConferenciaCaixa, Dinheiro, Identificador } from "@erp/domain";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
@@ -34,6 +35,19 @@ const corpoMovimento = z.object({
   supervisor: z
     .object({ matricula: z.string().min(1).max(20), pin: z.string().min(4).max(12) })
     .optional(),
+});
+
+/**
+ * Intervalo consultado.
+ *
+ * O padrão é **o dia de hoje**, e não "tudo": a consulta sem filtro numa loja
+ * com dois anos de histórico devolveria centenas de sessões para a tela montar,
+ * e ninguém abre esta tela querendo 2024.
+ */
+const consultaSessoes = z.object({
+  de: z.iso.date().optional(),
+  ate: z.iso.date().optional(),
+  estacaoId: z.uuid().optional(),
 });
 
 const corpoFechamento = z.object({
@@ -157,6 +171,33 @@ export function rotasDeCaixa(servidor: FastifyInstance, container: Container): v
   );
 
   /**
+   * Sessões de caixa do período — a conferência depois do fato.
+   *
+   * Exige `relatorio:vendas`: a resposta mostra quanto cada operador vendeu e
+   * qual foi a diferença dele. É informação de supervisão, não de balcão — e o
+   * operador que enxerga a divergência dos colegas tem material para justificar
+   * a própria.
+   */
+  servidor.get(
+    "/api/caixa/sessoes",
+    { preHandler: [autenticado, exigirPermissao(container, "relatorio:vendas")] },
+    async (requisicao, resposta) => {
+      const entrada = consultaSessoes.safeParse(requisicao.query);
+      if (!entrada.success) return recusar(resposta, "Período inválido.");
+
+      const { de, ate } = intervalo(entrada.data, container.relogio.agora());
+
+      const sessoes = await sessoesDeCaixa(container.prisma, {
+        de,
+        ate,
+        estacaoId: entrada.data.estacaoId,
+      });
+
+      return resposta.send({ sessoes });
+    },
+  );
+
+  /**
    * O caixa aberto da estação, se houver.
    *
    * Responde **204**, e não 404: "ainda não abriu o caixa" é resposta legítima
@@ -213,6 +254,28 @@ function apresentar(caixa: {
     quantidadeVendas: caixa.quantidadeVendas,
     abertaEm: caixa.abertaEm.toISOString(),
   };
+}
+
+/**
+ * Converte o período pedido em instantes.
+ *
+ * O fim é **exclusivo e no dia seguinte**: `ate=2026-08-01` precisa incluir as
+ * vendas das 23h daquele dia. Comparar com a meia-noite do próprio dia
+ * esconderia o expediente inteiro da data que o usuário digitou — o defeito de
+ * relatório mais comum que existe.
+ */
+function intervalo(
+  pedido: { readonly de?: string | undefined; readonly ate?: string | undefined },
+  agora: Date,
+): { readonly de: Date; readonly ate: Date } {
+  const hoje = agora.toISOString().slice(0, 10);
+
+  const de = new Date(`${pedido.de ?? hoje}T00:00:00.000Z`);
+  const fim = new Date(`${pedido.ate ?? pedido.de ?? hoje}T00:00:00.000Z`);
+
+  fim.setUTCDate(fim.getUTCDate() + 1);
+
+  return { de, ate: fim };
 }
 
 function apresentarMovimento(movimento: {

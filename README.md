@@ -39,7 +39,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 9c — Contingência na tela** | ✅ **Concluída** — indicador, venda pela fila, catálogo replicado e sincronização automática |
 | **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100 |
 | **Etapa 9d — Fechamento de caixa** | ✅ **Concluída** — sangria com alçada, suprimento e conferência às cegas |
-| Etapa 9e — Retaguarda do caixa: sessões fechadas, relatório do dia e reabertura | ⬜ Próxima |
+| **Etapa 9e — Conferência dos caixas** | ✅ **Concluída** — sessões do período com divergência recalculada, na retaguarda |
+| Etapa 11 — Fiscal: NFC-e via provedor externo | ⬜ Próxima |
 | Etapa 10 — Instalador, auto-update e backup | ⬜ |
 
 ## Requisitos

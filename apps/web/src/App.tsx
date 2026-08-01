@@ -2,6 +2,7 @@ import { Botao, Carregando } from "@erp/ui";
 import { type ReactNode, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
+import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
 import { Fornecedores } from "./telas/Fornecedores.js";
@@ -46,6 +47,7 @@ const SECOES = [
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
+  { chave: "CAIXAS", rotulo: "Caixas", permissao: "relatorio:vendas" },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -103,6 +105,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Fornecedores />;
     case "CATEGORIAS":
       return <Categorias />;
+    case "CAIXAS":
+      return <Caixas />;
     default:
       return <ConsultarProduto />;
   }

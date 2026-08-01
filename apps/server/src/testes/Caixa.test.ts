@@ -291,3 +291,94 @@ describe("POST /api/caixa/fechar", () => {
     expect(resposta.statusCode).toBe(404);
   });
 });
+
+describe("GET /api/caixa/sessoes", () => {
+  it("🔑 o operador de caixa não vê a conferência dos colegas", async () => {
+    // A resposta mostra quanto cada um vendeu e qual foi a diferença dele. É
+    // informação de supervisão: quem enxerga a divergência alheia tem material
+    // para justificar a própria.
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/api/caixa/sessoes",
+      headers: await entrar("42", PIN_OPERADOR),
+    });
+
+    expect(resposta.statusCode).toBe(403);
+  });
+
+  it("o gerente vê a sessão do dia, aberta, sem divergência inventada", async () => {
+    await abrirCaixa(await entrar("42", PIN_OPERADOR));
+
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/api/caixa/sessoes",
+      headers: await entrar("1", PIN_GERENTE),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+
+    const { sessoes } = resposta.json<{ sessoes: Record<string, unknown>[] }>();
+
+    expect(sessoes).toHaveLength(1);
+    expect(sessoes[0]).toMatchObject({
+      status: "ABERTA",
+      operadorNome: "Maria Operadora",
+      esperadoEmDinheiro: "100000",
+    });
+    expect(sessoes[0]).not.toHaveProperty("divergenciaEmDinheiro");
+  });
+
+  it("depois de fechada, a divergência aparece", async () => {
+    const doOperador = await entrar("42", PIN_OPERADOR);
+    await abrirCaixa(doOperador);
+    await fechar(doOperador, "98000");
+
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/api/caixa/sessoes",
+      headers: await entrar("1", PIN_GERENTE),
+    });
+
+    expect(
+      resposta.json<{ sessoes: { divergenciaEmDinheiro: string }[] }>().sessoes[0],
+    ).toMatchObject({ status: "FECHADA", divergenciaEmDinheiro: "-2000" });
+  });
+
+  it("🔑 o dia informado inclui o expediente inteiro", async () => {
+    // `ate` exclusivo na meia-noite do próprio dia esconderia as vendas das
+    // 23h — o defeito de relatório mais comum que existe.
+    const doOperador = await entrar("42", PIN_OPERADOR);
+    await abrirCaixa(doOperador);
+
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: `/api/caixa/sessoes?de=${hoje}&ate=${hoje}`,
+      headers: await entrar("1", PIN_GERENTE),
+    });
+
+    expect(resposta.json<{ sessoes: unknown[] }>().sessoes).toHaveLength(1);
+  });
+
+  it("período malformado é 400", async () => {
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/api/caixa/sessoes?de=ontem",
+      headers: await entrar("1", PIN_GERENTE),
+    });
+
+    expect(resposta.statusCode).toBe(400);
+  });
+
+  it("dia sem movimento devolve lista vazia, não erro", async () => {
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/api/caixa/sessoes?de=2020-01-01",
+      headers: await entrar("1", PIN_GERENTE),
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json<{ sessoes: unknown[] }>().sessoes).toEqual([]);
+  });
+});

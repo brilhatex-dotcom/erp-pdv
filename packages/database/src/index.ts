@@ -35,3 +35,8 @@ export {
   type CatalogoParaReplica,
   type ProdutoParaReplica,
 } from "./consultas/catalogoParaReplica.js";
+export {
+  type FiltroSessoes,
+  type SessaoDeCaixa,
+  sessoesDeCaixa,
+} from "./consultas/sessoesDeCaixa.js";
