@@ -76,6 +76,14 @@ export {
 export { type DadosProduto, Produto, type TipoProduto } from "./catalogo/Produto.js";
 export { ReferenciaProduto, type TipoReferencia } from "./catalogo/ReferenciaProduto.js";
 
+// ── Compras ─────────────────────────────────────────────────────────────
+export { type DadosItemDaNota, ItemDaNota } from "./compras/ItemDaNota.js";
+export {
+  type DadosNotaDeCompra,
+  NotaDeCompra,
+  type StatusNota,
+} from "./compras/NotaDeCompra.js";
+
 // ── Estoque ─────────────────────────────────────────────────────────────
 export {
   type DadosMovimento,

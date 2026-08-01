@@ -5,12 +5,9 @@ import {
   err,
   ErroNaoEncontrado,
   ErroRegraNegocio,
-  type ErroValidacao,
   type Identificador,
-  MovimentoEstoque,
-  ok,
+  type MovimentoEstoque,
   type OrigemMovimento,
-  type Produto,
   Quantidade,
   type Result,
   type TipoMovimento,
@@ -19,6 +16,8 @@ import {
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
+
+import { movimentar } from "./movimentar.js";
 
 /**
  * Tipos que **não** entram por lançamento manual.
@@ -65,11 +64,14 @@ export interface EntradaMovimento {
 }
 
 /**
- * Registra um movimento de estoque.
+ * Registra um movimento de estoque avulso.
  *
  * O movimento é um **fato imutável** (ADR-0007): correção não altera o
  * lançamento anterior, gera um novo. É o que permite responder numa
  * fiscalização o que aconteceu, quando e por quem.
+ *
+ * Entrada de mercadoria com nota não passa por aqui — passa por
+ * `LancarNotaDeCompra`, que gera os mesmos movimentos amarrados ao documento.
  */
 export class RegistrarMovimento {
   constructor(
@@ -94,6 +96,13 @@ export class RegistrarMovimento {
     const informada = Quantidade.deMilesimos(entrada.quantidade, entrada.unidade);
     if (informada.isErr()) return err(informada.error);
 
+    const custo =
+      entrada.custoUnitario === undefined
+        ? undefined
+        : Dinheiro.deCentavos(entrada.custoUnitario);
+
+    if (custo?.isErr() === true) return err(custo.error);
+
     const agora = this.relogio.agora();
 
     return this.unitOfWork.transacao(async (repositorios) => {
@@ -110,68 +119,16 @@ export class RegistrarMovimento {
       // ao fornecedor o resto do lote. Bloquear aqui deixaria saldo preso num
       // produto que ninguém mais consegue mexer.
 
-      const convertida = converter(produto, informada.unwrap(), entrada.custoUnitario);
-      if (convertida.isErr()) return err(convertida.error);
-
-      const { quantidade, custoUnitario } = convertida.unwrap();
-
-      const movimento = MovimentoEstoque.criar({
-        id: this.geradorId.proximo(),
-        produtoId: produto.id,
+      return movimentar(repositorios, this.geradorId, produto, {
         tipo: entrada.tipo,
-        quantidade,
-        origem: entrada.origem ?? { tipo: "MANUAL" },
-        usuarioId: entrada.usuarioId,
-        ocorridoEm: agora,
-        custoUnitario,
+        quantidade: informada.unwrap(),
+        custoUnitario: custo?.unwrap(),
         lote: entrada.lote,
         observacao: entrada.observacao,
+        usuarioId: entrada.usuarioId,
+        origem: entrada.origem ?? { tipo: "MANUAL" },
+        ocorridoEm: agora,
       });
-
-      if (movimento.isErr()) return err(movimento.error);
-
-      await repositorios.estoque.registrar(movimento.unwrap());
-
-      return ok(movimento.unwrap());
     });
   }
-}
-
-/** Quantidade e custo já na unidade base do produto. */
-interface NaUnidadeBase {
-  readonly quantidade: Quantidade;
-  readonly custoUnitario: Dinheiro | undefined;
-}
-
-/**
- * Converte quantidade e custo para a unidade base do produto.
- *
- * Os dois andam juntos de propósito: o custo informado é **por unidade
- * informada**, e a proporção que o converte é a mesma que converte a
- * quantidade. Calculá-los em lugares separados é como um deles deixa de
- * acompanhar o outro.
- */
-function converter(
-  produto: Produto,
-  informada: Quantidade,
-  centavos: bigint | undefined,
-): Result<NaUnidadeBase, ErroValidacao> {
-  const convertida = produto.converterParaUnidadeBase(informada);
-  if (convertida.isErr()) return err(convertida.error);
-
-  const quantidade = convertida.unwrap();
-
-  if (centavos === undefined) return ok({ quantidade, custoUnitario: undefined });
-
-  const informado = Dinheiro.deCentavos(centavos);
-  if (informado.isErr()) return err(informado.error);
-
-  // Custo total dividido pela quantidade base: R$ 60,00 o fardo de 12 vira
-  // R$ 5,00 a unidade. Sem isto, o custo médio do produto passaria a ser o
-  // preço do fardo, e a margem de todo relatório iria junto.
-  const porUnidadeBase = informado
-    .unwrap()
-    .escalar(informada.milesimos, quantidade.milesimos);
-
-  return ok({ quantidade, custoUnitario: porUnidadeBase });
 }

@@ -3169,3 +3169,746 @@ describe("Extrato do estoque", () => {
     });
   });
 });
+
+// ── Compras ──────────────────────────────────────────────────────────────
+
+const COMPRADOR = {
+  ...USUARIO_GERENTE,
+  nome: "Bruno Estoquista",
+  papel: "ESTOQUISTA",
+  permissoes: ["estoque:entrada", "estoque:ajuste", "produto:ver_custo"],
+};
+
+const NOTA_NA_LISTA = {
+  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0020",
+  numero: "123456",
+  serie: "1",
+  fornecedorNome: "Distribuidora Central",
+  recebidaEm: "2026-07-30T12:00:00.000Z",
+  total: "3000",
+  quantidadeItens: 1,
+  status: "LANCADA" as const,
+  usuarioNome: "Bruno Estoquista",
+};
+
+const NOTA_COMPLETA = {
+  ...NOTA_NA_LISTA,
+  emitidaEm: "2026-07-28T12:00:00.000Z",
+  itens: [
+    {
+      numero: 1,
+      descricao: "Refrigerante Cola 2 Litros",
+      quantidade: "10000",
+      unidade: "UN",
+      custoUnitario: "300",
+      desconto: "0",
+      total: "3000",
+    },
+  ],
+};
+
+const PRODUTO_PARA_NOTA = {
+  itens: [
+    {
+      ...PRODUTO,
+      referencias: [],
+      embalagens: [{ unidade: "FD", fator: "12" }],
+    },
+  ],
+};
+
+const ROTAS_COMPRAS: Rotas = {
+  "/api/acesso/eu": () => json(200, COMPRADOR),
+  "/api/compras/notas": () => json(200, { itens: [NOTA_NA_LISTA] }),
+  "/api/compras/permissoes": () => json(200, { podeCancelar: true }),
+  "/api/fornecedores": () =>
+    json(200, {
+      itens: [
+        { id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0011", exibicao: "Distribuidora Central" },
+      ],
+    }),
+  "/api/produtos": () => json(200, PRODUTO_PARA_NOTA),
+};
+
+async function abrirCompras(extras: Rotas = {}): Promise<void> {
+  montarApp({ ...ROTAS_COMPRAS, ...extras });
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Compras" })).toBeVisible();
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Compras" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "Entrada de mercadoria" })).toBeVisible();
+  });
+}
+
+describe("Lista de notas de entrada", () => {
+  it("lista com fornecedor e total formatado", async () => {
+    await abrirCompras();
+
+    await waitFor(() => {
+      expect(screen.getByText("Distribuidora Central")).toBeVisible();
+    });
+    expect(screen.getByText("R$ 30,00")).toBeVisible();
+  });
+
+  it("🔑 marca a cancelada com texto, não só com cor", async () => {
+    await abrirCompras({
+      "/api/compras/notas": () =>
+        json(200, { itens: [{ ...NOTA_NA_LISTA, status: "CANCELADA" }] }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Cancelada")).toBeVisible();
+    });
+  });
+
+  it("pede as canceladas ao servidor quando a caixa é marcada", async () => {
+    const chamadas: string[] = [];
+
+    const buscar = vi.fn((url: string) => {
+      chamadas.push(url);
+      const caminho = url.split("?")[0] ?? url;
+      const rota = ROTAS_COMPRAS[caminho];
+      return Promise.resolve(
+        rota?.() ?? json(404, { erro: { codigo: "X", mensagem: "x" } }),
+      );
+    });
+
+    const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+    render(
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
+        <App />
+      </ProvedorSessao>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Compras" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Compras" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Mostrar também as canceladas/)).toBeVisible();
+    });
+    await userEvent.click(screen.getByLabelText(/Mostrar também as canceladas/));
+
+    await waitFor(() => {
+      expect(chamadas.some((url) => url.includes("incluirCanceladas=true"))).toBe(true);
+    });
+  });
+
+  it("procura por número e mostra o vazio certo", async () => {
+    await abrirCompras({ "/api/compras/notas": () => json(200, { itens: [] }) });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Lance a primeira/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Procurar nota/), "999");
+    await userEvent.click(screen.getByRole("button", { name: "Procurar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nada para "999"/)).toBeVisible();
+    });
+  });
+
+  it("falha ao listar oferece repetir", async () => {
+    await abrirCompras({
+      "/api/compras/notas": () =>
+        json(500, { erro: { codigo: "X", mensagem: "Banco fora do ar." } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Banco fora do ar");
+    });
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+  });
+});
+
+describe("Lançamento de nota", () => {
+  function montarLancamentoDeNota(rotas: Record<string, () => Response> = {}) {
+    return montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, COMPRADOR),
+      "GET /api/compras/notas": () => json(200, { itens: [] }),
+      "GET /api/compras/permissoes": () => json(200, { podeCancelar: true }),
+      "GET /api/fornecedores": () =>
+        json(200, {
+          itens: [
+            {
+              id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0011",
+              exibicao: "Distribuidora Central",
+            },
+          ],
+        }),
+      "GET /api/produtos": () => json(200, PRODUTO_PARA_NOTA),
+      "POST /api/compras/notas": () => json(201, NOTA_COMPLETA),
+      ...rotas,
+    });
+  }
+
+  async function irParaLancamento(): Promise<void> {
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Compras" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Compras" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Lançar nota" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Lançar nota de entrada" }),
+      ).toBeVisible();
+    });
+  }
+
+  async function adicionarLinha(): Promise<void> {
+    await userEvent.type(screen.getByLabelText(/Adicionar produto/), "REF001");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    });
+  }
+
+  it("🔑 a soma das linhas aparece enquanto se digita", async () => {
+    // Quem errou uma quantidade descobre com o papel ainda na mão, e não três
+    // meses depois quando o estoque não fecha.
+    montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+
+    expect(screen.getByText("Soma das linhas")).toBeVisible();
+    expect(screen.getAllByText("R$ 30,00").length).toBeGreaterThan(0);
+  });
+
+  it("🔑 avisa quando o total digitado não bate com as linhas", async () => {
+    montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "35,00");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Não bate com o total da nota/)).toBeVisible();
+    });
+  });
+
+  it("o aviso some quando os dois valores batem", async () => {
+    montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "30,00");
+
+    expect(screen.queryByText(/Não bate com o total da nota/)).not.toBeInTheDocument();
+  });
+
+  it("🔑 quantidade vai em milésimos e dinheiro em centavos", async () => {
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "1,5");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "4,50");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    const itens = enviado["itens"] as Record<string, unknown>[];
+
+    expect(itens[0]?.["quantidade"]).toBe("1500");
+    expect(itens[0]?.["custoUnitario"]).toBe("300");
+    expect(enviado["totalDeclarado"]).toBe("450");
+  });
+
+  it("🔑 oferece a embalagem do produto para não obrigar a multiplicar de cabeça", async () => {
+    montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    expect(screen.getByRole("option", { name: /FD — 12 UN/ })).toBeInTheDocument();
+  });
+
+  it("🔑 escolher a embalagem manda a unidade dela, e o servidor converte", async () => {
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.selectOptions(screen.getByLabelText(/^Unidade/), "FD");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "3");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "60,00");
+    await userEvent.type(screen.getByLabelText(/Observação/), "Entrega parcial");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "180,00");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const enviado = corpos.find((c) => c.metodo === "POST")?.corpo as Record<
+      string,
+      unknown
+    >;
+    const itens = enviado["itens"] as Record<string, unknown>[];
+
+    // O cliente manda o que foi digitado; a conversão para 36 unidades é do
+    // servidor, e a regra mora num lugar só.
+    expect(itens[0]).toMatchObject({ quantidade: "3000", unidade: "FD" });
+    expect(enviado["observacao"]).toBe("Entrega parcial");
+  });
+
+  it("🔑 a data que vai para o estoque é a da entrada, não a de hoje", async () => {
+    // Lançar uma nota de ontem precisa colocar o movimento em ontem, senão o
+    // custo médio sai da ordem em que as compras aconteceram de verdade.
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.type(screen.getByLabelText(/Série/), "1");
+    await userEvent.clear(screen.getByLabelText(/Emitida em/));
+    await userEvent.type(screen.getByLabelText(/Emitida em/), "2026-07-28");
+    await userEvent.clear(screen.getByLabelText(/Mercadoria entrou em/));
+    await userEvent.type(screen.getByLabelText(/Mercadoria entrou em/), "2026-07-30");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "30,00");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    expect(corpos.find((c) => c.metodo === "POST")?.corpo).toMatchObject({
+      emitidaEm: "2026-07-28",
+      recebidaEm: "2026-07-30",
+      serie: "1",
+    });
+  });
+
+  it("falha de rede ao procurar o produto vira aviso, não tela branca", async () => {
+    montarLancamentoDeNota({
+      "GET /api/produtos": () =>
+        json(500, { erro: { codigo: "X", mensagem: "Banco fora do ar." } }),
+    });
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Adicionar produto/), "REF001");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Banco fora do ar");
+    });
+  });
+
+  it("avisa quando o produto procurado não existe", async () => {
+    montarLancamentoDeNota({ "GET /api/produtos": () => json(200, { itens: [] }) });
+    await irParaLancamento();
+
+    await userEvent.type(screen.getByLabelText(/Adicionar produto/), "INEXISTENTE");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Nenhum produto");
+    });
+  });
+
+  it("remove a linha adicionada por engano", async () => {
+    montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remover" }));
+
+    expect(screen.getByText(/Sem item, nada entra no estoque/)).toBeVisible();
+  });
+
+  it("recusa campos obrigatórios vazios antes de chamar o servidor", async () => {
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    const antes = corpos.length;
+
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Escolha o fornecedor");
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("número da nota");
+
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("ao menos um item");
+
+    await adicionarLinha();
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Confira quantidade e custo");
+
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("total impresso");
+
+    expect(corpos.filter((c) => c.metodo === "POST")).toHaveLength(0);
+    expect(corpos.length).toBeGreaterThanOrEqual(antes);
+  });
+
+  it("recusa do servidor aparece sem perder o que foi digitado", async () => {
+    montarLancamentoDeNota({
+      "POST /api/compras/notas": () =>
+        json(409, {
+          erro: {
+            codigo: "NOTA_JA_LANCADA",
+            mensagem: "A nota 123456/1 deste fornecedor já foi lançada.",
+          },
+        }),
+    });
+
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "30,00");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("já foi lançada");
+    });
+    expect(screen.getByLabelText(/Número da nota/)).toHaveValue("123456");
+  });
+
+  it("avisa quando não há fornecedor cadastrado", async () => {
+    montarLancamentoDeNota({ "GET /api/fornecedores": () => json(200, { itens: [] }) });
+    await irParaLancamento();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nenhum fornecedor cadastrado/)).toBeVisible();
+    });
+  });
+
+  it("🔑 o desconto do fornecedor entra no total da linha e no corpo", async () => {
+    // 10 a R$ 3,00 com R$ 5,00 de desconto: a loja pagou R$ 25,00.
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Desconto/), "5,00");
+
+    // A soma já reflete o desconto antes de gravar.
+    expect(screen.getAllByText("R$ 25,00").length).toBeGreaterThan(0);
+
+    await userEvent.type(screen.getByLabelText(/Total impresso/), "25,00");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "POST")).toBe(true);
+    });
+
+    const itens = (
+      corpos.find((c) => c.metodo === "POST")?.corpo as {
+        itens: Record<string, unknown>[];
+      }
+    ).itens;
+
+    expect(itens[0]?.["desconto"]).toBe("500");
+  });
+
+  it("desconto malformado é recusado antes da rede", async () => {
+    const { corpos } = montarLancamentoDeNota();
+    await irParaLancamento();
+    await adicionarLinha();
+
+    await userEvent.selectOptions(
+      screen.getByLabelText(/Fornecedor/),
+      "Distribuidora Central",
+    );
+    await userEvent.type(screen.getByLabelText(/Número da nota/), "123456");
+    await userEvent.type(screen.getByLabelText(/^Quantidade/), "10");
+    await userEvent.type(screen.getByLabelText(/Custo unitário/), "3,00");
+    await userEvent.type(screen.getByLabelText(/Desconto/), "abc");
+    await userEvent.click(screen.getByRole("button", { name: "Lançar nota" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Confira quantidade e custo");
+    expect(corpos.filter((c) => c.metodo === "POST")).toHaveLength(0);
+  });
+
+  it("cancelar volta para a lista", async () => {
+    montarLancamentoDeNota();
+    await irParaLancamento();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Entrada de mercadoria" }),
+      ).toBeVisible();
+    });
+  });
+});
+
+describe("Detalhe e cancelamento da nota", () => {
+  const URL_NOTA = "/api/compras/notas/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0020";
+
+  async function abrirDetalhe(extras: Rotas = {}): Promise<void> {
+    await abrirCompras({ [URL_NOTA]: () => json(200, NOTA_COMPLETA), ...extras });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Abrir" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Nota 123456/ })).toBeVisible();
+    });
+  }
+
+  it("mostra os itens da nota", async () => {
+    await abrirDetalhe();
+
+    expect(screen.getByText("Refrigerante Cola 2 Litros")).toBeVisible();
+    expect(screen.getByText(/10 un/)).toBeVisible();
+  });
+
+  it("🔑 exige motivo antes de cancelar", async () => {
+    await abrirDetalhe();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cancelar nota e estornar estoque" }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Informe o motivo");
+  });
+
+  it("🔑 cancela com motivo e a nota aparece marcada", async () => {
+    let cancelada = false;
+
+    const buscar = vi.fn((url: string, init?: RequestInit) => {
+      const caminho = url.split("?")[0] ?? url;
+      const metodo = init?.method ?? "GET";
+
+      if (caminho === "/api/acesso/eu") return Promise.resolve(json(200, COMPRADOR));
+      if (caminho === "/api/compras/permissoes")
+        return Promise.resolve(json(200, { podeCancelar: true }));
+      if (caminho === "/api/compras/notas")
+        return Promise.resolve(json(200, { itens: [NOTA_NA_LISTA] }));
+      if (caminho === `${URL_NOTA}/cancelamento` && metodo === "POST") {
+        cancelada = true;
+        return Promise.resolve(json(200, NOTA_COMPLETA));
+      }
+      if (caminho === URL_NOTA) {
+        return Promise.resolve(
+          json(200, {
+            ...NOTA_COMPLETA,
+            ...(cancelada
+              ? { status: "CANCELADA", motivoCancelamento: "Lançada em duplicidade" }
+              : {}),
+          }),
+        );
+      }
+      return Promise.resolve(json(404, { erro: { codigo: "X", mensagem: "x" } }));
+    });
+
+    const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+    render(
+      <ProvedorSessao contexto="RETAGUARDA" cliente={cliente}>
+        <App />
+      </ProvedorSessao>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Compras" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Compras" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Abrir" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Motivo/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Motivo/), "Lançada em duplicidade");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cancelar nota e estornar estoque" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nota cancelada/)).toBeVisible();
+    });
+    expect(screen.getByText(/Lançada em duplicidade/)).toBeVisible();
+  });
+
+  it("mostra a observação da nota quando existe", async () => {
+    await abrirDetalhe({
+      "/api/compras/notas/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0020": () =>
+        json(200, { ...NOTA_COMPLETA, observacao: "Entrega parcial" }),
+    });
+
+    expect(screen.getByText("Entrega parcial")).toBeVisible();
+  });
+
+  it("recusa do servidor no cancelamento aparece na tela", async () => {
+    await abrirDetalhe({
+      "/api/compras/notas/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0020/cancelamento": () =>
+        json(422, {
+          erro: { codigo: "NOTA_JA_CANCELADA", mensagem: "Esta nota já foi cancelada." },
+        }),
+    });
+
+    await userEvent.type(screen.getByLabelText(/Motivo/), "Duplicada");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cancelar nota e estornar estoque" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("já foi cancelada");
+    });
+  });
+
+  it("🔑 quem não pode cancelar não vê o formulário de cancelamento", async () => {
+    await abrirDetalhe({
+      "/api/compras/permissoes": () => json(200, { podeCancelar: false }),
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Cancelar nota e estornar estoque" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("nota já cancelada não oferece cancelar de novo", async () => {
+    await abrirDetalhe({
+      [URL_NOTA]: () =>
+        json(200, {
+          ...NOTA_COMPLETA,
+          status: "CANCELADA",
+          motivoCancelamento: "Duplicada",
+        }),
+    });
+
+    expect(screen.getByText(/Nota cancelada/)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Cancelar nota e estornar estoque" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falha ao carregar a nota oferece repetir, e voltar leva à lista", async () => {
+    await abrirCompras({
+      [URL_NOTA]: () => json(500, { erro: { codigo: "X", mensagem: "Falhou." } }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Abrir" })).toBeVisible();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeVisible();
+    });
+  });
+});
+
+// ── Barreira de erro ─────────────────────────────────────────────────────
+
+const NOTA_SEM_TOTAL = { id: "x", numero: "1" };
+
+/**
+ * Abre Compras com uma resposta que **falta um campo**.
+ *
+ * Não usa `abrirCompras` de propósito: a tela quebra na primeira listagem, e
+ * esperar pelo cabeçalho dela seria esperar por algo que a barreira já
+ * substituiu.
+ */
+async function abrirComprasQuebrada(): Promise<void> {
+  montarApp({
+    ...ROTAS_COMPRAS,
+    "/api/compras/notas": () => json(200, { itens: [NOTA_SEM_TOTAL] }),
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Compras" })).toBeVisible();
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Compras" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "Esta tela não abriu" })).toBeVisible();
+  });
+}
+
+describe("Barreira de erro", () => {
+  it("🔑 resposta malformada não deixa a tela em branco", async () => {
+    // A causa real: servidor atualizado e página do cliente ainda na versão
+    // antiga, sem um campo que a tela espera. Sem a barreira, a página some
+    // inteira — sem mensagem, sem botão, sem pista para o suporte.
+    await abrirComprasQuebrada();
+
+    expect(screen.getByRole("button", { name: "Recarregar" })).toBeVisible();
+  });
+
+  it("🔑 não mostra a exceção ao operador", async () => {
+    await abrirComprasQuebrada();
+
+    // Erro técnico na tela é veto do papel UX (CLAUDE.md §9).
+    expect(document.body.textContent).not.toContain("BigInt");
+    expect(document.body.textContent).not.toContain("TypeError");
+  });
+
+  it("🔑 a navegação continua de pé e a próxima aba abre normalmente", async () => {
+    // Se a barreira envolvesse a página inteira, o usuário ficaria preso.
+    await abrirComprasQuebrada();
+
+    await userEvent.click(screen.getByRole("button", { name: "Produtos" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Produtos" })).toBeVisible();
+    });
+  });
+});

@@ -2,9 +2,11 @@ import { Botao, Carregando } from "@erp/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
+import { BarreiraDeErro } from "./BarreiraDeErro.js";
 import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
+import { Compras } from "./telas/Compras.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
 import { Estoque } from "./telas/Estoque.js";
 import { Fornecedores } from "./telas/Fornecedores.js";
@@ -92,6 +94,7 @@ const SECOES = [
   // cadastro responde outra pergunta — "que produtos eu tenho".
   { chave: "CONSULTA", rotulo: "Consulta de preço", permissao: undefined },
   { chave: "ESTOQUE", rotulo: "Estoque", permissao: undefined },
+  { chave: "COMPRAS", rotulo: "Compras", permissao: "estoque:entrada" },
   { chave: "CLIENTES", rotulo: "Clientes", permissao: "cliente:consultar" },
   { chave: "FORNECEDORES", rotulo: "Fornecedores", permissao: "fornecedor:consultar" },
   { chave: "CATEGORIAS", rotulo: "Categorias", permissao: "categoria:gerenciar" },
@@ -140,7 +143,15 @@ function Retaguarda(): ReactNode {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Conteudo secao={secao} />
+        {/*
+          A barreira envolve só o conteúdo, e não a página: se uma tela quebra,
+          o cabeçalho e a navegação continuam de pé e o usuário troca de seção
+          em vez de ficar preso. `key` a reinicia ao mudar de aba — sem isso,
+          uma tela que quebrou deixaria a barreira aberta sobre a seguinte.
+        */}
+        <BarreiraDeErro key={secao}>
+          <Conteudo secao={secao} />
+        </BarreiraDeErro>
       </main>
     </div>
   );
@@ -162,6 +173,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <ConsultarProduto />;
     case "ESTOQUE":
       return <Estoque />;
+    case "COMPRAS":
+      return <Compras />;
     default:
       return <Produtos />;
   }

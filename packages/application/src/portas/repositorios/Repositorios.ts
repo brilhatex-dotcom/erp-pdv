@@ -14,6 +14,7 @@ import type {
   DomainEvent,
   Identificador,
   MovimentoEstoque,
+  NotaDeCompra,
   Produto,
   SaldoEstoque,
   SessaoCaixa,
@@ -80,6 +81,27 @@ export interface EstoqueRepository {
   registrar(movimento: MovimentoEstoque): Promise<void>;
 }
 
+export interface NotaDeCompraRepository {
+  porId(id: Identificador): Promise<NotaDeCompra | undefined>;
+
+  /**
+   * Localiza a nota **lançada** com a identificação que o fornecedor deu a ela.
+   *
+   * É a consulta que impede a mesma nota de entrar duas vezes — o defeito mais
+   * comum da entrada de mercadoria, e o que dobra o estoque sem ninguém notar.
+   *
+   * Ignora as canceladas: quem digitou a quantidade errada cancela e relança
+   * com o mesmo número, e considerar a cancelada travaria a correção.
+   */
+  porChave(
+    fornecedorId: Identificador,
+    numero: string,
+    serie: string | undefined,
+  ): Promise<NotaDeCompra | undefined>;
+
+  salvar(nota: NotaDeCompra): Promise<void>;
+}
+
 export interface CaixaRepository {
   porId(id: Identificador): Promise<SessaoCaixa | undefined>;
   /** Sessão aberta numa estação, se houver. Só pode existir uma. */
@@ -111,4 +133,5 @@ export interface Repositorios {
   readonly categorias: CategoriaRepository;
   readonly clientes: ClienteRepository;
   readonly fornecedores: FornecedorRepository;
+  readonly notasDeCompra: NotaDeCompraRepository;
 }

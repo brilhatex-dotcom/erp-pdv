@@ -319,6 +319,22 @@ describe("Ajuste e perda", () => {
     expect(negativa.isErr()).toBe(true);
   });
 
+  it("recusa custo que estoura o limite de dinheiro", async () => {
+    const antes = cenario.estoque.movimentos.length;
+
+    const resultado = await cenario.registrar.executar({
+      produtoId: PRODUTO,
+      tipo: "ENTRADA",
+      quantidade: 1_000n,
+      unidade: "UN",
+      custoUnitario: 10n ** 20n,
+      usuarioId: USUARIO,
+    });
+
+    expect(resultado.isErr()).toBe(true);
+    expect(cenario.estoque.movimentos).toHaveLength(antes);
+  });
+
   it("recusa custo negativo", async () => {
     const resultado = await cenario.registrar.executar({
       produtoId: PRODUTO,

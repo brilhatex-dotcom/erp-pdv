@@ -10,6 +10,7 @@ export type { UnitOfWork } from "./portas/infraestrutura/UnitOfWork.js";
 export type {
   CaixaRepository,
   EstoqueRepository,
+  NotaDeCompraRepository,
   OutboxRepository,
   ProdutoRepository,
   Repositorios,
@@ -104,6 +105,17 @@ export type {
   EmbalagemBruta,
   ReferenciaBruta,
 } from "./casos-de-uso/catalogo/interpretarProduto.js";
+
+// ── Compras ─────────────────────────────────────────────────────────────
+export {
+  CancelarNotaDeCompra,
+  type EntradaCancelarNota,
+} from "./casos-de-uso/compras/CancelarNotaDeCompra.js";
+export {
+  type EntradaLancarNota,
+  type ItemBruto,
+  LancarNotaDeCompra,
+} from "./casos-de-uso/compras/LancarNotaDeCompra.js";
 
 // ── Estoque ─────────────────────────────────────────────────────────────
 export {

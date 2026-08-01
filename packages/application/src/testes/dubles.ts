@@ -12,6 +12,7 @@ import {
   type Matricula,
   montarUuidV7,
   type MovimentoEstoque,
+  type NotaDeCompra,
   type Papel,
   type Produto,
   type Result,
@@ -31,6 +32,7 @@ import type { UnitOfWork } from "../portas/infraestrutura/UnitOfWork.js";
 import type {
   CaixaRepository,
   EstoqueRepository,
+  NotaDeCompraRepository,
   OutboxRepository,
   ProdutoRepository,
   Repositorios,
@@ -181,6 +183,37 @@ export class EstoqueRepositorioEmMemoria implements EstoqueRepository {
 
   registrar(movimento: MovimentoEstoque): Promise<void> {
     this.movimentos.push(movimento);
+    return Promise.resolve();
+  }
+}
+
+export class NotaDeCompraRepositorioEmMemoria implements NotaDeCompraRepository {
+  readonly itens = new Map<string, NotaDeCompra>();
+
+  porId(id: Identificador): Promise<NotaDeCompra | undefined> {
+    return Promise.resolve(this.itens.get(id.valor));
+  }
+
+  porChave(
+    fornecedorId: Identificador,
+    numero: string,
+    serie: string | undefined,
+  ): Promise<NotaDeCompra | undefined> {
+    for (const nota of this.itens.values()) {
+      const mesma =
+        !nota.estaCancelada &&
+        nota.fornecedorId.equals(fornecedorId) &&
+        nota.numero === numero.trim() &&
+        (nota.serie ?? "") === (serie?.trim() ?? "");
+
+      if (mesma) return Promise.resolve(nota);
+    }
+
+    return Promise.resolve(undefined);
+  }
+
+  salvar(nota: NotaDeCompra): Promise<void> {
+    this.itens.set(nota.id.valor, nota);
     return Promise.resolve();
   }
 }
@@ -492,6 +525,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly categorias: CategoriaRepositorioEmMemoria;
   readonly clientes: ClienteRepositorioEmMemoria;
   readonly fornecedores: FornecedorRepositorioEmMemoria;
+  readonly notasDeCompra: NotaDeCompraRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -508,6 +542,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const categorias = new CategoriaRepositorioEmMemoria();
   const clientes = new ClienteRepositorioEmMemoria();
   const fornecedores = new FornecedorRepositorioEmMemoria();
+  const notasDeCompra = new NotaDeCompraRepositorioEmMemoria();
 
   return {
     produtos,
@@ -521,6 +556,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     categorias,
     clientes,
     fornecedores,
+    notasDeCompra,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -534,6 +570,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       categorias,
       clientes,
       fornecedores,
+      notasDeCompra,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

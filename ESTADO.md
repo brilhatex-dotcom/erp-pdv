@@ -79,6 +79,8 @@ movimentação é o pior de resolver.
 | Cadastros — categoria, cliente, fornecedor | ✅ Completo, ponta a ponta | domínio → banco → API → telas |
 | **Produtos — cadastro completo** | ✅ Completo, ponta a ponta | `casos-de-uso/catalogo/`, `rotas/produtos.ts`, `telas/Produtos.tsx` |
 | **Estoque — movimento, saldo e extrato** | ✅ Completo, ponta a ponta | `casos-de-uso/estoque/`, `consultas/estoque.ts`, `rotas/estoque.ts`, `telas/Estoque.tsx` |
+| **Compras — entrada de mercadoria** | ✅ Completo, ponta a ponta | `domain/compras/`, `casos-de-uso/compras/`, `rotas/compras.ts`, `telas/Compras.tsx` |
+| Barreira de erro da retaguarda | ✅ Tela que quebra não derruba a página | `apps/web/src/BarreiraDeErro.tsx` |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
 | Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
@@ -87,7 +89,7 @@ movimentação é o pior de resolver.
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**2.218 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**2.349 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -129,7 +131,7 @@ Duas frentes que destravam o resto:
 | 5 | Fornecedores | ✅ Pronto |
 | 6 | Produtos | ✅ Pronto — cadastro, alteração, busca da retaguarda e correção de preço pelo supervisor |
 | 7 | Estoque | ✅ Movimento, saldo e extrato prontos. **Falta a contagem de inventário em lote** — ver §2.4 |
-| 8 | **Compras** | ⬜ Nada existe. Entrada de mercadoria, que alimenta o estoque |
+| 8 | Compras | ✅ Nota de entrada, cancelamento com estorno e lista. **Falta o pedido de compra** — ver §2.4 |
 | 9 | Vendas | ✅ Pronto |
 | 10 | PDV | ⚠️ Pronto como Electron; **vira PWA** (ADR-0023) |
 | 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
@@ -161,6 +163,17 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
+- **Pedido de compra não existe.** O que existe é a **nota de entrada**: o
+  documento do que já chegou. Falta o passo anterior — pedir ao fornecedor e
+  conferir o recebimento contra o pedido. Não bloqueia a operação (a loja de
+  bairro compra por telefone e confere com o papel na mão), e entra junto com a
+  importação do XML da nota, que é quando o rascunho de nota passa a valer a pena.
+- **Cancelar nota não desfaz o custo médio.** O estorno é `AJUSTE_NEGATIVO`, que
+  corrige quantidade e **não** valor — o correto para um ajuste. Mas o custo médio
+  já foi contaminado pela entrada errada e continua contaminado depois do
+  cancelamento. Corrigi-lo exigiria reprojetar o saldo a partir dos movimentos,
+  que é operação de manutenção e ainda não existe. **Gatilho:** quando houver
+  recálculo de projeção, ligar os dois.
 - **Contagem de inventário em lote não existe.** Dá para lançar `AJUSTE_POSITIVO` e
   `AJUSTE_NEGATIVO` um a um, com justificativa, e é o suficiente para corrigir
   divergência pontual. O que falta é o fluxo de **contagem às cegas** da loja

@@ -13,6 +13,7 @@ import {
   FornecedorRepositorioPrisma,
 } from "./repositorios/CadastroRepositorioPrisma.js";
 import { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
+import { CompraRepositorioPrisma } from "./repositorios/CompraRepositorioPrisma.js";
 import { EstoqueRepositorioPrisma } from "./repositorios/EstoqueRepositorioPrisma.js";
 import { OutboxRepositorioPrisma } from "./repositorios/OutboxRepositorioPrisma.js";
 import { ProdutoRepositorioPrisma } from "./repositorios/ProdutoRepositorioPrisma.js";
@@ -114,5 +115,6 @@ export function montarRepositorios(tx: Prisma.TransactionClient): Repositorios {
     categorias: new CategoriaRepositorioPrisma(tx),
     clientes: new ClienteRepositorioPrisma(tx),
     fornecedores: new FornecedorRepositorioPrisma(tx),
+    notasDeCompra: new CompraRepositorioPrisma(tx),
   };
 }
