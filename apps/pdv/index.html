@@ -2,7 +2,20 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `user-scalable=no`: no balcão o dedo encosta na tela o tempo todo, e um
+         pinch acidental que aumenta o zoom deixa o operador sem achar o campo
+         de código no meio de uma venda. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1a5fd0" />
+    <meta name="description" content="Frente de caixa do ERP, operada por teclado." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PDV" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icones/icone-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icones/icone-192.png" />
     <title>PDV — ERP</title>
   </head>
   <body>
