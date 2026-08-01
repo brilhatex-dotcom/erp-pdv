@@ -44,11 +44,10 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 01/08/2026 | O que ela mexe |
 |---|---|---|
-| `claude/agente-local` | 2 commits à frente de `main`, 0 atrás | Implementa o **ADR-0023**: move `apps/pdv/src/principal/**` para um `apps/agente/` novo e cria `packages/agente-contrato`. Toca impressão, fila offline e catálogo replicado |
+| `claude/agente-local` | Aguardando merge (PR #9) | Implementa o **ADR-0023**: move `apps/pdv/src/principal/**` para um `apps/agente/` novo e cria `packages/agente-contrato`. Toca impressão, fila offline e catálogo replicado. **Ao mesclar, apague-a e esvazie esta tabela** |
 
-> `claude/gestao-de-usuarios` esteve nesta lista e **já foi mesclada** — o módulo
-> de usuários está em `main`. A branch some assim que puder ser apagada no
-> GitHub (o ambiente de desenvolvimento recusa a exclusão remota).
+> Já mescladas e apagadas: `claude/gestao-de-usuarios` e
+> `claude/cadastro-de-empresa`.
 
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
@@ -85,12 +84,15 @@ movimentação é o pior de resolver.
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
 | Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
-| Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
+| **Agente Local** | ✅ Serviço HTTP em `127.0.0.1:9787` — impressão, fila offline e catálogo | `apps/agente/` |
+| Contrato tela ↔ Agente | ✅ Tipos e cliente HTTP compartilhados | `packages/agente-contrato/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
 | **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 
-**2.415 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**2.449 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (20 tarefas —
+entraram `@erp/agente` e `@erp/agente-contrato`). O grafo de dependências ficou **sem
+nenhum órfão**: os dois avisos que sobravam eram do processo Electron, que saiu.
 
 Verificação completa em um comando:
 
@@ -107,7 +109,7 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 > **A ordem abaixo é decisão do responsável pelo produto, não sugestão técnica.**
 > O fiscal deixou de ser bloqueador (ADR-0022): entra **depois** de tudo isto.
 
-### 2.1 ⬅️ PRÓXIMO — Agente Local
+### 2.1 As duas frentes que destravavam o resto — ambas concluídas
 
 - ~~**Cadastro da empresa**~~ ✅ **Pronto.** CNPJ, razão social, endereço, regime
   tributário e contato, com índice único no esquema garantindo a linha única
@@ -115,12 +117,21 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   notas já emitidas passariam a apontar para um emitente que nunca as emitiu.
   **Falta o logotipo** — entra junto com a impressão comum (módulo 19), que é
   quem vai usá-lo.
-- **Agente Local** (ADR-0023): o processo instalado que passa a ser dono da
-  impressão, da fila offline e do catálogo replicado. `FilaDeVendas`,
-  `ReplicaCatalogo` e `Sincronizador` **mudam de casa, não são reescritos** — hoje
-  vivem no processo principal do Electron.
-  🔶 **Já está em andamento** na branch `claude/agente-local` (§0.1). Não comece
-  do zero: parta dela ou espere o merge.
+- ~~**Agente Local**~~ ✅ **Pronto** (ADR-0023). `apps/agente` é um serviço Node
+  em `127.0.0.1:9787`, dono da impressão, da fila offline e do catálogo
+  replicado. `FilaDeVendas`, `ReplicaCatalogo` e `Sincronizador` **mudaram de
+  casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
+  fala HTTP pelo `@erp/agente-contrato`.
+
+### 2.1.1 ⬅️ PRÓXIMO — Financeiro (módulo 12)
+
+É o primeiro ⬜ da ordem pedida em §2.2. Contas a pagar e a receber; o crediário
+da venda **já grava o título**, então o que falta é a baixa, o extrato e a
+cobrança — não o registro.
+
+Dois candidatos baratos podem entrar antes, se a preferência for fechar
+pendências curtas: o **manifesto PWA** (módulo 18) encerra o ADR-0023, e a
+**casca Electron de quiosque** é trabalho de poucas horas. Ambos em §2.4.
 
 ### 2.2 Módulos do ERP, na ordem pedida
 
@@ -135,7 +146,7 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 | 7 | Estoque | ✅ Movimento, saldo e extrato prontos. **Falta a contagem de inventário em lote** — ver §2.4 |
 | 8 | Compras | ✅ Nota de entrada, cancelamento com estorno e lista. **Falta o pedido de compra** — ver §2.4 |
 | 9 | Vendas | ✅ Pronto |
-| 10 | PDV | ⚠️ Pronto como Electron; **vira PWA** (ADR-0023) |
+| 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
 | 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
 | 12 | **Financeiro** | ⬜ Nada existe. Contas a pagar e a receber; o crediário da venda já grava o título |
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
@@ -145,7 +156,7 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | **PWA** | ⬜ Manifesto, service worker e instalação na área de trabalho |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
-| 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto; faltam Bematech, Elgin, Epson e Daruma |
+| 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto no Agente; faltam Bematech, Elgin, Epson e Daruma |
 
 ### 2.3 Só depois de tudo acima — fiscal com provedor real
 
@@ -165,6 +176,13 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
+- **A casca Electron de quiosque ainda não existe** (ADR-0023). O processo
+  principal antigo foi removido junto com a migração para o Agente; a casca fina
+  — que só abre a PWA em tela cheia — é trabalho de poucas horas, para quando
+  houver instalador. Ela não pode ganhar lógica.
+- **O segredo do Agente vem de `VITE_SEGREDO_AGENTE` no build da PWA.** É
+  provisório e está marcado como tal em `balcao.ts`: o certo é o servidor da loja
+  entregá-lo junto com a sessão, para não viajar dentro de um bundle público.
 - **Pedido de compra não existe.** O que existe é a **nota de entrada**: o
   documento do que já chegou. Falta o passo anterior — pedir ao fornecedor e
   conferir o recebimento contra o pedido. Não bloqueia a operação (a loja de
@@ -190,11 +208,6 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   GIN com `pg_trgm`) acrescentaria uma extensão do PostgreSQL à responsabilidade do
   instalador. **Gatilho de revisão:** acima de ~50 mil produtos, ou busca passando de
   300 ms, medir e reconsiderar.
-- **A casca Electron vira quiosque fino** (ADR-0023): abre a PWA em tela cheia e
-  não contém lógica nenhuma. O processo principal de hoje — dono de fila,
-  catálogo e impressão — migra para o Agente Local. Casca que ganha lógica volta
-  a ser uma segunda aplicação, e aí todo defeito precisa ser reproduzido duas
-  vezes.
 
 ## 3. Armadilhas já pagas — não caia de novo
 
@@ -215,6 +228,7 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`.env` sumido em ambiente novo** | `P1012: Environment variable not found: DATABASE_URL` | O `.env` é ignorado pelo git e não sobrevive a um contêiner novo. Recrie: `cp packages/database/.env.example packages/database/.env` |
 | **`prisma migrate dev` trava sem saída** | Comando fica parado; matá-lo deixa `P1002: timed out acquiring advisory lock` | `migrate dev` é **interativo** (pede nome da migração). Em sessão automatizada use `pnpm db:deploy`. Se já travou, mate o processo e derrube a conexão presa: `pg_terminate_backend` no banco |
 | **`as CodigoUnidade` num dado de disco** | `Cannot read properties of undefined (reading 'fracionavel')` no meio da bipada | O domínio procura a unidade numa tabela. Afirmar o tipo sem checar troca recusa clara por tela branca — use `ehCodigoUnidade` antes |
+| **Mock de teste desatualizado passa despercebido** | Teste verde com `An error occurred in the <p> component` no log | Ao mudar o que uma função devolve, o dublê que ainda devolve o formato antigo **não** quebra o teste — só faz o React estourar em segundo plano. Ler o log do `test:cov`, não só o placar |
 | **`BigInt(texto)` de arquivo externo** | Exceção não tratada em vez de recusa | `BigInt("abc")` **lança**. Todo centavo lido de disco ou rede passa por `/^\d+$/` antes |
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |

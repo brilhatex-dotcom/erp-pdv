@@ -1,0 +1,33 @@
+{
+  "name": "@erp/agente-contrato",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Contrato HTTP entre a tela do PDV e o Agente Local da estação",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@erp/printing": "workspace:*"
+  }
+}

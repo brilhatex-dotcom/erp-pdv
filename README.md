@@ -41,7 +41,8 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 | **Etapa 9d — Fechamento de caixa** | ✅ **Concluída** — sangria com alçada, suprimento e conferência às cegas |
 | **Etapa 9e — Conferência dos caixas** | ✅ **Concluída** — sessões do período com divergência recalculada, na retaguarda |
 | **Estratégia revista em 01/08/2026** | 🧭 Fiscal **fora do caminho crítico** ([ADR-0022](docs/adr/0022-fiscal-fora-do-caminho-critico.md)) · PDV vira **PWA + Agente Local** ([ADR-0023](docs/adr/0023-pdv-como-pwa-com-agente-local.md)) · **uma empresa por instalação** ([ADR-0024](docs/adr/0024-uma-empresa-por-instalacao.md)) |
-| Próximo — Empresa e Agente Local | ⬜ Ver [`ESTADO.md`](ESTADO.md) §2.1 |
+| **Agente Local** | ✅ **Concluído** — serviço em `127.0.0.1:9787` com impressão, fila offline e catálogo; três camadas de defesa na porta |
+| Próximo — Cadastro de Empresa | ⬜ Ver [`ESTADO.md`](ESTADO.md) §2.1 |
 | Depois — Compras, Financeiro, Dashboard, Backup, Instalador, PWA, drivers por marca | ⬜ Ordem em [`ESTADO.md`](ESTADO.md) §2.2 |
 | Por último — Fiscal com provedor real | ⬜ Até lá, `ProvedorFiscalSimulado` |
 
@@ -106,10 +107,12 @@ packages/
   cliente-api/ cliente HTTP e sessão, usados pela retaguarda e pelo PDV
   ui/          design system: tokens, componentes e estados de tela
   printing/    comandos ESC/POS e layout de cupom — puro, sem hardware
+  agente-contrato/ contrato HTTP entre a tela do PDV e o Agente Local
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
   web/         retaguarda: SPA React + Vite
   pdv/         frente de caixa: venda por teclado (React + Vite)
+  agente/      Agente Local da estação: impressão, fila offline e catálogo
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio

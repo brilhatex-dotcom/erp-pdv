@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+
 import { z } from "zod";
 
 /**
- * Configuração da estação.
+ * Configuração do Agente Local.
  *
  * Vive num arquivo JSON ao lado do executável, e **não** no banco: a estação
  * precisa saber qual é a impressora dela antes de conseguir falar com o
@@ -10,6 +12,11 @@ import { z } from "zod";
  *
  * Validada na abertura, com Zod, como toda fronteira (CLAUDE.md §6). Arquivo
  * corrompido não pode virar `undefined` silencioso três telas adiante.
+ *
+ * **O segredo é a única coisa sem padrão seguro.** Tudo aqui degrada para um
+ * valor razoável quando falta; o segredo não pode — Agente que aceita segredo
+ * vazio é Agente sem a terceira camada de defesa (`seguranca.ts`). Sem ele, o
+ * processo se recusa a subir, e é o instalador que o grava.
  */
 
 const esquemaImpressora = z.discriminatedUnion("tipo", [
@@ -35,8 +42,27 @@ export const esquemaConfiguracao = z.object({
   impressora: esquemaImpressora.default({ tipo: "NENHUMA" }),
   /** 48 para papel de 80 mm; 32 para 58 mm. */
   colunas: z.number().int().min(24).max(96).default(48),
-  /** Tela cheia sem barra — o balcão não navega em outra coisa. */
+  /** Tela cheia sem barra — vale para a casca de quiosque, quando usada. */
   quiosque: z.boolean().default(true),
+  /** Onde ficam a fila de vendas e o catálogo replicado. */
+  pastaDados: z.string().min(1).default("./dados"),
+  /**
+   * Origens autorizadas a falar com o Agente.
+   *
+   * É o endereço do servidor da loja, de onde a PWA é servida. Lista vazia
+   * significa que só programa local — sem `Origin` — consegue conversar.
+   */
+  origensPermitidas: z.array(z.string().min(1)).default([]),
+  /**
+   * Segredo de emparelhamento, gravado na instalação.
+   *
+   * O padrão é vazio para que a leitura continue degradando como o resto — mas
+   * `carregarConfiguracao` **recusa** subir com ele vazio ou curto. Interpretar
+   * é tolerante; carregar é estrito, e a distinção é de propósito: um arquivo
+   * com uma vírgula a mais não pode derrubar a estação, e um Agente sem segredo
+   * não pode existir.
+   */
+  segredo: z.string().default(""),
 });
 
 /**
@@ -90,4 +116,31 @@ export function interpretarConfiguracao(bruto: string | undefined): {
   }
 
   return { configuracao: lida.data };
+}
+
+/**
+ * Lê a configuração do arquivo apontado pela variável de ambiente.
+ *
+ * Falha ao ler é **fatal aqui**, ao contrário do resto: sem configuração não há
+ * segredo, e sem segredo o Agente não pode subir. Melhor não abrir e deixar o
+ * rastro no log do serviço do que abrir com uma porta destrancada.
+ */
+export const TAMANHO_MINIMO_SEGREDO = 16;
+
+export function carregarConfiguracao(caminho: string | undefined): ConfiguracaoDaEstacao {
+  if (caminho === undefined) {
+    throw new Error("Defina ERP_AGENTE_CONFIG com o caminho da configuração.");
+  }
+
+  const { configuracao, aviso } = interpretarConfiguracao(readFileSync(caminho, "utf8"));
+
+  if (aviso !== undefined) throw new Error(aviso);
+
+  if (configuracao.segredo.length < TAMANHO_MINIMO_SEGREDO) {
+    throw new Error(
+      `O segredo do agente precisa de ao menos ${String(TAMANHO_MINIMO_SEGREDO)} caracteres.`,
+    );
+  }
+
+  return configuracao;
 }

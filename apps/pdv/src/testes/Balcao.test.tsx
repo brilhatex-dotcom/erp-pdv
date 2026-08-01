@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ClienteAgente } from "@erp/agente-contrato";
+
 import { App } from "../App.js";
+import { definirAgenteParaTeste } from "../balcao.js";
 
 /**
  * O balcão, do ponto de vista de quem opera.
@@ -664,14 +667,14 @@ describe("cupom no fechamento da venda", () => {
   };
 
   function instalarPonte(imprimirCupom: ReturnType<typeof vi.fn>): void {
-    Object.defineProperty(globalThis.window, "balcao", {
-      value: { imprimirCupom, abrirGaveta: vi.fn(), configuracao: vi.fn() },
-      configurable: true,
-    });
+    definirAgenteParaTeste({
+      imprimirCupom,
+      abrirGaveta: vi.fn(),
+    } as unknown as ClienteAgente);
   }
 
   afterEach(() => {
-    Reflect.deleteProperty(globalThis.window, "balcao");
+    definirAgenteParaTeste(undefined);
   });
 
   async function venderAtePagar(): Promise<void> {
@@ -687,7 +690,7 @@ describe("cupom no fechamento da venda", () => {
   }
 
   it("🔑 o cupom sai com os dados da venda, e a gaveta abre no dinheiro", async () => {
-    const imprimirCupom = vi.fn().mockResolvedValue({ tipo: "IMPRESSO" });
+    const imprimirCupom = vi.fn().mockResolvedValue(undefined);
     instalarPonte(imprimirCupom);
 
     montar(VENDENDO_CUPOM);
@@ -717,7 +720,9 @@ describe("cupom no fechamento da venda", () => {
     const ordem: string[] = [];
     const imprimirCupom = vi.fn().mockImplementation(() => {
       ordem.push("imprimiu");
-      return Promise.resolve({ tipo: "IMPRESSO" });
+      // `undefined` é "nada a avisar": o cliente do Agente já traduz o desfecho
+      // em mensagem, e devolver o objeto cru faria a tela tentar renderizá-lo.
+      return Promise.resolve(undefined);
     });
     instalarPonte(imprimirCupom);
 
@@ -735,10 +740,9 @@ describe("cupom no fechamento da venda", () => {
     // "Falhou" seria falso e faria o operador refazer a venda, que é como se
     // cobra o cliente duas vezes.
     instalarPonte(
-      vi.fn().mockResolvedValue({
-        tipo: "NAO_IMPRESSO",
-        mensagem: "Cupom não impresso. A venda foi registrada normalmente.",
-      }),
+      vi
+        .fn()
+        .mockResolvedValue("Cupom não impresso. A venda foi registrada normalmente."),
     );
 
     montar(VENDENDO_CUPOM);

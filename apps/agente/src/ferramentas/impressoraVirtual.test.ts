@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { COLUNAS_80MM } from "@erp/printing";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { impressoraDeRede } from "../principal/ponte-hardware/impressora.js";
-import { ServicoImpressao } from "../principal/ponte-hardware/servicoImpressao.js";
+import { impressoraDeRede } from "../hardware/impressora.js";
+import { ServicoImpressao } from "../hardware/servicoImpressao.js";
 import { ImpressoraVirtual } from "./impressoraVirtual.js";
 
 const CUPOM = {

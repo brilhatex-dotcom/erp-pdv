@@ -1,0 +1,30 @@
+{
+  "name": "@erp/agente",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agente Local da estação: impressão, fila offline e catálogo replicado",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "impressora:virtual": "pnpm build && node scripts/impressora-virtual.mjs"
+  },
+  "dependencies": {
+    "@erp/agente-contrato": "workspace:*",
+    "@erp/domain": "workspace:*",
+    "@erp/printing": "workspace:*",
+    "@erp/utils": "workspace:*",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

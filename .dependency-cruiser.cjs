@@ -136,6 +136,9 @@ module.exports = {
           "(^|/)(index|main)\\.ts$",
           "\\.(test|spec)\\.ts$",
           "(^|/)\\.[^/]+\\.(js|cjs|mjs|ts)$",
+          // Scripts de linha de comando são ponto de entrada, não módulo
+          // importado. Sem esta linha, toda ferramenta de suporte vira aviso.
+          "^apps/[^/]+/scripts/",
         ],
       },
       to: {},

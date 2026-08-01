@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ClienteAgente } from "@erp/agente-contrato";
+
+import { definirAgenteParaTeste } from "../balcao.js";
 import { Fechamento } from "../telas/Fechamento.js";
 
 /**
@@ -71,22 +74,14 @@ function montar(responder: (corpo: unknown) => Response): {
 }
 
 function instalarPonte(pendentes: number): void {
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: {
-      estadoConexao: vi.fn().mockResolvedValue({ tipo: "CONECTADO", pendentes }),
-    },
-    configurable: true,
-    writable: true,
-  });
+  definirAgenteParaTeste({
+    estado: vi.fn().mockResolvedValue({ tipo: "CONECTADO", pendentes }),
+  } as unknown as ClienteAgente);
 }
 
 beforeEach(() => {
   globalThis.localStorage.clear();
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: undefined,
-    configurable: true,
-    writable: true,
-  });
+  definirAgenteParaTeste(undefined);
 });
 
 afterEach(() => {
@@ -213,13 +208,9 @@ describe("fila da estação", () => {
   it("ponte quebrada não impede o fechamento do dia", async () => {
     // Travar o fechamento porque o IPC não respondeu deixaria a loja sem
     // conseguir fechar por um problema que não tem a ver com dinheiro.
-    Object.defineProperty(globalThis.window, "balcao", {
-      value: {
-        estadoConexao: vi.fn().mockRejectedValue(new Error("IPC morreu")),
-      },
-      configurable: true,
-      writable: true,
-    });
+    definirAgenteParaTeste({
+      estado: vi.fn().mockRejectedValue(new Error("agente morreu")),
+    } as unknown as ClienteAgente);
 
     const { corpos } = montar(() => json(200, CONFERENCIA));
 

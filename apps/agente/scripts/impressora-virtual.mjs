@@ -7,7 +7,7 @@
  * Aponte a estação para `127.0.0.1` na porta informada (padrão 9100) e cada
  * cupom aparece aqui já decodificado, com a borda do papel desenhada.
  */
-import { ImpressoraVirtual } from "../dist-electron/ferramentas/impressoraVirtual.js";
+import { ImpressoraVirtual } from "../dist/ferramentas/impressoraVirtual.js";
 
 const porta = Number(process.argv[2] ?? 9100);
 const colunas = Number(process.env["COLUNAS"] ?? 48);

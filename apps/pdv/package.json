@@ -11,9 +11,7 @@
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "dev": "vite",
-    "preview": "vite preview",
-    "build:electron": "tsc -p tsconfig.electron.json",
-    "impressora:virtual": "pnpm build:electron && node scripts/impressora-virtual.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@erp/cliente-api": "workspace:*",
@@ -23,7 +21,8 @@
     "@erp/printing": "workspace:*",
     "zod": "^4.1.13",
     "@erp/utils": "workspace:*",
-    "@erp/domain": "workspace:*"
+    "@erp/domain": "workspace:*",
+    "@erp/agente-contrato": "workspace:*"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",
@@ -34,12 +33,10 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.5",
-    "electron": "^33.4.11",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.2",
     "vite": "^8.2.0",
     "vitest": "^3.2.4"
-  },
-  "main": "dist-electron/principal/main.js"
+  }
 }

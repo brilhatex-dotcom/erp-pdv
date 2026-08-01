@@ -8,12 +8,12 @@ import {
 } from "@erp/domain";
 
 import type {
-  ItemNaPonte,
-  ResultadoFinalizacaoNaPonte,
-  ResultadoItemNaPonte,
-  ResultadoPagamentoNaPonte,
-  VendaNaPonte,
-} from "../../contrato-ponte.js";
+  ItemNoAgente,
+  ResultadoFinalizacaoNoAgente,
+  ResultadoItemNoAgente,
+  ResultadoPagamentoNoAgente,
+  VendaNoAgente,
+} from "@erp/agente-contrato";
 import type { FilaDeVendas, VendaPendente } from "../armazenamento-local/filaDeVendas.js";
 import type {
   ProdutoReplicado,
@@ -48,13 +48,13 @@ import type {
  */
 
 export type {
-  EstadoConexaoNaPonte,
-  ItemNaPonte as ItemLocal,
-  ResultadoFinalizacaoNaPonte as ResultadoFinalizacao,
-  ResultadoItemNaPonte as ResultadoItem,
-  ResultadoPagamentoNaPonte as ResultadoPagamento,
-  VendaNaPonte as VendaLocalNaTela,
-} from "../../contrato-ponte.js";
+  EstadoConexaoNoAgente,
+  ItemNoAgente as ItemLocal,
+  ResultadoFinalizacaoNoAgente as ResultadoFinalizacao,
+  ResultadoItemNoAgente as ResultadoItem,
+  ResultadoPagamentoNoAgente as ResultadoPagamento,
+  VendaNoAgente as VendaLocalNaTela,
+} from "@erp/agente-contrato";
 
 export interface PagamentoLocal {
   readonly forma: string;
@@ -66,7 +66,7 @@ interface EmAndamento {
   readonly estacaoId: string;
   readonly operadorId: string;
   readonly registradaEm: Date;
-  readonly itens: ItemNaPonte[];
+  readonly itens: ItemNoAgente[];
   readonly pagamentos: PagamentoLocal[];
 }
 
@@ -96,7 +96,7 @@ export class VendaLocal {
   }
 
   /** Abre a venda offline. Chamada na primeira bipada, como no caminho online. */
-  iniciar(estacaoId: string, operadorId: string): VendaNaPonte {
+  iniciar(estacaoId: string, operadorId: string): VendaNoAgente {
     this.#atual = {
       id: this.#novoId(),
       estacaoId,
@@ -109,7 +109,7 @@ export class VendaLocal {
     return this.#comoTela(this.#atual);
   }
 
-  adicionarItem(codigo: string): ResultadoItemNaPonte {
+  adicionarItem(codigo: string): ResultadoItemNoAgente {
     const venda = this.#atual;
 
     if (venda === undefined) {
@@ -152,7 +152,7 @@ export class VendaLocal {
     return { tipo: "OK", venda: this.#comoTela(venda) };
   }
 
-  registrarPagamento(forma: string, valorEmCentavos: string): ResultadoPagamentoNaPonte {
+  registrarPagamento(forma: string, valorEmCentavos: string): ResultadoPagamentoNoAgente {
     const venda = this.#atual;
 
     if (venda === undefined) {
@@ -179,7 +179,7 @@ export class VendaLocal {
    * permite ao operador entregar o cupom sabendo que a venda existe em algum
    * lugar mesmo que falte energia no segundo seguinte.
    */
-  finalizar(): ResultadoFinalizacaoNaPonte {
+  finalizar(): ResultadoFinalizacaoNoAgente {
     const venda = this.#atual;
 
     if (venda === undefined) {
@@ -307,7 +307,7 @@ export class VendaLocal {
     return this.#total(venda) - pago;
   }
 
-  #comoTela(venda: EmAndamento): VendaNaPonte {
+  #comoTela(venda: EmAndamento): VendaNoAgente {
     const falta = this.#faltaPagar(venda);
 
     return {

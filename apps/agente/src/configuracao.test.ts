@@ -1,6 +1,10 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { interpretarConfiguracao } from "./configuracao.js";
+import { carregarConfiguracao, interpretarConfiguracao } from "./configuracao.js";
 
 describe("Configuração ausente", () => {
   it("🔑 estação nova abre sem configuração, e sem impressora", () => {
@@ -90,5 +94,60 @@ describe("Configuração quebrada", () => {
     expect(interpretarConfiguracao(JSON.stringify({ colunas: 500 })).aviso).toContain(
       "colunas",
     );
+  });
+});
+
+describe("carregarConfiguracao", () => {
+  /** Grava uma configuração temporária e devolve o caminho. */
+  function comArquivo(conteudo: string): string {
+    const pasta = mkdtempSync(join(tmpdir(), "agente-config-"));
+    const arquivo = join(pasta, "estacao.json");
+
+    writeFileSync(arquivo, conteudo, "utf8");
+
+    return arquivo;
+  }
+
+  it("🔑 recusa subir sem segredo", () => {
+    // Agente com segredo vazio é Agente sem a terceira camada de defesa. Melhor
+    // não abrir e deixar o rastro no log do serviço do que abrir destrancado.
+    const arquivo = comArquivo(JSON.stringify({ api: "http://loja:3000" }));
+
+    expect(() => carregarConfiguracao(arquivo)).toThrow(/segredo/i);
+  });
+
+  it("recusa segredo curto demais para valer alguma coisa", () => {
+    const arquivo = comArquivo(JSON.stringify({ segredo: "curto" }));
+
+    expect(() => carregarConfiguracao(arquivo)).toThrow(/segredo/i);
+  });
+
+  it("sem caminho informado, diz qual variável falta", () => {
+    expect(() => carregarConfiguracao(undefined)).toThrow(/ERP_AGENTE_CONFIG/);
+  });
+
+  it("configuração completa sobe com os padrões preenchidos", () => {
+    const arquivo = comArquivo(
+      JSON.stringify({
+        segredo: "segredo-de-instalacao-1234",
+        origensPermitidas: ["http://loja:3000"],
+      }),
+    );
+
+    const configuracao = carregarConfiguracao(arquivo);
+
+    expect(configuracao.segredo).toBe("segredo-de-instalacao-1234");
+    expect(configuracao.origensPermitidas).toEqual(["http://loja:3000"]);
+    expect(configuracao.colunas).toBe(48);
+    expect(configuracao.pastaDados).toBe("./dados");
+  });
+
+  it("🔑 arquivo malformado não sobe com padrões silenciosos", () => {
+    // Interpretar é tolerante para não derrubar a estação por uma vírgula; mas
+    // carregar é estrito, porque um padrão silencioso aqui significa Agente sem
+    // segredo e sem lista de origens.
+    const arquivo = comArquivo("{ isto não é json");
+
+    expect(() => carregarConfiguracao(arquivo)).toThrow(/malformado/i);
   });
 });

@@ -1,6 +1,6 @@
 import { mensagemDe, useSessao } from "@erp/cliente-api";
 
-import { imprimirCupomDaVenda } from "../balcao.js";
+import { agente } from "../balcao.js";
 import {
   Botao,
   CampoTexto,
@@ -162,7 +162,9 @@ export function Venda(): ReactNode {
         //
         // Falha de impressão vira aviso na tela, jamais erro — o dinheiro já
         // entrou, e dizer "falhou" faria o operador refazer a venda.
-        const problema = await imprimirCupomDaVenda({
+        const problema = await (
+          await agente()
+        )?.imprimirCupom({
           cupom: {
             loja: { nome: "" },
             numero: venda.numero ?? 0,

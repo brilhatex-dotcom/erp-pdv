@@ -1,81 +1,62 @@
-import type { DadosCupom } from "@erp/printing";
-
-import type {
-  EstadoConexaoNaPonte,
-  ResultadoFinalizacaoNaPonte,
-  ResultadoItemNaPonte,
-  ResultadoPagamentoNaPonte,
-  ResumoSincronizacaoNaPonte,
-  VendaNaPonte,
-} from "./contrato-ponte.js";
+import { ClienteAgente } from "@erp/agente-contrato";
 
 /**
- * A ponte, vista de dentro da tela.
+ * O Agente Local, visto de dentro da tela.
  *
- * `undefined` quando o PDV roda no navegador — em desenvolvimento, e no teste.
- * A tela **precisa** funcionar sem ela: a venda não depende de impressora
- * (princípio 1), e amarrar a tela ao Electron impediria de desenvolvê-la.
+ * ### Descoberto uma vez, não a cada chamada
+ *
+ * A tela pergunta ao Agente se ele existe na primeira vez que precisa dele e
+ * guarda a resposta. Perguntar a cada bipada custaria uma ida à rede local por
+ * item — e a resposta não muda no meio de um atendimento.
+ *
+ * ### Ausência de Agente não é erro
+ *
+ * Em desenvolvimento, em tablet, ou antes de o serviço subir, não há Agente.
+ * A tela continua vendendo contra o servidor da loja: o que ela perde é
+ * contingência e impressão, não a venda (princípio 1).
+ *
+ * ### O segredo vem do servidor da loja
+ *
+ * A PWA não pode carregá-lo embutido — o código do navegador é público. Ele é
+ * entregue pelo servidor junto com a sessão, e o Agente confere. Enquanto a
+ * rota que o entrega não existir, o valor vem da configuração de build, o que
+ * basta para desenvolvimento e para o instalador de demonstração.
  */
-export interface Balcao {
-  imprimirCupom(dados: {
-    readonly cupom: DadosCupom;
-    readonly houveDinheiro: boolean;
-  }): Promise<AvisoDeImpressao>;
-  abrirGaveta(): Promise<AvisoDeImpressao>;
-  configuracao(): Promise<{ readonly api: string; readonly temImpressora: boolean }>;
 
-  estadoConexao(): Promise<EstadoConexaoNaPonte>;
-  iniciarVendaLocal(dados: {
-    readonly estacaoId: string;
-    readonly operadorId: string;
-  }): Promise<VendaNaPonte | undefined>;
-  itemLocal(dados: { readonly codigo: string }): Promise<ResultadoItemNaPonte>;
-  pagamentoLocal(dados: {
-    readonly forma: string;
-    readonly valor: string;
-  }): Promise<ResultadoPagamentoNaPonte>;
-  finalizarVendaLocal(): Promise<ResultadoFinalizacaoNaPonte>;
-  cancelarVendaLocal(): Promise<null>;
-  sincronizarAgora(): Promise<ResumoSincronizacaoNaPonte>;
+const SEGREDO_PROVISORIO =
+  (import.meta.env["VITE_SEGREDO_AGENTE"] as string | undefined) ??
+  "agente-de-desenvolvimento";
+
+let clienteMemorizado: ClienteAgente | undefined;
+let disponibilidade: Promise<boolean> | undefined;
+
+function cliente(): ClienteAgente {
+  clienteMemorizado ??= new ClienteAgente({ segredo: SEGREDO_PROVISORIO });
+
+  return clienteMemorizado;
 }
 
-export type AvisoDeImpressao =
-  | { readonly tipo: "IMPRESSO" }
-  | { readonly tipo: "NAO_IMPRESSO"; readonly mensagem: string };
+/** O Agente desta estação, ou `undefined` quando não há um. */
+export async function agente(): Promise<ClienteAgente | undefined> {
+  disponibilidade ??= cliente().disponivel();
 
-declare global {
-  interface Window {
-    readonly balcao?: Balcao;
-  }
-}
-
-/** A ponte quando ela existe. Fora do Electron, `undefined`. */
-export function balcao(): Balcao | undefined {
-  return globalThis.window.balcao;
+  return (await disponibilidade) ? cliente() : undefined;
 }
 
 /**
- * Imprime o cupom **sem nunca lançar**.
+ * Substitui o cliente — só para teste.
  *
- * Chamado depois de a venda estar gravada. Devolve `undefined` quando não há o
- * que avisar — sem impressora configurada, ou cupom impresso com sucesso.
+ * A alternativa seria injetar o cliente em cada tela que o usa, o que espalharia
+ * um detalhe de infraestrutura por toda a interface para servir apenas ao teste.
  */
-export async function imprimirCupomDaVenda(dados: {
-  readonly cupom: DadosCupom;
-  readonly houveDinheiro: boolean;
-}): Promise<string | undefined> {
-  const ponte = balcao();
+export function definirAgenteParaTeste(substituto: ClienteAgente | undefined): void {
+  clienteMemorizado = substituto;
+  disponibilidade =
+    substituto === undefined ? Promise.resolve(false) : Promise.resolve(true);
+}
 
-  // Navegador: não há impressora, e isso não é erro. Avisar "sem impressora" a
-  // cada venda ensinaria o operador a ignorar avisos.
-  if (ponte === undefined) return undefined;
-
-  try {
-    const aviso = await ponte.imprimirCupom(dados);
-    return aviso.tipo === "IMPRESSO" ? undefined : aviso.mensagem;
-  } catch {
-    // A ponte quebrou. A venda já está gravada; o operador precisa saber do
-    // cupom, não de um erro de IPC.
-    return "Cupom não impresso. A venda foi registrada normalmente.";
-  }
+/** Volta a descobrir o Agente na próxima chamada. */
+export function esquecerAgente(): void {
+  clienteMemorizado = undefined;
+  disponibilidade = undefined;
 }

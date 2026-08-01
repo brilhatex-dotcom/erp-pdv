@@ -1,83 +1,79 @@
-import type { DadosCupom } from "@erp/printing";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { ClienteAgente } from "@erp/agente-contrato";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type Balcao, balcao, imprimirCupomDaVenda } from "./balcao.js";
+import { agente, definirAgenteParaTeste, esquecerAgente } from "./balcao.js";
 
-const CUPOM: DadosCupom = {
-  loja: { nome: "MERCADINHO" },
-  numero: 1,
-  emitidoEm: new Date("2026-07-31T14:35:00"),
-  operador: "Maria",
-  itens: [],
-  subtotal: "0",
-  descontoTotal: "0",
-  total: "990",
-  pagamentos: [],
-  troco: "0",
-  semValorFiscal: true,
-};
+/**
+ * A descoberta do Agente Local.
+ *
+ * A promessa deste arquivo é uma só: **ausência de Agente não é erro.** Em
+ * desenvolvimento, em tablet, ou antes de o serviço subir, a tela continua
+ * vendendo contra o servidor da loja — perde contingência e impressão, não a
+ * venda (princípio 1).
+ */
 
-function instalarPonte(ponte: Partial<Balcao>): void {
-  Object.defineProperty(globalThis.window, "balcao", {
-    value: ponte,
-    configurable: true,
-  });
-}
+beforeEach(() => {
+  esquecerAgente();
+});
 
 afterEach(() => {
-  Reflect.deleteProperty(globalThis.window, "balcao");
+  definirAgenteParaTeste(undefined);
+  vi.restoreAllMocks();
 });
 
-describe("Fora do Electron", () => {
-  it("🔑 a tela funciona sem a ponte — a venda não depende de impressora", () => {
-    // É o princípio 1. Amarrar a tela ao Electron também impediria de
-    // desenvolvê-la no navegador.
-    expect(balcao()).toBeUndefined();
+describe("descoberta", () => {
+  it("🔑 sem Agente respondendo, a tela recebe undefined em vez de erro", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("conexão recusada"));
+
+    await expect(agente()).resolves.toBeUndefined();
   });
 
-  it("🔑 sem ponte não há aviso — avisar toda venda ensina a ignorar avisos", async () => {
-    expect(
-      await imprimirCupomDaVenda({ cupom: CUPOM, houveDinheiro: true }),
-    ).toBeUndefined();
+  it("com Agente no ar, devolve o cliente", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ estado: "ok" }), { status: 200 }),
+    );
+
+    await expect(agente()).resolves.toBeInstanceOf(ClienteAgente);
+  });
+
+  it("🔑 pergunta uma vez só, não a cada bipada", async () => {
+    // Uma ida à rede local por item registrado seria latência somada ao caminho
+    // mais quente do produto, para uma resposta que não muda no atendimento.
+    const buscar = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ estado: "ok" }), { status: 200 }));
+
+    await agente();
+    await agente();
+    await agente();
+
+    expect(buscar).toHaveBeenCalledTimes(1);
+  });
+
+  it("esquecer faz a próxima chamada procurar de novo", async () => {
+    const buscar = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ estado: "ok" }), { status: 200 }));
+
+    await agente();
+    esquecerAgente();
+    await agente();
+
+    expect(buscar).toHaveBeenCalledTimes(2);
   });
 });
 
-describe("Com a ponte", () => {
-  it("imprimiu: nada a avisar", async () => {
-    const imprimirCupom = vi.fn().mockResolvedValue({ tipo: "IMPRESSO" });
-    instalarPonte({ imprimirCupom });
+describe("substituição no teste", () => {
+  it("o dublê instalado é o que a tela recebe", async () => {
+    const duble = { estado: vi.fn() } as unknown as ClienteAgente;
+    definirAgenteParaTeste(duble);
 
-    expect(
-      await imprimirCupomDaVenda({ cupom: CUPOM, houveDinheiro: false }),
-    ).toBeUndefined();
-    expect(imprimirCupom).toHaveBeenCalledWith({
-      cupom: CUPOM,
-      houveDinheiro: false,
-    });
+    await expect(agente()).resolves.toBe(duble);
   });
 
-  it("não imprimiu: devolve a mensagem que o operador lê", async () => {
-    instalarPonte({
-      imprimirCupom: vi.fn().mockResolvedValue({
-        tipo: "NAO_IMPRESSO",
-        mensagem: "Cupom não impresso. A venda foi registrada normalmente.",
-      }),
-    });
+  it("instalar undefined simula estação sem Agente", async () => {
+    definirAgenteParaTeste(undefined);
 
-    const aviso = await imprimirCupomDaVenda({ cupom: CUPOM, houveDinheiro: true });
-
-    expect(aviso).toContain("venda foi registrada");
-  });
-
-  it("🔑 ponte quebrada não derruba a tela — a venda já está gravada", async () => {
-    instalarPonte({
-      imprimirCupom: vi.fn().mockRejectedValue(new Error("IPC morreu")),
-    });
-
-    const aviso = await imprimirCupomDaVenda({ cupom: CUPOM, houveDinheiro: true });
-
-    expect(aviso).toContain("venda foi registrada");
-    // O detalhe técnico não chega ao operador.
-    expect(aviso).not.toContain("IPC");
+    await expect(agente()).resolves.toBeUndefined();
   });
 });

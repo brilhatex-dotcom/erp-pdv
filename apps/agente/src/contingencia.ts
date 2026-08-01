@@ -1,3 +1,9 @@
+import type {
+  ResultadoFinalizacaoNoAgente,
+  ResultadoItemNoAgente,
+  ResultadoPagamentoNoAgente,
+  VendaNoAgente,
+} from "@erp/agente-contrato";
 import { LAYOUT_BALANCA_PADRAO } from "@erp/domain";
 
 import { FilaDeVendas } from "./armazenamento-local/filaDeVendas.js";
@@ -5,7 +11,6 @@ import {
   type CatalogoEmDisco,
   ReplicaCatalogo,
 } from "./armazenamento-local/replicaCatalogo.js";
-import type { Contingencia } from "./ponte-ipc.js";
 import {
   type EnvioDeVendas,
   type EstadoConexao,
@@ -47,6 +52,17 @@ export interface OpcoesContingencia {
   readonly buscar?: typeof fetch;
   readonly novoId?: () => string;
   readonly registrar?: (mensagem: string) => void;
+}
+
+/** O que os canais HTTP precisam da contingência. */
+export interface Contingencia {
+  estado(): EstadoConexao;
+  iniciar(estacaoId: string, operadorId: string): VendaNoAgente;
+  adicionarItem(codigo: string): ResultadoItemNoAgente;
+  registrarPagamento(forma: string, valor: string): ResultadoPagamentoNoAgente;
+  finalizar(): ResultadoFinalizacaoNoAgente;
+  cancelar(): void;
+  sincronizar(): Promise<ResumoSincronizacao>;
 }
 
 export interface ContingenciaViva extends Contingencia {
