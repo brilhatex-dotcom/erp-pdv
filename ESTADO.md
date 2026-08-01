@@ -124,8 +124,11 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
-- **A casca Electron será descartada** (ADR-0023). Enquanto existir no
-  repositório sem ser mantida, engana quem a encontrar.
+- **A casca Electron vira quiosque fino** (ADR-0023): abre a PWA em tela cheia e
+  não contém lógica nenhuma. O processo principal de hoje — dono de fila,
+  catálogo e impressão — migra para o Agente Local. Casca que ganha lógica volta
+  a ser uma segunda aplicação, e aí todo defeito precisa ser reproduzido duas
+  vezes.
 
 ## 3. Armadilhas já pagas — não caia de novo
 

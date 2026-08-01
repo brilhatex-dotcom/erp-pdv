@@ -181,7 +181,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | **Comunicação fiscal** | **Via API fiscal externa, atrás da porta `ProvedorFiscal`. Sem SEFAZ direto.** O ERP nunca conhece o fornecedor | **ADR-0015** · `docs/fiscal/ARQUITETURA-FISCAL.md` |
 | **Módulo fiscal** | **Opcional por empresa**, via Null Object na composição. O domínio **não** tem `if (fiscalHabilitado)` | **ADR-0016** |
 | **Fiscal no roteiro** | **Não bloqueia a entrega.** Todo o ERP é concluído antes; até lá, `ProvedorFiscalSimulado` cobre emissão, rejeição, cancelamento, inutilização, XML, DANFE, contingência e eventos. **O instalador não depende do fiscal** | **ADR-0022** |
-| **PDV** | **PWA** servida pelo servidor da loja + **Agente Local** instalado, dono da impressão, da fila offline e do catálogo | **ADR-0023** (supersede 0005) |
+| **PDV** | **PWA** servida pelo servidor da loja + **Agente Local** instalado, dono da impressão, da fila offline e do catálogo. Casca Electron **de quiosque** é opcional e não pode ter lógica | **ADR-0023** (supersede 0005) |
 | **Empresas** | **Uma empresa por instalação.** Nenhuma tabela leva `empresa_id`; duas lojas são duas instalações | **ADR-0024** |
 | Certificado digital | **É do cliente.** Custódia no provedor quando possível; o ERP guarda só hash, titular e validade | ADR-0015 · §6 |
 | Numeração fiscal | Controlada pelo **ERP**, não pelo provedor. Uma série por estação de PDV | §8 do doc fiscal |

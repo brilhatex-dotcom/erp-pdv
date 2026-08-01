@@ -67,6 +67,32 @@ exatamente a mesma de hoje. O código de `FilaDeVendas`, `ReplicaCatalogo` e
 | Velocidade com muitos itens | **Não discrimina.** O caminho da bipada é tela → servidor da loja → banco. A casca não entra nele, e a impressão nunca bloqueia a venda |
 | **Custo de atualizar a base instalada** | **Decidiu.** Publicar contra visitar cada estação |
 
+## A casca Electron sobrevive — fina, e opcional
+
+**O que é superseado é o Electron como aplicação; não como forma de abrir.**
+
+Com React, a mesma tela roda nos dois formatos sem código duplicado. Uma casca
+de quiosque que só abre a PWA em tela cheia, apontando para o servidor da loja,
+é da ordem de cem linhas e não contém regra nenhuma:
+
+```
+PWA (a aplicação de verdade)
+ └── casca Electron opcional — abre a PWA em tela cheia, modo quiosque
+```
+
+Ela é **suportada** para o lojista que prefere ícone na área de trabalho e uma
+janela sem barra de navegador. Quem usa tablet abre pelo navegador. Uma base de
+código, dois jeitos de abrir.
+
+**O limite:** a casca não pode ganhar lógica. No instante em que ela souber
+alguma coisa que a PWA não sabe — um caminho de impressão próprio, um cache
+paralelo, uma tela que só existe nela — voltam a ser duas aplicações, e cada
+defeito passa a precisar de reprodução nas duas. A casca conhece uma URL e nada
+mais; o hardware é do Agente Local nos dois casos.
+
+Isto corrige uma imprecisão da primeira versão deste ADR, que descartava a casca
+sem separar as duas coisas.
+
 ## Consequências
 
 ### Positivas
@@ -82,9 +108,9 @@ exatamente a mesma de hoje. O código de `FilaDeVendas`, `ReplicaCatalogo` e
 
 ### Negativas — o custo aceito, declarado honestamente
 
-- **A casca Electron da etapa 9a é descartada.** Foram poucas horas, e a parte
-  cara dela — `@erp/printing`, os transportes, o serviço de impressão — é
-  aproveitada integralmente pelo Agente Local.
+- **A casca Electron da etapa 9a é reduzida a quiosque.** O processo principal
+  atual — que hospeda fila, catálogo e impressão — deixa de existir nessa forma;
+  a parte cara dele migra para o Agente Local. O que resta é abrir uma janela.
 - **Risco de descarte de cache pelo navegador.** Sob pressão extrema de disco, o
   navegador pode limpar o que guardou, e a tela precisaria ser baixada de novo
   do servidor da loja. Mitigado por `navigator.storage.persist()` e por a
