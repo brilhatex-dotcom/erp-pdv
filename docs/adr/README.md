@@ -20,7 +20,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | 0002 | SQLite como banco padrão | ❌ **Superseado por [0013](0013-postgresql-unico-embarcado.md)** |
 | 0003 | Monorepo com pnpm + Turborepo | Aceito |
 | 0004 | Arquitetura hexagonal com domínio puro | Aceito |
-| 0005 | Electron no PDV, web na retaguarda | Aceito |
+| 0005 | Electron no PDV, web na retaguarda | ❌ **Superseado por [0023](0023-pdv-como-pwa-com-agente-local.md)** |
 | 0006 | Emissão fiscal assíncrona via Outbox | Aceito |
 | 0007 | Estoque como eventos comutativos | Aceito |
 | 0008 | UUIDv7 como identificador | Aceito |
@@ -37,6 +37,9 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0019](0019-desfecho-explicito-em-transacao.md) | Desfecho explícito em transação, para gravações que sobrevivem ao erro | Aceito |
 | [0020](0020-cliente-api-como-pacote-compartilhado.md) | `@erp/cliente-api` compartilhado entre retaguarda e PDV | Aceito |
 | [0021](0021-contingencia-do-pdv-em-arquivo.md) | Contingência do PDV em arquivo, não em SQLite | Aceito |
+| [0022](0022-fiscal-fora-do-caminho-critico.md) | Fiscal fora do caminho crítico, com provedor simulado completo | Aceito |
+| [0023](0023-pdv-como-pwa-com-agente-local.md) | PDV como PWA, com Agente Local dono do hardware e da contingência | Aceito |
+| [0024](0024-uma-empresa-por-instalacao.md) | Uma empresa por instalação | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo
