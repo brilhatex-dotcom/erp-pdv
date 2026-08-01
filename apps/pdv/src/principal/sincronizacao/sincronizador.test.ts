@@ -191,12 +191,12 @@ describe("Estado que o operador vê", () => {
   it("conectado enquanto tudo vai bem", async () => {
     const { sincronizador } = montar([]);
 
-    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO" });
+    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO", pendentes: 0 });
 
     fila.enfileirar(venda("v1"));
     await sincronizador.sincronizar();
 
-    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO" });
+    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO", pendentes: 0 });
   });
 
   it("🔑 offline mostra quantas vendas estão esperando", async () => {
@@ -250,7 +250,7 @@ describe("Estado que o operador vê", () => {
     disponivel = true;
     await sincronizador.sincronizar();
 
-    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO" });
+    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO", pendentes: 0 });
   });
 });
 
@@ -266,7 +266,7 @@ describe("Sem relógio nem log injetados", () => {
     });
 
     expect(await sincronizador.sincronizar()).toMatchObject({ enviadas: 1 });
-    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO" });
+    expect(sincronizador.estado()).toEqual({ tipo: "CONECTADO", pendentes: 0 });
   });
 
   it("o registrador padrão não estoura ao receber uma falha", async () => {

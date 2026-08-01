@@ -41,7 +41,8 @@ export type ResultadoFinalizacaoNaPonte =
   | { readonly tipo: "ERRO"; readonly mensagem: string };
 
 export type EstadoConexaoNaPonte =
-  | { readonly tipo: "CONECTADO" }
+  /** Conectado também carrega a fila: ela pode não ter sido esvaziada ainda. */
+  | { readonly tipo: "CONECTADO"; readonly pendentes: number }
   | { readonly tipo: "OFFLINE"; readonly pendentes: number }
   | {
       readonly tipo: "OFFLINE_CRITICO";

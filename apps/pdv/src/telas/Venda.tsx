@@ -19,6 +19,7 @@ import {
   VendaIndisponivel,
   type VendaVisivel,
 } from "../vendaComQueda.js";
+import { Fechamento } from "./Fechamento.js";
 import { IndicadorConexao } from "./IndicadorConexao.js";
 
 /**
@@ -42,7 +43,7 @@ import { IndicadorConexao } from "./IndicadorConexao.js";
  * — que num teclado numérico de PDV nem sempre está onde o operador espera.
  */
 
-type Fase = "VENDENDO" | "PAGANDO" | "CONCLUIDA";
+type Fase = "VENDENDO" | "PAGANDO" | "CONCLUIDA" | "FECHANDO";
 
 interface ItemNaTela {
   readonly numero: number;
@@ -216,6 +217,16 @@ export function Venda(): ReactNode {
     setFase("VENDENDO");
   }
 
+  if (fase === "FECHANDO") {
+    return (
+      <Fechamento
+        aoSair={() => {
+          setFase("VENDENDO");
+        }}
+      />
+    );
+  }
+
   if (fase === "CONCLUIDA") {
     return (
       <Concluida
@@ -234,6 +245,19 @@ export function Venda(): ReactNode {
         <h1 className="text-lg font-semibold text-tinta">Caixa {rotuloDaVenda(venda)}</h1>
         <div className="flex items-center gap-3 text-sm text-tinta-suave">
           <span>{usuario?.nome}</span>
+          {/* Fechar caixa só aparece sem venda em andamento: oferecer o botão
+              no meio de um atendimento é convidar ao clique errado com a fila
+              esperando. */}
+          {venda === undefined && (
+            <Botao
+              tom="discreto"
+              onClick={() => {
+                setFase("FECHANDO");
+              }}
+            >
+              Fechar caixa
+            </Botao>
+          )}
           <Botao tom="discreto" onClick={() => void sair()}>
             Sair
           </Botao>

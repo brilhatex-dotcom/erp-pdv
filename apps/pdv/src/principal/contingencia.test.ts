@@ -193,12 +193,16 @@ describe("envio das vendas da fila", () => {
     expect(comQuatroXX.fila.quantidadePendente()).toBe(0);
   });
 
-  it("o estado reflete a fila para o indicador da tela", async () => {
+  it("🔑 conectado também conta a fila, antes da primeira tentativa", async () => {
+    // A estação abre com vendas de ontem na fila e nenhuma tentativa falhou
+    // ainda. Se o estado omitisse o número aqui, o fechamento de caixa
+    // acreditaria que não há nada pendente justamente quando há — e o bloqueio
+    // que existe para isso passaria batido.
     const contingencia = comFila(
       vi.fn().mockRejectedValue(new TypeError("sem rede")) as typeof fetch,
     );
 
-    expect(contingencia.estado()).toEqual({ tipo: "CONECTADO" });
+    expect(contingencia.estado()).toEqual({ tipo: "CONECTADO", pendentes: 1 });
 
     await contingencia.sincronizar();
 

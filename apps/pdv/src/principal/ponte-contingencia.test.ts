@@ -34,7 +34,7 @@ type Tratador = (evento: unknown, ...argumentos: unknown[]) => unknown;
 
 function contingenciaFalsa(sobrescritas: Partial<Contingencia> = {}): Contingencia {
   return {
-    estado: vi.fn().mockReturnValue({ tipo: "CONECTADO" }),
+    estado: vi.fn().mockReturnValue({ tipo: "CONECTADO", pendentes: 0 }),
     iniciar: vi.fn().mockReturnValue({
       id: "v1",
       offline: true,
@@ -60,7 +60,10 @@ describe("canais de contingência", () => {
     const { ipc, chamar } = ipcFalso();
     registrarCanaisDeContingencia(ipc, contingenciaFalsa());
 
-    await expect(chamar(CANAIS.estadoConexao)).resolves.toEqual({ tipo: "CONECTADO" });
+    await expect(chamar(CANAIS.estadoConexao)).resolves.toEqual({
+      tipo: "CONECTADO",
+      pendentes: 0,
+    });
     await expect(chamar(CANAIS.cancelarVendaLocal)).resolves.toBeNull();
   });
 

@@ -18,6 +18,17 @@ export type {
 // ── Casos de uso ────────────────────────────────────────────────────────
 export { AbrirCaixa, type EntradaAbrirCaixa } from "./casos-de-uso/caixa/AbrirCaixa.js";
 export {
+  type EntradaFecharCaixa,
+  FecharCaixa,
+  type ResultadoFechamento,
+} from "./casos-de-uso/caixa/FecharCaixa.js";
+export {
+  type EntradaSangria,
+  type EntradaSuprimento,
+  RegistrarSangria,
+  RegistrarSuprimento,
+} from "./casos-de-uso/caixa/MovimentarCaixa.js";
+export {
   AdicionarItemPorCodigo,
   type EntradaAdicionarItem,
 } from "./casos-de-uso/vendas/AdicionarItemPorCodigo.js";

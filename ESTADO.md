@@ -48,8 +48,9 @@ A unificação custou uma tarde. `main` sempre atualizada é o que impede a repe
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
 | Casca Electron e ponte de hardware | ✅ Completo | `apps/pdv/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
+| **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
 
-**1.797 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
+**1.848 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (17 tarefas).
 
 Verificação completa em um comando:
 
@@ -63,20 +64,17 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
 
 ## 2. O que falta — em ordem de risco crescente
 
-### 2.1 ⬅️ PRÓXIMO — fechamento de caixa
+### 2.1 ⬅️ PRÓXIMO — retaguarda do caixa e relatório do dia
 
-Existem `/api/caixa/abrir` e `/api/caixa/aberto`. **Não existe fechamento** — nem rota,
-nem tela. A loja abre o caixa e nunca o fecha, o que deixa três coisas no ar:
+O caixa fecha, mas **ninguém consegue olhar o resultado depois**. Falta:
 
-- **Conferência do dia**: contar o dinheiro na gaveta contra o que o sistema registrou.
-- **Sangria e suprimento** já existem no domínio (`packages/domain`, etapa 3c) e não
-  têm rota nem tela.
-- **Bloquear o fechamento com fila pendente** — item que saiu do escopo da 9c porque
-  não havia o que bloquear. Conferir o dinheiro com venda ainda não enviada produz
-  diferença que ninguém consegue explicar, e é o caminho mais curto para o operador
-  desconfiar do sistema.
+- **Consulta de sessões fechadas** na retaguarda: quem fechou, quando, e com que
+  diferença. Hoje a conferência aparece uma vez na tela do PDV e some.
+- **Relatório do dia**: vendas por forma de pagamento, sangrias e suprimentos.
+- **Reabertura de caixa** (`caixa:reabrir` já existe como permissão, sem rota).
 
-Ler antes: `SessaoCaixa` no domínio, que já tem as regras — falta a borda.
+Nada disso é bloqueante para a loja operar — é o que o gerente precisa para
+conferir o que aconteceu.
 
 ### 2.2 Fiscal — risco médio
 
@@ -126,6 +124,9 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`BigInt(texto)` de arquivo externo** | Exceção não tratada em vez de recusa | `BigInt("abc")` **lança**. Todo centavo lido de disco ou rede passa por `/^\d+$/` antes |
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |
+| **Docker morre no reinício do contêiner** | `P1001: Can't reach database server` e testes pulados em silêncio | `nohup dockerd > /tmp/dockerd.log 2>&1 &` e `docker compose up -d`. Suíte que não alcança o banco é **pulada**, não reprovada — verde enganoso |
+| **`corpos[0]` capturando a chamada errada** | Teste "não chamou nada" falha sem motivo aparente | `ProvedorSessao` consulta `/api/acesso/eu` ao montar. Filtre o dublê de `fetch` pela rota que interessa |
+| **403 confundido com 401** | Cliente tenta renovar token e joga o operador no login | Sem token é **401**; sem alçada é **403**. Trocar faz o operador achar que a sessão caiu |
 
 ---
 
@@ -143,6 +144,13 @@ Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
 - Escopo é **varejo apenas**. Serviços, Ordem de Serviço e NFS-e estão **fora**
   (ADR-0014). Emite só NFC-e (65) e NF-e (55).
 - Um papel por usuário (ADR-0018). PIN no PDV, senha forte na retaguarda (ADR-0011).
+- **Sem a permissão base, limite não se discute**: o operador de caixa não sangra
+  a gaveta nem com supervisor ao lado — ele **chama** o supervisor, que executa com
+  a própria conta. A escalação por supervisor só vale para quem tem a permissão e
+  estoura o teto de valor (`PoliticaAutorizacao`).
+- **A contagem do fechamento é às cegas.** Nem a tela nem a API entregam o esperado
+  em dinheiro antes de o operador contar — conferência com a resposta à vista não
+  detecta falta nenhuma.
 - Dinheiro em centavos `bigint` (ADR-0009). Quantidade em milésimos. Percentual em
   centésimos de por cento — 5% é `500`.
 

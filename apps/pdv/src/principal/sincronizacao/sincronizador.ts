@@ -38,7 +38,13 @@ export interface EnvioDeVendas {
 }
 
 export type EstadoConexao =
-  | { readonly tipo: "CONECTADO" }
+  /**
+   * Conectado **também tem fila**: a estação pode ter acabado de abrir com
+   * vendas de ontem ainda não enviadas, e nesse instante nenhuma tentativa
+   * falhou ainda. Omitir o número aqui faria o fechamento de caixa acreditar
+   * que não há nada pendente justamente no momento em que há.
+   */
+  | { readonly tipo: "CONECTADO"; readonly pendentes: number }
   | { readonly tipo: "OFFLINE"; readonly pendentes: number }
   /** Offline há tempo demais: o gerente precisa saber. */
   | {
@@ -132,7 +138,7 @@ export class Sincronizador {
   estado(): EstadoConexao {
     const pendentes = this.#fila.quantidadePendente();
 
-    if (this.#offlineDesde === undefined) return { tipo: "CONECTADO" };
+    if (this.#offlineDesde === undefined) return { tipo: "CONECTADO", pendentes };
 
     const desdeMs = this.#agora().getTime() - this.#offlineDesde.getTime();
 
