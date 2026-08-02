@@ -46,10 +46,14 @@ InstallDir "$PROGRAMFILES64\ERP PDV"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
-; Espaço mínimo, em kilobytes. O Postgres embarcado ocupa ~200 MB e o banco
+; Espaço mínimo, em **megabytes**. O Postgres embarcado ocupa ~200 MB e o banco
 ; cresce com as vendas; instalar num disco cheio produz uma loja que para de
 ; vender no meio do expediente.
-!define ESPACO_MINIMO_KB 2097152
+;
+; Megabytes e não kilobytes: a comparação do NSIS é inteiro de 32 bits com
+; sinal, e um disco de 4 TB tem mais kilobytes do que cabe ali. O valor viraria
+; negativo e o instalador recusaria justamente a máquina mais folgada.
+!define ESPACO_MINIMO_MB 2048
 
 !define PORTA_SERVIDOR "3000"
 !define PORTA_POSTGRES "55433"
@@ -75,9 +79,9 @@ Section "Sistema" SEC_SISTEMA
   ; Falhar aqui custa um clique. Falhar no meio da cópia deixa a máquina com
   ; metade de um sistema instalado, e o técnico sem saber o que remover.
   ${GetRoot} "$INSTDIR" $0
-  ${DriveSpace} "$0" "/D=F /S=K" $1
+  ${DriveSpace} "$0" "/D=F /S=M" $1
 
-  ${If} $1 < ${ESPACO_MINIMO_KB}
+  ${If} $1 < ${ESPACO_MINIMO_MB}
     MessageBox MB_ICONSTOP "Espaço insuficiente no disco $0.$\n$\nSão necessários 2 GB livres.$\n$\nLibere espaço ou instale em outro disco."
     Abort
   ${EndIf}
