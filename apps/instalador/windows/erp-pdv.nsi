@@ -224,18 +224,29 @@ Section "Sistema" SEC_SISTEMA
   DetailPrint "Registrando os serviços..."
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" stop "ERPPDVServidor"'
   Pop $0
-  ; O caminho do script vai em `AppParameters`, **com aspas literais**, e não
-  ; como argumento do `install`.
+  ; O script é passado por caminho **relativo**, contra o `AppDirectory`.
   ;
-  ; O `nssm install <serviço> <programa> <args...>` junta os argumentos com
-  ; espaço e **não os re-aspa**. Como o caminho contém "Program Files", a linha
-  ; de comando do serviço virava `node.exe C:\Program Files\...\index.js` sem
+  ; ### Por que não o caminho completo
+  ;
+  ; `nssm install <serviço> <programa> <args...>` junta os argumentos com espaço
+  ; e **não os re-aspa**. Como o caminho contém "Program Files", a linha de
+  ; comando do serviço virava `node.exe C:\Program Files\...\index.js` sem
   ; aspas, e o Node lia só até o primeiro espaço: `Cannot find module
-  ; 'C:\Program'`. O serviço reiniciava em laço até o NSSM o pausar — e o
-  ; sintoma que chegava ao técnico era "o sistema não respondeu".
+  ; 'C:\Program'`. O serviço reiniciava em laço até o NSSM o pausar, e o sintoma
+  ; que chegava ao técnico era "o sistema não respondeu" — três passos adiante
+  ; da causa.
+  ;
+  ; Escapar as aspas resolveria no papel e é onde a segunda tentativa falhou: o
+  ; nível de escape tem que sobreviver ao NSIS, ao `CommandLineToArgvW` do
+  ; `nssm` e à linha de comando que o `nssm` monta depois. Três parsers em
+  ; sequência, cada um com regra própria de aspas.
+  ;
+  ; `index.js` não tem espaço, então **não há nada para escapar** em nenhum dos
+  ; três. O `AppDirectory` logo abaixo é quem diz de onde. Uma classe inteira de
+  ; defeito deixa de existir em vez de ser contornada.
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" install "ERPPDVServidor" "$INSTDIR\node\node.exe"'
   Pop $0
-  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppParameters "$\"$INSTDIR\servidor\index.js$\""'
+  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppParameters index.js'
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppDirectory "$INSTDIR\servidor"'
   Pop $0
