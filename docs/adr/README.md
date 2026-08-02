@@ -40,6 +40,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0022](0022-fiscal-fora-do-caminho-critico.md) | Fiscal fora do caminho crítico, com provedor simulado completo | Aceito |
 | [0023](0023-pdv-como-pwa-com-agente-local.md) | PDV como PWA, com Agente Local dono do hardware e da contingência | Aceito |
 | [0024](0024-uma-empresa-por-instalacao.md) | Uma empresa por instalação | Aceito |
+| [0025](0025-financeiro-na-transacao-da-venda.md) | A conta a receber nasce na transação da venda | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo

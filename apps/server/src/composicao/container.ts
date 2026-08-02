@@ -26,7 +26,12 @@ import {
   CadastrarCategoria,
   CadastrarCliente,
   CadastrarFornecedor,
+  AdiarVencimento,
+  CancelarTitulo,
   DefinirEmpresa,
+  EstornarRecebimento,
+  LancarTitulo,
+  RegistrarRecebimento,
   FinalizarVenda,
   RegistrarPagamento,
   RenovarSessao,
@@ -118,6 +123,12 @@ export interface Container {
   readonly cadastrarFornecedor: CadastrarFornecedor;
   readonly alterarFornecedor: AlterarFornecedor;
   readonly definirEmpresa: DefinirEmpresa;
+
+  readonly lancarTitulo: LancarTitulo;
+  readonly registrarRecebimento: RegistrarRecebimento;
+  readonly estornarRecebimento: EstornarRecebimento;
+  readonly adiarVencimento: AdiarVencimento;
+  readonly cancelarTitulo: CancelarTitulo;
 
   encerrar(): Promise<void>;
 }
@@ -218,6 +229,12 @@ export function montarContainer(ambiente: Ambiente): Container {
     cadastrarFornecedor: new CadastrarFornecedor(unitOfWork, geradorId),
     alterarFornecedor: new AlterarFornecedor(unitOfWork),
     definirEmpresa: new DefinirEmpresa(unitOfWork, geradorId),
+
+    lancarTitulo: new LancarTitulo(unitOfWork, relogio, geradorId),
+    registrarRecebimento: new RegistrarRecebimento(unitOfWork, relogio, geradorId),
+    estornarRecebimento: new EstornarRecebimento(unitOfWork, relogio, geradorId),
+    adiarVencimento: new AdiarVencimento(unitOfWork),
+    cancelarTitulo: new CancelarTitulo(unitOfWork, relogio),
 
     async encerrar(): Promise<void> {
       await prisma.$disconnect();

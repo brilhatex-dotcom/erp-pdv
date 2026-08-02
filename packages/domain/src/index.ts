@@ -56,6 +56,28 @@ export {
 } from "./cadastros/Empresa.js";
 export { type DadosFornecedor, Fornecedor } from "./cadastros/Fornecedor.js";
 
+// ── Financeiro ──────────────────────────────────────────────────────────
+export {
+  type Baixa,
+  type DadosTitulo,
+  ehOrigemTitulo,
+  ehTipoTitulo,
+  ORIGENS_TITULO,
+  type OrigemTitulo,
+  type SituacaoTitulo,
+  SITUACOES_TITULO,
+  type TipoTitulo,
+  TIPOS_TITULO,
+  Titulo,
+} from "./financeiro/Titulo.js";
+export {
+  DIAS_ENTRE_PARCELAS_PADRAO,
+  DIAS_PRIMEIRO_VENCIMENTO_PADRAO,
+  montarPlanoDeParcelas,
+  type Parcela,
+  type PedidoDeParcelamento,
+} from "./financeiro/planoDeParcelas.js";
+
 // ── Catálogo ────────────────────────────────────────────────────────────
 export {
   type ConteudoBalanca,

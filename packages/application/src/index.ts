@@ -127,6 +127,30 @@ export {
   RegistrarMovimento,
 } from "./casos-de-uso/estoque/RegistrarMovimento.js";
 
+// ── Financeiro ──────────────────────────────────────────────────────────
+export type {
+  FiltroTitulos,
+  TituloRepository,
+} from "./portas/repositorios/RepositoriosFinanceiro.js";
+export {
+  gerarTitulosDaVenda,
+  type PedidoDeCrediario,
+} from "./casos-de-uso/financeiro/gerarTitulosDaVenda.js";
+export {
+  type EntradaLancarTitulo,
+  LancarTitulo,
+} from "./casos-de-uso/financeiro/LancarTitulo.js";
+export {
+  AdiarVencimento,
+  CancelarTitulo,
+  type EntradaAdiarVencimento,
+  type EntradaCancelarTitulo,
+  type EntradaEstornarRecebimento,
+  type EntradaRegistrarRecebimento,
+  EstornarRecebimento,
+  RegistrarRecebimento,
+} from "./casos-de-uso/financeiro/MovimentarTitulo.js";
+
 // ── Cadastros ───────────────────────────────────────────────────────────
 export type {
   CategoriaRepository,
