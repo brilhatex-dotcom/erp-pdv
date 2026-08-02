@@ -4,6 +4,9 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 
 const MINIMO_SENHA = 12;
 
+/** Seis dígitos exatos, como a tela do balcão espera (ADR-0011). */
+const DIGITOS_PIN = 6;
+
 /**
  * Configuração da instalação — cria o primeiro administrador.
  *
@@ -13,10 +16,22 @@ const MINIMO_SENHA = 12;
  *
  * ### Por isso ela pede o mínimo
  *
- * Nome, matrícula e senha. Nada de endereço, CNPJ ou preferências — tudo isso
- * cabe depois, com o sistema já funcionando. Uma tela de instalação que faz dez
- * perguntas é uma tela em que se erra alguma, e o erro só aparece semanas
+ * Nome, matrícula, senha e PIN. Nada de endereço, CNPJ ou preferências — tudo
+ * isso cabe depois, com o sistema já funcionando. Uma tela de instalação que faz
+ * dez perguntas é uma tela em que se erra alguma, e o erro só aparece semanas
  * depois num relatório.
+ *
+ * ### Por que o PIN não pode ficar para depois
+ *
+ * São duas credenciais de propósito: no balcão o operador troca de turno em
+ * segundos, e senha longa a cada troca não funciona; na retaguarda o risco é
+ * outro e a senha é longa (ADR-0011).
+ *
+ * Sem pedir o PIN aqui, o administrador recém-criado entra na retaguarda e
+ * **não entra no caixa** — sem nenhuma pista do porquê, logo depois de instalar.
+ * É um chamado de suporte na primeira hora de uso, e o conserto seria ir a
+ * Usuários e descobrir o campo sozinho. Uma pergunta a mais aqui custa menos
+ * que isso.
  *
  * ### O que ela explica
  *
@@ -35,6 +50,7 @@ export function PrimeiroAcesso({
   const [matricula, setMatricula] = useState("1");
   const [senha, setSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
+  const [pin, setPin] = useState("");
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [salvando, setSalvando] = useState(false);
 
@@ -59,13 +75,18 @@ export function PrimeiroAcesso({
       return;
     }
 
+    if (pin.length !== DIGITOS_PIN) {
+      setErro(`O PIN do balcão precisa de ${String(DIGITOS_PIN)} dígitos.`);
+      return;
+    }
+
     setSalvando(true);
     setErro(undefined);
 
     try {
       await cliente.requisitar("/api/instalacao/primeiro-administrador", {
         metodo: "POST",
-        corpo: { matricula: matricula.trim(), nome: nome.trim(), senha },
+        corpo: { matricula: matricula.trim(), nome: nome.trim(), senha, pin },
       });
 
       aoConcluir();
@@ -141,6 +162,19 @@ export function PrimeiroAcesso({
           value={confirmacao}
           onChange={(evento) => {
             setConfirmacao(evento.target.value);
+          }}
+        />
+
+        <CampoTexto
+          rotulo="PIN do balcão"
+          type="password"
+          numerico
+          required
+          autoComplete="off"
+          ajuda={`${String(DIGITOS_PIN)} dígitos. É o que você digita na frente de caixa — a senha acima é só para a retaguarda.`}
+          value={pin}
+          onChange={(evento) => {
+            setPin(evento.target.value.replace(/\D/g, "").slice(0, DIGITOS_PIN));
           }}
         />
 

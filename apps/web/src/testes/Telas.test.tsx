@@ -1495,6 +1495,7 @@ describe("Primeiro acesso da instalação", () => {
       screen.getByLabelText(/Repita a senha/),
       "cavalo bateria grampo",
     );
+    await userEvent.type(screen.getByLabelText(/PIN do balcão/), "246813");
     await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
 
     // Por URL, e não só por método: a restauração de sessão também faz um POST
@@ -1509,7 +1510,38 @@ describe("Primeiro acesso da instalação", () => {
       nome: "Ana Administradora",
       matricula: "1",
       senha: "cavalo bateria grampo",
+      pin: "246813",
     });
+  });
+
+  it("🔑 exige o PIN, sem o qual o administrador não entra no caixa", async () => {
+    // São duas credenciais: senha na retaguarda, PIN no balcão (ADR-0011). Sem
+    // pedir o PIN aqui, quem acaba de instalar entra na retaguarda e descobre
+    // que não abre o caixa — sem nenhuma pista do porquê.
+    const { corpos } = montarComMetodo({
+      "GET /api/instalacao/situacao": () => json(200, { precisaConfiguracao: true }),
+      "GET /api/acesso/eu": () => json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/acesso/renovar": () =>
+        json(401, { erro: { codigo: "X", mensagem: "x" } }),
+      "POST /api/instalacao/primeiro-administrador": () => json(201, ADMIN),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Seu nome/)).toBeVisible();
+    });
+
+    await userEvent.type(screen.getByLabelText(/Seu nome/), "Ana");
+    await userEvent.type(screen.getByLabelText(/^Senha/), "cavalo bateria grampo");
+    await userEvent.type(
+      screen.getByLabelText(/Repita a senha/),
+      "cavalo bateria grampo",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/6 dígitos/);
+    expect(corpos.some((c) => c.url === "/api/instalacao/primeiro-administrador")).toBe(
+      false,
+    );
   });
 
   it("🔑 senhas diferentes são recusadas antes da rede", async () => {
@@ -1593,6 +1625,7 @@ describe("Primeiro acesso da instalação", () => {
       screen.getByLabelText(/Repita a senha/),
       "cavalo bateria grampo",
     );
+    await userEvent.type(screen.getByLabelText(/PIN do balcão/), "246813");
     await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
 
     await waitFor(() => {
@@ -1895,6 +1928,7 @@ describe("Usuários — caminhos da retaguarda", () => {
       screen.getByLabelText(/Repita a senha/),
       "cavalo bateria grampo",
     );
+    await userEvent.type(screen.getByLabelText(/PIN do balcão/), "246813");
     await userEvent.click(screen.getByRole("button", { name: "Criar acesso e entrar" }));
 
     const criacao = "/api/instalacao/primeiro-administrador";
