@@ -155,7 +155,8 @@ duplicada a cada reinstalação; e as portas nunca eram conferidas, apesar de
 | Preparação da instalação (segredos, `.env`, portas, banco) | ✅ **Testado** — 48 casos, 100% de cobertura |
 | Migração pelo CLI embarcado | ✅ **Executada de verdade**, pela árvore do `pnpm deploy`, contra Postgres real |
 | Montagem do conteúdo no runner Windows | ✅ **Executada** |
-| Script NSIS | ⚠️ **Ainda nunca compilou com sucesso** |
+| Servidor subindo pela carga do instalador | ✅ **Executado** — PDV, `sw.js`, manifesto e retaguarda respondendo 200, lendo o `.env` gerado, contra Postgres real |
+| Script NSIS | ⚠️ **Compila até a cópia dos arquivos**; nunca gerou o `.exe` |
 | Instalação numa máquina Windows | ⚠️ **Nunca feita** |
 
 **Por que o resto não foi executado:** o ambiente de desenvolvimento é Linux.
@@ -302,6 +303,9 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`pnpm deploy` não leva binário baixado** | `engine not found` na máquina do cliente | `deploy` remonta a árvore do armazém de pacotes; o que o `postinstall` baixou depois **não está lá**. Binário nativo de que a instalação depende é copiado explicitamente no workflow |
 | **`npx` numa instalação embarcada** | Falha na loja sem internet | A instalação embarca só o `node.exe`. Nada de `npm`, `npx` ou download em tempo de instalação: o que for preciso viaja dentro do instalador |
 | **Reinstalar regenerando segredo** | Vendas intactas e inalcançáveis | Instalador que gera senha nova por cima de banco existente destrói o **acesso** sem destruir o dado — nem o backup resolve. Segredo de instalação anterior é sempre preservado (`lerSegredosDoEnv`) |
+| **`.env` que ninguém lê** | Serviço morre na partida; verificação diz "não respondeu" | O Node **não** lê `.env` sozinho — exige `--env-file`, e o serviço sobe com `node index.js` e mais nada. `index.ts` chama `carregarArquivoDeAmbiente` ao lado do executável. Só apareceu porque a carga foi **executada**, não lida |
+| **Caminho longo do pnpm no Windows** | `File: failed opening file` no meio do NSIS | O armazém `.pnpm` põe o nome do pacote com hash no caminho e passa de 230 caracteres, contra o limite de 260. `NPM_CONFIG_NODE_LINKER=hoisted` no `deploy`, e o workflow reprova qualquer caminho relativo acima de 180 |
+| **Comparação de 32 bits no NSIS** | Recusa a máquina mais folgada | `${DriveSpace}` em kilobytes estoura em disco de 4 TB e vira negativo. Medir em megabytes |
 | **Aviso de commit "Unverified"** | Hook aponta `8ba140f` | Falso positivo: é o merge commit do próprio GitHub. **Não reescrever** — está em `main` e exigiria force-push |
 | **Dublê guarda referência, não cópia** | Teste de unicidade passa quando deveria falhar | O repositório em memória devolve a **mesma instância** que o caso de uso acabou de alterar. Verificação de duplicidade tem de vir **antes** da mutação — o que também é o certo contra o banco de verdade |
 | **`unbound-method` em fábrica de objeto de valor** | Lint reprova `interpretarOpcional(x, Telefone.criar, erros)` | Passar método estático solto desassocia o `this`. Embrulhe: `(valor) => Telefone.criar(valor)` |

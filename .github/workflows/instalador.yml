@@ -64,9 +64,40 @@ jobs:
       # divergir produz um instalador que copia tudo e não acha nada.
       - name: Montar o conteúdo
         shell: pwsh
+        env:
+          # ── Por que a árvore precisa ser plana ──────────────────────────
+          #
+          # O `deploy` sozinho não basta: com o linker padrão ele reproduz o
+          # armazém virtual `.pnpm`, cujos diretórios carregam o nome do pacote
+          # com hash — e um `.d.ts.map` lá dentro chega a 230 caracteres. O
+          # `File /r` do NSIS estoura no limite de 260 do Windows e a compilação
+          # morre no meio da árvore.
+          #
+          # `hoisted` acha tudo direto em `node_modules/`: o caminho mais longo
+          # cai para ~100 caracteres, e some a estrutura de links que não
+          # sobrevive a uma cópia entre máquinas — o motivo de usar `deploy`
+          # desde o início.
+          NPM_CONFIG_NODE_LINKER: hoisted
         run: |
           $conteudo = "dist-instalador/conteudo"
           New-Item -ItemType Directory -Force -Path $conteudo, "dist-instalador" | Out-Null
+
+          # `.bin` são atalhos para executáveis de linha de comando. A instalação
+          # roda `node index.js` direto, nunca um deles — e num Windows sem modo
+          # de desenvolvedor eles viram cópias inúteis ou links quebrados.
+          function Limpar-Arvore($raiz) {
+            Get-ChildItem $raiz -Recurse -Force -Directory -Filter ".bin" |
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+            # Mapas de código dentro de `node_modules`. O serviço roda
+            # `node index.js` sem `--enable-source-maps`, então **nada** os lê
+            # em produção — e são justamente os nomes mais longos da árvore
+            # (`CriarPrimeiroAdministrador.d.ts.map` é quem estourou o limite).
+            # Os do `servidor/` ficam: se um dia o suporte precisar de pilha
+            # legível, basta a variável de ambiente, sem reinstalar.
+            Get-ChildItem $raiz -Recurse -Force -File -Filter "*.map" |
+              Remove-Item -Force -ErrorAction SilentlyContinue
+          }
 
           # Servidor, com as dependências de produção resolvidas.
           New-Item -ItemType Directory -Force -Path "$conteudo/servidor" | Out-Null
@@ -83,6 +114,8 @@ jobs:
           pnpm --filter @erp/server deploy --prod --legacy "dist-instalador/servidor-deps"
           Copy-Item -Recurse "dist-instalador/servidor-deps/node_modules" "$conteudo/servidor/"
           Remove-Item -Recurse -Force "dist-instalador/servidor-deps"
+
+          Limpar-Arvore "$conteudo/servidor/node_modules"
 
           # Telas: é isto que faz o service worker registrar (ADR-0023).
           New-Item -ItemType Directory -Force -Path "$conteudo/telas/pdv", "$conteudo/telas/retaguarda" | Out-Null
@@ -108,6 +141,8 @@ jobs:
           Copy-Item -Recurse "dist-instalador/instalador-deps/dist/*" "$conteudo/instalador/"
           Copy-Item -Recurse "dist-instalador/instalador-deps/node_modules" "$conteudo/instalador/"
           Remove-Item -Recurse -Force "dist-instalador/instalador-deps"
+
+          Limpar-Arvore "$conteudo/instalador/node_modules"
 
           # ── Motor de schema do Prisma ─────────────────────────────────────
           #
@@ -218,6 +253,26 @@ jobs:
 
           if (-not $motorConsulta) {
             throw "Motor de consulta do Prisma para Windows ausente: o servidor não abriria o banco."
+          }
+
+          # ── Limite de 260 caracteres do Windows ───────────────────────────
+          #
+          # Foi o que quebrou a 2ª execução: o armazém virtual do pnpm produzia
+          # caminhos de 230 caracteres e o `File /r` do NSIS morria no meio da
+          # árvore, com uma mensagem que não diz "caminho longo demais".
+          #
+          # O teto é sobre o caminho **relativo**, porque na loja ele ganha o
+          # prefixo da pasta de instalação. 180 deixa 80 caracteres para o
+          # técnico que escolhe um destino mais fundo que o padrão.
+          $LIMITE = 180
+
+          $longos = Get-ChildItem $conteudo -Recurse -File |
+            ForEach-Object { $_.FullName.Substring((Resolve-Path $conteudo).Path.Length + 1) } |
+            Where-Object { $_.Length -gt $LIMITE }
+
+          if ($longos) {
+            $exemplo = $longos | Sort-Object Length -Descending | Select-Object -First 3
+            throw "Caminhos acima de $LIMITE caracteres ($($longos.Count)): o NSIS falharia ao copiá-los.`n$($exemplo -join "`n")"
           }
 
           $mb = [math]::Round(

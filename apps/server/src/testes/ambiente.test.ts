@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { carregarAmbiente } from "../ambiente.js";
+import { afterAll, describe, expect, it } from "vitest";
+
+import { carregarAmbiente, carregarArquivoDeAmbiente } from "../ambiente.js";
 
 const MINIMO = {
   DATABASE_URL: "postgresql://erp@localhost:5432/erp",
@@ -52,5 +56,67 @@ describe("Configuração do servidor", () => {
 
   it.each([["0"], ["70000"], ["abc"]])("recusa porta inválida %p", (PORTA) => {
     expect(() => carregarAmbiente({ ...MINIMO, PORTA })).toThrow(/Configuração inválida/);
+  });
+});
+
+describe("carregamento do arquivo de configuração", () => {
+  const pastas: string[] = [];
+
+  afterAll(() => {
+    for (const pasta of pastas) rmSync(pasta, { recursive: true, force: true });
+  });
+
+  it("🔑 carrega o `.env` que o instalador gravou", () => {
+    // O Node não lê `.env` sozinho, e o serviço do Windows sobe com
+    // `node index.js` e mais nada. Sem esta chamada a instalação inteira sobe
+    // sem configuração, e o sintoma é "o sistema não respondeu".
+    const carregados: string[] = [];
+
+    const achou = carregarArquivoDeAmbiente(
+      "/instalacao/servidor/.env",
+      () => true,
+      (caminho) => carregados.push(caminho),
+    );
+
+    expect(achou).toBe(true);
+    expect(carregados).toEqual(["/instalacao/servidor/.env"]);
+  });
+
+  it("🔑 lê um arquivo de verdade, com o `process.loadEnvFile` de verdade", () => {
+    // Sem exercitar os padrões, o teste provaria só que a função chama os
+    // dublês que ele mesmo passou — e foi exatamente a ligação real com o
+    // Node que faltava e derrubaria toda instalação.
+    const pasta = mkdtempSync(join(tmpdir(), "erp-ambiente-"));
+    pastas.push(pasta);
+
+    const arquivo = join(pasta, ".env");
+    writeFileSync(arquivo, "VARIAVEL_SO_DESTE_TESTE=veio-do-arquivo\n");
+
+    expect(carregarArquivoDeAmbiente(arquivo)).toBe(true);
+    expect(process.env["VARIAVEL_SO_DESTE_TESTE"]).toBe("veio-do-arquivo");
+
+    delete process.env["VARIAVEL_SO_DESTE_TESTE"];
+  });
+
+  it("não encontra o que não existe, usando o `existsSync` de verdade", () => {
+    const pasta = mkdtempSync(join(tmpdir(), "erp-ambiente-"));
+    pastas.push(pasta);
+
+    expect(carregarArquivoDeAmbiente(join(pasta, ".env"))).toBe(false);
+  });
+
+  it("segue em frente quando não há arquivo", () => {
+    // Em desenvolvimento e no CI a configuração vem do ambiente; exigir o
+    // arquivo faria a suíte depender de um arquivo que ninguém versiona.
+    const carregados: string[] = [];
+
+    const achou = carregarArquivoDeAmbiente(
+      "/sem/env",
+      () => false,
+      (caminho) => carregados.push(caminho),
+    );
+
+    expect(achou).toBe(false);
+    expect(carregados).toEqual([]);
   });
 });
