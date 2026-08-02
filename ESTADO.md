@@ -94,7 +94,7 @@ movimentação é o pior de resolver.
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 | **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
-| **Instalador Windows** | ⚠️ Workflow corrigido após a 1ª execução; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
+| **Instalador Windows** | ⚠️ Workflow verde e `.exe` de 77 MB gerado; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
 **2.686 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
@@ -128,7 +128,7 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
   fala HTTP pelo `@erp/agente-contrato`.
 
-### 2.1.1 ⬅️ PRÓXIMO — rodar o instalador numa máquina Windows
+### 2.1.1 ⬅️ PRÓXIMO — instalar numa máquina Windows de verdade
 
 O `instalador.yml` foi executado pela primeira vez em 02/08/2026 (run
 30744827814). Tudo até a compilação passou: as dependências, o build, a montagem
@@ -156,8 +156,9 @@ duplicada a cada reinstalação; e as portas nunca eram conferidas, apesar de
 | Migração pelo CLI embarcado | ✅ **Executada de verdade**, pela árvore do `pnpm deploy`, contra Postgres real |
 | Montagem do conteúdo no runner Windows | ✅ **Executada** |
 | Servidor subindo pela carga do instalador | ✅ **Executado** — PDV, `sw.js`, manifesto e retaguarda respondendo 200, lendo o `.env` gerado, contra Postgres real |
-| Script NSIS | ⚠️ **Compila até a cópia dos arquivos**; nunca gerou o `.exe` |
-| Instalação numa máquina Windows | ⚠️ **Nunca feita** |
+| Script NSIS | ✅ **Compila** — run 30746227226 |
+| Executável gerado | ✅ `erp-pdv-0.1.0-teste-instalador.exe`, **77,2 MB** (de 450,9 MB de carga) |
+| Instalação numa máquina Windows | ⚠️ **Nunca feita** — é o que falta |
 
 **Por que o resto não foi executado:** o ambiente de desenvolvimento é Linux.
 Compilar NSIS e registrar serviço do Windows exige Windows. O `instalador.yml`
@@ -165,9 +166,18 @@ roda em `windows-latest` e é ali que a prova acontece — mas ele dispara **só
 manualmente ou em tag `v*`**, para não gastar minuto de runner Windows a cada
 commit.
 
-**O próximo passo é:** rodar o workflow de novo, baixar o `.exe` do artefato e
-executá-lo numa máquina Windows real. O que falhar ali continua sendo conserto de
-primeira execução.
+**O próximo passo é:** baixar o artefato `instalador-windows` do run 30746227226
+e executar o `.exe` numa máquina Windows real. É o único elo da corrente que
+ainda nunca rodou — e onde moram `initdb`, os dois serviços, o firewall e a
+verificação de saúde.
+
+**O que observar na primeira instalação**, em ordem de risco:
+
+1. o `initdb` com `--locale-provider=icu --icu-locale=pt-BR` aceita a locale na
+   máquina do cliente (nunca foi executado no Windows);
+2. o `nssm` sobe o serviço e o Node acha o `.env` ao lado do `index.js`;
+3. a migração roda pelo motor embarcado, **sem** tentar baixar nada;
+4. reinstalar por cima preserva os segredos e não recria o cluster.
 
 Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 
@@ -196,7 +206,7 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ⬜ Nada existe |
-| 16 | Instalação | ⚠️ Escrito ponta a ponta: NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow executado uma vez e corrigido; **nunca instalado numa máquina Windows** — ver §2.1.1 |
+| 16 | Instalação | ⚠️ NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow **verde**, `.exe` gerado; **nunca instalado numa máquina Windows** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
