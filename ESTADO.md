@@ -88,7 +88,7 @@ movimentação é o pior de resolver.
 | **Agente Local** | ✅ Serviço HTTP em `127.0.0.1:9787` — impressão, fila offline e catálogo | `apps/agente/` |
 | Contrato tela ↔ Agente | ✅ Tipos e cliente HTTP compartilhados | `packages/agente-contrato/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
-| **Caixa — abertura, sangria, suprimento e fechamento** | ✅ Completo, com contagem às cegas | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Fechamento.tsx` |
+| **Caixa — abertura e fechamento** | ✅ Completo, com contagem às cegas. **Sangria e suprimento só têm API, sem tela** — ver §2.4 | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Abertura.tsx`, `telas/Fechamento.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
@@ -202,7 +202,7 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 | 8 | Compras | ✅ Nota de entrada, cancelamento com estorno e lista. **Falta o pedido de compra** — ver §2.4 |
 | 9 | Vendas | ✅ Pronto |
 | 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
-| 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
+| 11 | Caixa | ⚠️ Abertura, fechamento e conferência prontos. **Sangria e suprimento têm rota e caso de uso, mas nenhuma tela os chama** — ver §2.4 |
 | 12 | Financeiro | ✅ Contas a receber e a pagar, baixa parcial, estorno, parcelamento, adiamento e cancelamento. **Falta a conciliação bancária** — ver §2.4 |
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
@@ -223,6 +223,11 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 
 ### 2.4 Dívidas conhecidas, pequenas e nomeadas
 
+- **Sangria e suprimento não têm tela.** `POST /api/caixa/sangria` e `/suprimento`
+  existem, com caso de uso e testes; nenhuma tela os chama. A sangria ainda precisa
+  do fluxo de autorização do supervisor, que a rota já devolve como terceiro estado
+  (`AUTORIZACAO_NECESSARIA`), não como negativa. Sem isso a loja não tira dinheiro da
+  gaveta pelo sistema.
 - **`sessoes_caixa.operador_id` não tem FK.** O papel do DBA tem veto sobre FK
   ausente (`CLAUDE.md` §1), e esta escapou. A consulta de sessões já lida com o
   caso (mostra `—`), mas a integridade real depende da migração. Fazer junto com
@@ -315,6 +320,7 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`npx` numa instalação embarcada** | Falha na loja sem internet | A instalação embarca só o `node.exe`. Nada de `npm`, `npx` ou download em tempo de instalação: o que for preciso viaja dentro do instalador |
 | **Reinstalar regenerando segredo** | Vendas intactas e inalcançáveis | Instalador que gera senha nova por cima de banco existente destrói o **acesso** sem destruir o dado — nem o backup resolve. Segredo de instalação anterior é sempre preservado (`lerSegredosDoEnv`) |
 | **Reinstalar por cima de serviço no ar** | Enxurrada de "erro ao abrir o arquivo pra gravação", uma por DLL | O serviço do banco segura os próprios binários. Quem clica em "Ignorar" fica com **binários de duas versões misturados**, e o estrago aparece longe da causa. O NSIS para os dois serviços **antes** do `File /r` |
+| **API pronta sem tela que a chame** | Função "completa" que o usuário não alcança | `POST /api/caixa/abrir` existia desde sempre, testada, sem **nenhuma** tela chamando: o operador entrava, bipava e levava "abra o caixa antes de iniciar uma venda", sem lugar onde abrir. Achado na primeira instalação real. Ao dar um módulo por pronto, confira que cada rota tem quem a chame |
 | **200 no HTML não prova que a tela abre** | Página em branco, documento respondendo 200 | A retaguarda pedia `/assets/…` absoluto e recebia o 404 do PDV. Conferir o status do documento não pega: é preciso buscar **o que o HTML referencia**. O `base` do Vite é `/retaguarda/`, e o workflow reprova se o `index.html` apontar para a raiz |
 | **`nssm install` com caminho que tem espaço** | Serviço em laço de reinício, depois `Paused`; "o sistema não respondeu" | `nssm install <svc> <exe> <args>` junta os argumentos **sem re-aspar**: o Node recebia `C:\Program` e morria. O script vai em `AppParameters` com aspas literais (`$\"`) |
 | **Carga sem `package.json`** | Node sobe por detecção de sintaxe e procura configuração até `C:\` | `"type": "module"` precisa estar ao lado do `index.js`. O `package.json` do `pnpm deploy` viaja junto, e a conferência do workflow o exige |

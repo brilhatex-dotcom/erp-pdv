@@ -19,6 +19,7 @@ import {
   VendaIndisponivel,
   type VendaVisivel,
 } from "../vendaComQueda.js";
+import { Abertura } from "./Abertura.js";
 import { Fechamento } from "./Fechamento.js";
 import { IndicadorConexao } from "./IndicadorConexao.js";
 
@@ -45,6 +46,16 @@ import { IndicadorConexao } from "./IndicadorConexao.js";
 
 type Fase = "VENDENDO" | "PAGANDO" | "CONCLUIDA" | "FECHANDO";
 
+/**
+ * O caixa desta estação está aberto?
+ *
+ * `INDEFINIDO` enquanto a resposta não chega: mostrar a tela de venda antes de
+ * saber faria o operador bipar e levar "abra o caixa antes de iniciar uma
+ * venda" — que é exatamente o beco em que a ausência desta tela deixava todo
+ * mundo.
+ */
+type EstadoDoCaixa = "INDEFINIDO" | "ABERTO" | "FECHADO";
+
 interface ItemNaTela {
   readonly numero: number;
   readonly descricao: string;
@@ -65,6 +76,7 @@ export function Venda(): ReactNode {
   const { cliente, usuario, sair } = useSessao();
 
   const [fase, setFase] = useState<Fase>("VENDENDO");
+  const [caixa, setCaixa] = useState<EstadoDoCaixa>("INDEFINIDO");
   // Uma vez na fila, a venda inteira segue na fila: metade no servidor e metade
   // aqui produziria duas vendas parciais, nenhuma cobrável.
   const [origem, setOrigem] = useState<Origem>("SERVIDOR");
@@ -79,6 +91,26 @@ export function Venda(): ReactNode {
 
   const campoCodigo = useRef<HTMLInputElement>(null);
   const campoValor = useRef<HTMLInputElement>(null);
+
+  const conferirCaixa = useCallback(async (): Promise<void> => {
+    try {
+      // 204 quando não há sessão aberta — o cliente devolve `undefined`.
+      const aberto = await cliente.requisitar<{ readonly id: string } | undefined>(
+        `/api/caixa/aberto?estacaoId=${identificadorDaEstacao()}`,
+      );
+
+      setCaixa(aberto === undefined ? "FECHADO" : "ABERTO");
+    } catch {
+      // Servidor fora do ar não é caixa fechado. Bloquear aqui deixaria a
+      // estação sem vender numa queda de rede, que é justamente o cenário em
+      // que a contingência existe para funcionar (ADR-0023).
+      setCaixa("ABERTO");
+    }
+  }, [cliente]);
+
+  useEffect(() => {
+    void conferirCaixa();
+  }, [conferirCaixa]);
 
   // O foco volta ao campo certo a cada mudança de fase. Sem isto o operador
   // teria de encontrar o campo com o mouse depois de cada pagamento.
@@ -224,6 +256,23 @@ export function Venda(): ReactNode {
       <Fechamento
         aoSair={() => {
           setFase("VENDENDO");
+          // Fechou o caixa: a estação volta para a abertura, não para uma tela
+          // de venda que recusaria a primeira bipada.
+          void conferirCaixa();
+        }}
+      />
+    );
+  }
+
+  // Enquanto a resposta não chega, nada — e não a tela de venda. Um piscar de
+  // campo de código antes do desvio faria o operador começar a bipar no vazio.
+  if (caixa === "INDEFINIDO") return null;
+
+  if (caixa === "FECHADO") {
+    return (
+      <Abertura
+        aoAbrir={() => {
+          setCaixa("ABERTO");
         }}
       />
     );

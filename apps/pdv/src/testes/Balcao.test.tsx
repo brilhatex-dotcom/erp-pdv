@@ -98,9 +98,25 @@ function montar(rotas: Rotas): { readonly chamadas: Chamada[] } {
   return { chamadas };
 }
 
-/** Operador já autenticado, com o balcão pronto para vender. */
+const CAIXA_ABERTO = {
+  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0009",
+  estacaoId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f000a",
+  fundoTroco: "10000",
+  totalVendido: "0",
+  quantidadeVendas: 0,
+  abertaEm: "2026-08-02T12:00:00.000Z",
+};
+
+/**
+ * Operador já autenticado, com o balcão pronto para vender.
+ *
+ * O caixa aberto é **explícito**: sem sessão aberta a tela desvia para a
+ * abertura, e todo teste de venda que dependesse do silêncio estaria medindo
+ * outra coisa.
+ */
 const AUTENTICADO: Rotas = {
   "/api/acesso/eu": () => json(200, OPERADOR),
+  "/api/caixa/aberto": () => json(200, CAIXA_ABERTO),
 };
 
 const VENDENDO: Rotas = {
@@ -801,6 +817,153 @@ describe("entrada no fechamento", () => {
     expect(await screen.findByText("Fechamento de caixa")).toBeVisible();
 
     await usuario.click(screen.getByRole("button", { name: "Voltar" }));
+
+    expect(await esperarCampoDeCodigo()).toBeVisible();
+  });
+});
+
+describe("abertura do caixa", () => {
+  /**
+   * A primeira coisa do dia, e por muito tempo a que não existia.
+   *
+   * O servidor tinha `POST /api/caixa/abrir` desde sempre; nenhuma tela a
+   * chamava. O operador entrava, bipava, e levava "abra o caixa antes de
+   * iniciar uma venda" — sem nenhum lugar onde abrir. Foi encontrado na
+   * primeira instalação real.
+   */
+  it("🔑 caixa fechado leva à abertura, não ao campo de código", async () => {
+    montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () => new Response(null, { status: 204 }),
+    });
+
+    expect(await screen.findByRole("heading", { name: "Abrir o caixa" })).toBeVisible();
+    expect(screen.queryByLabelText(/Código do produto/)).not.toBeInTheDocument();
+  });
+
+  it("🔑 abre com o fundo contado e libera a venda", async () => {
+    const usuario = userEvent.setup();
+    let aberto = false;
+
+    const { chamadas } = montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () =>
+        aberto ? json(200, CAIXA_ABERTO) : new Response(null, { status: 204 }),
+      "/api/caixa/abrir": () => {
+        aberto = true;
+        return json(201, CAIXA_ABERTO);
+      },
+    });
+
+    await screen.findByRole("heading", { name: "Abrir o caixa" });
+
+    await usuario.type(screen.getByLabelText(/Fundo de troco/), "15000");
+    await usuario.click(screen.getByRole("button", { name: "Abrir caixa" }));
+
+    // O campo de código é a prova de que a venda liberou.
+    expect(await esperarCampoDeCodigo()).toBeVisible();
+
+    expect(chamadas.find((c) => c.url === "/api/caixa/abrir")?.corpo).toMatchObject({
+      fundoTroco: "15000",
+    });
+  });
+
+  it("🔑 fundo vazio não vira zero", async () => {
+    // Campo em branco não distingue "não havia fundo" de "esqueci de contar", e
+    // a diferença aparece no fechamento como uma falta que ninguém explica.
+    const usuario = userEvent.setup();
+
+    const { chamadas } = montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () => new Response(null, { status: 204 }),
+      "/api/caixa/abrir": () => json(201, CAIXA_ABERTO),
+    });
+
+    await screen.findByRole("heading", { name: "Abrir o caixa" });
+    await usuario.click(screen.getByRole("button", { name: "Abrir caixa" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/digite 0/i);
+    expect(chamadas.some((c) => c.url === "/api/caixa/abrir")).toBe(false);
+  });
+
+  it("aceita fundo zero, que é resposta comum", async () => {
+    const usuario = userEvent.setup();
+    let aberto = false;
+
+    const { chamadas } = montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () =>
+        aberto ? json(200, CAIXA_ABERTO) : new Response(null, { status: 204 }),
+      "/api/caixa/abrir": () => {
+        aberto = true;
+        return json(201, { ...CAIXA_ABERTO, fundoTroco: "0" });
+      },
+    });
+
+    await screen.findByRole("heading", { name: "Abrir o caixa" });
+    await usuario.type(screen.getByLabelText(/Fundo de troco/), "0");
+    await usuario.click(screen.getByRole("button", { name: "Abrir caixa" }));
+
+    await esperarCampoDeCodigo();
+
+    expect(chamadas.find((c) => c.url === "/api/caixa/abrir")?.corpo).toMatchObject({
+      fundoTroco: "0",
+    });
+  });
+
+  it("recusa do servidor aparece na tela, sem perder o valor contado", async () => {
+    // Acontece de verdade: dois operadores abrindo a mesma estação ao mesmo
+    // tempo. Quem perder a corrida precisa entender o que houve, e não recontar
+    // a gaveta do zero.
+    const usuario = userEvent.setup();
+
+    montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () => new Response(null, { status: 204 }),
+      "/api/caixa/abrir": () =>
+        json(422, {
+          erro: {
+            codigo: "REGRA_NEGOCIO",
+            mensagem: "O caixa desta estação já está aberto.",
+          },
+        }),
+    });
+
+    await screen.findByRole("heading", { name: "Abrir o caixa" });
+    await usuario.type(screen.getByLabelText(/Fundo de troco/), "15000");
+    await usuario.click(screen.getByRole("button", { name: "Abrir caixa" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/já está aberto/);
+    expect(screen.getByLabelText(/Fundo de troco/)).toHaveValue("15000");
+  });
+
+  it("dá saída sem abrir, para quem entrou na estação errada", async () => {
+    const usuario = userEvent.setup();
+
+    const { chamadas } = montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () => new Response(null, { status: 204 }),
+      "/api/acesso/sair": () => json(204, {}),
+    });
+
+    await screen.findByRole("heading", { name: "Abrir o caixa" });
+    await usuario.click(screen.getByRole("button", { name: "Sair" }));
+
+    await waitFor(() => {
+      expect(chamadas.some((c) => c.url === "/api/acesso/sair")).toBe(true);
+    });
+  });
+
+  it("🔑 servidor fora do ar não é caixa fechado", async () => {
+    // Bloquear aqui deixaria a estação sem vender numa queda de rede — que é
+    // exatamente o cenário em que a contingência existe para funcionar
+    // (ADR-0023). O PDV nunca para (CLAUDE.md §4).
+    montar({
+      ...AUTENTICADO,
+      "/api/caixa/aberto": () => {
+        throw new Error("rede fora");
+      },
+    });
 
     expect(await esperarCampoDeCodigo()).toBeVisible();
   });
