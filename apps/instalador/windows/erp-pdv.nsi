@@ -224,7 +224,18 @@ Section "Sistema" SEC_SISTEMA
   DetailPrint "Registrando os serviços..."
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" stop "ERPPDVServidor"'
   Pop $0
-  nsExec::ExecToLog '"$INSTDIR\nssm.exe" install "ERPPDVServidor" "$INSTDIR\node\node.exe" "$INSTDIR\servidor\index.js"'
+  ; O caminho do script vai em `AppParameters`, **com aspas literais**, e não
+  ; como argumento do `install`.
+  ;
+  ; O `nssm install <serviço> <programa> <args...>` junta os argumentos com
+  ; espaço e **não os re-aspa**. Como o caminho contém "Program Files", a linha
+  ; de comando do serviço virava `node.exe C:\Program Files\...\index.js` sem
+  ; aspas, e o Node lia só até o primeiro espaço: `Cannot find module
+  ; 'C:\Program'`. O serviço reiniciava em laço até o NSSM o pausar — e o
+  ; sintoma que chegava ao técnico era "o sistema não respondeu".
+  nsExec::ExecToLog '"$INSTDIR\nssm.exe" install "ERPPDVServidor" "$INSTDIR\node\node.exe"'
+  Pop $0
+  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppParameters "$\"$INSTDIR\servidor\index.js$\""'
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppDirectory "$INSTDIR\servidor"'
   Pop $0

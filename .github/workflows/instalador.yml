@@ -113,6 +113,15 @@ jobs:
           # `deploy` materializa os arquivos de verdade.
           pnpm --filter @erp/server deploy --prod --legacy "dist-instalador/servidor-deps"
           Copy-Item -Recurse "dist-instalador/servidor-deps/node_modules" "$conteudo/servidor/"
+
+          # ── `package.json` ao lado do `index.js` ──────────────────────────
+          #
+          # Sem ele o Node não acha `"type": "module"` e sobe **por detecção de
+          # sintaxe**, procurando a configuração pasta acima até a raiz do `C:`.
+          # Funciona por acidente, avisa no log e custa desempenho na partida —
+          # e a semântica de módulo passa a depender de não existir nenhum
+          # `package.json` no caminho até `C:\`, que não é garantia nenhuma.
+          Copy-Item "dist-instalador/servidor-deps/package.json" "$conteudo/servidor/"
           Remove-Item -Recurse -Force "dist-instalador/servidor-deps"
 
           Limpar-Arvore "$conteudo/servidor/node_modules"
@@ -140,6 +149,7 @@ jobs:
           # lado dele.
           Copy-Item -Recurse "dist-instalador/instalador-deps/dist/*" "$conteudo/instalador/"
           Copy-Item -Recurse "dist-instalador/instalador-deps/node_modules" "$conteudo/instalador/"
+          Copy-Item "dist-instalador/instalador-deps/package.json" "$conteudo/instalador/"
           Remove-Item -Recurse -Force "dist-instalador/instalador-deps"
 
           Limpar-Arvore "$conteudo/instalador/node_modules"
@@ -227,12 +237,14 @@ jobs:
             "postgres/bin/psql.exe",
             "postgres/bin/createdb.exe",
             "servidor/index.js",
+            "servidor/package.json",
             "servidor/prisma/schema.prisma",
             "servidor/node_modules/@erp/database/dist/gerado/schema.prisma",
             "telas/pdv/index.html",
             "telas/pdv/sw.js",
             "telas/retaguarda/index.html",
             "instalador/index.js",
+            "instalador/package.json",
             "instalador/node_modules/prisma/build/index.js",
             "instalador/engines/schema-engine-windows.exe",
             "agente/index.js"
