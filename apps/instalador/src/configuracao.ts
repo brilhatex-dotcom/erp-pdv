@@ -51,6 +51,39 @@ export function gerarSegredos(
   };
 }
 
+/**
+ * Recupera os segredos de um `.env` que já existe.
+ *
+ * ### Por que isto não é opcional
+ *
+ * Reinstalar por cima de uma loja em operação é caso real: atualização de
+ * versão, técnico refazendo um passo, instalador rodado duas vezes. Se a
+ * segunda instalação gerasse segredos novos, a senha do `.env` deixaria de
+ * casar com a do cluster que já existe — e o sistema subiria sem conseguir
+ * abrir o banco, com todas as vendas intactas e inalcançáveis. É o pior
+ * defeito possível num instalador: destrói o acesso sem destruir o dado, então
+ * nem o backup ajuda.
+ *
+ * Devolve `undefined` quando o arquivo não tem os três segredos — instalação
+ * nova, ou `.env` truncado por queda de energia no meio da escrita. Nos dois
+ * casos o certo é gerar de novo, porque não há o que preservar.
+ */
+export function lerSegredosDoEnv(conteudo: string): Segredos | undefined {
+  const senhaBanco = /^DATABASE_URL=postgresql:\/\/[^:]+:([^@]+)@/m.exec(conteudo)?.[1];
+  const segredoToken = /^SEGREDO_TOKEN=(.+)$/m.exec(conteudo)?.[1];
+  const segredoAgente = /^SEGREDO_AGENTE=(.+)$/m.exec(conteudo)?.[1];
+
+  if (
+    senhaBanco === undefined ||
+    segredoToken === undefined ||
+    segredoAgente === undefined
+  ) {
+    return undefined;
+  }
+
+  return { senhaBanco, segredoToken, segredoAgente };
+}
+
 export interface DadosDaInstalacao {
   /** Onde o sistema foi instalado. */
   readonly raiz: string;
@@ -98,6 +131,11 @@ export function conteudoDoEnv(dados: DadosDaInstalacao): string {
     "ENDERECO=0.0.0.0",
     `DATABASE_URL=${urlDoBanco({ portaPostgres: dados.portaPostgres, senhaBanco: dados.segredos.senhaBanco })}`,
     `SEGREDO_TOKEN=${dados.segredos.segredoToken}`,
+    // O servidor não lê este segredo — quem lê é o instalador da estação, ao
+    // parear o Agente Local. Fica gravado porque **regenerá-lo desemparelharia
+    // as estações já instaladas**, e o sintoma seria o caixa parar de imprimir
+    // depois de uma reinstalação do servidor.
+    `SEGREDO_AGENTE=${dados.segredos.segredoAgente}`,
     `ORIGENS_PERMITIDAS=http://localhost:${porta},http://${dados.estacao}:${porta}`,
     `PASTA_PDV=${caminhoDeTela(dados.raiz, "pdv")}`,
     `PASTA_RETAGUARDA=${caminhoDeTela(dados.raiz, "retaguarda")}`,

@@ -5,6 +5,7 @@ import {
   conteudoDoEnvDoAgente,
   type DadosDaInstalacao,
   gerarSegredos,
+  lerSegredosDoEnv,
   PORTA_POSTGRES_PADRAO,
   PORTA_SERVIDOR_PADRAO,
   urlDoBanco,
@@ -146,5 +147,47 @@ describe("configuração do agente na estação", () => {
 
     expect(env).toContain("ERP_SERVIDOR=http://SERVIDOR-LOJA:3000");
     expect(env).toContain("ERP_SEGREDO_AGENTE=abc123");
+  });
+});
+
+describe("reinstalação por cima de uma loja em operação", () => {
+  it("🔑 recupera os segredos do `.env` que já existe", () => {
+    // Gerar segredos novos numa reinstalação deixaria a senha do `.env` sem
+    // casar com a do cluster já criado: o sistema sobe, o banco não abre, e
+    // todas as vendas ficam intactas e inalcançáveis. Nem o backup resolve —
+    // ele tem o dado, não a chave.
+    const gravado = conteudoDoEnv(dados());
+
+    expect(lerSegredosDoEnv(gravado)).toEqual({
+      senhaBanco: "senha-de-teste",
+      segredoToken: "token-de-teste-com-mais-de-32-caracteres",
+      segredoAgente: "agente-de-teste",
+    });
+  });
+
+  it("sobrevive a segredo com base64url de verdade", () => {
+    const segredos = gerarSegredos();
+
+    expect(lerSegredosDoEnv(conteudoDoEnv(dados({ segredos })))).toEqual(segredos);
+  });
+
+  it("🔑 pede segredos novos quando o arquivo está truncado", () => {
+    // Queda de energia no meio da escrita deixa um `.env` pela metade.
+    // Preservar meio segredo é pior que gerar tudo de novo: produz uma
+    // instalação que parece configurada e não abre nada.
+    const truncado = "NODE_ENV=production\nDATABASE_URL=postgresql://erp:abc@localhost";
+
+    expect(lerSegredosDoEnv(truncado)).toBeUndefined();
+  });
+
+  it("pede segredos novos quando não há `.env` nenhum", () => {
+    expect(lerSegredosDoEnv("")).toBeUndefined();
+  });
+
+  it("grava o segredo do Agente, para não desemparelhar as estações", () => {
+    // O servidor não lê este segredo, mas o instalador da estação lê. Se ele
+    // sumisse do `.env`, a reinstalação geraria outro e o caixa pararia de
+    // imprimir.
+    expect(conteudoDoEnv(dados())).toContain("SEGREDO_AGENTE=agente-de-teste");
   });
 });

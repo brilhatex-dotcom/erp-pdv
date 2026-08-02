@@ -42,12 +42,13 @@ git branch -r                       # o que existe
 git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 ```
 
-| Branch | Situação em 01/08/2026 | O que ela mexe |
+| Branch | Situação em 02/08/2026 | O que ela mexe |
 |---|---|---|
-| `claude/instalacao` | Aguardando merge | Módulo 16: servidor passa a servir as telas (`http/estaticos.ts`), novo `apps/instalador`, script NSIS e workflow `instalador.yml` com runner Windows. Ao mesclar, apague-a e esvazie esta tabela |
+| `claude/projeto-andamento-47iofe` | Aguardando merge | Correções da 1ª execução do `instalador.yml`: NSIS instalado no runner, migração passa a morar no `apps/instalador` com o CLI do Prisma embarcado, e a ordem segredos↔`initdb` corrigida. Ao mesclar, apague-a e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
-> `claude/agente-local`, `claude/pwa-e-quiosque` e `claude/financeiro`.
+> `claude/agente-local`, `claude/pwa-e-quiosque`, `claude/financeiro` e
+> `claude/instalacao`.
 
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
@@ -93,7 +94,7 @@ movimentação é o pior de resolver.
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 | **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
-| **Instalador Windows** | ⚠️ Escrito e não executado — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
+| **Instalador Windows** | ⚠️ Workflow corrigido após a 1ª execução; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
 **2.686 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
@@ -127,28 +128,45 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
   fala HTTP pelo `@erp/agente-contrato`.
 
-### 2.1.1 ⬅️ PRÓXIMO — rodar o instalador de verdade
+### 2.1.1 ⬅️ PRÓXIMO — rodar o instalador numa máquina Windows
 
-O módulo 16 está escrito e **nunca foi executado**. Esta é a diferença que mais
-importa saber antes de continuar:
+O `instalador.yml` foi executado pela primeira vez em 02/08/2026 (run
+30744827814). Tudo até a compilação passou: as dependências, o build, a montagem
+do conteúdo, o download do Node, do PostgreSQL e do NSSM. **A compilação falhou**
+— e a leitura do log expôs quatro defeitos que teriam quebrado *toda* instalação:
+
+| Defeito | Por que quebrava | Situação |
+|---|---|---|
+| NSIS não vem mais no runner `windows-latest` | `makensis não encontrado` | ✅ Instalado por `choco`, versão fixada |
+| `initdb --pwfile` apontava para arquivo que ninguém criava | `initdb` falhava no 1º passo | ✅ `preparar` escreve o arquivo, e roda **antes** do `initdb` |
+| Segredos gerados **depois** do `initdb` | `.env` com senha que o cluster nunca teve | ✅ Ordem invertida no NSIS |
+| `migrar` chamava `npx prisma` | Só o `node.exe` é embarcado: não há `npx` | ✅ CLI do Prisma vai junto, chamado por caminho |
+| Banco `erp_pdv` nunca era criado | `database does not exist` | ✅ Novo comando `criar-banco` |
+
+Achados no mesmo caminho e corrigidos: reinstalar por cima de uma loja gerava
+segredos novos e **perdia o acesso ao banco com as vendas dentro**; os atalhos
+usavam `.lnk` para endereço `http`, que não abre nada; o `netsh` empilhava regra
+duplicada a cada reinstalação; e as portas nunca eram conferidas, apesar de
+`portaLivre` existir e ser testada.
 
 | Parte | Situação |
 |---|---|
 | Servidor entregar as telas | ✅ **Testado** — 14 casos contra o servidor real |
-| Preparação da instalação (segredos, `.env`, verificação) | ✅ **Testado** — 25 casos |
-| Script NSIS | ⚠️ **Escrito, nunca compilado** |
-| Workflow com runner Windows | ⚠️ **Escrito, nunca executado** |
+| Preparação da instalação (segredos, `.env`, portas, banco) | ✅ **Testado** — 48 casos, 100% de cobertura |
+| Migração pelo CLI embarcado | ✅ **Executada de verdade**, pela árvore do `pnpm deploy`, contra Postgres real |
+| Montagem do conteúdo no runner Windows | ✅ **Executada** |
+| Script NSIS | ⚠️ **Ainda nunca compilou com sucesso** |
+| Instalação numa máquina Windows | ⚠️ **Nunca feita** |
 
-**Por que não foi executado:** o ambiente de desenvolvimento é Linux e o
-`ci.yml` só tem `ubuntu-latest`. Compilar NSIS e testar serviço do Windows exige
-Windows. O `instalador.yml` roda em `windows-latest` e é ali que a prova
-acontece — mas ele dispara **só manualmente ou em tag `v*`**, para não gastar
-minuto de runner Windows a cada commit.
+**Por que o resto não foi executado:** o ambiente de desenvolvimento é Linux.
+Compilar NSIS e registrar serviço do Windows exige Windows. O `instalador.yml`
+roda em `windows-latest` e é ali que a prova acontece — mas ele dispara **só
+manualmente ou em tag `v*`**, para não gastar minuto de runner Windows a cada
+commit.
 
-**O próximo passo é literalmente:** ir em Actions → "Instalador Windows" → Run
-workflow, baixar o `.exe` do artefato e rodá-lo numa máquina Windows. O que
-falhar ali é conserto de primeira execução — esperado, e é para isso que o
-workflow existe.
+**O próximo passo é:** rodar o workflow de novo, baixar o `.exe` do artefato e
+executá-lo numa máquina Windows real. O que falhar ali continua sendo conserto de
+primeira execução.
 
 Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 
@@ -177,7 +195,7 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ⬜ Nada existe |
-| 16 | Instalação | ⚠️ Escrito ponta a ponta: NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. **Nunca executado** — ver §2.1.1 |
+| 16 | Instalação | ⚠️ Escrito ponta a ponta: NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow executado uma vez e corrigido; **nunca instalado numa máquina Windows** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
@@ -204,7 +222,7 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 - ~~O servidor da loja não serve a PWA~~ ✅ **Resolvido.** `http/estaticos.ts`
   entrega o PDV na raiz e a retaguarda em `/retaguarda`, com `sw.js` sem cache e
   arquivo com hash cacheado por um ano.
-- **O instalador nunca foi executado.** Ver §2.1.1 — é a maior incerteza aberta
+- **O instalador nunca foi executado numa máquina Windows.** Ver §2.1.1 — é a maior incerteza aberta
   no projeto hoje.
 - **O instalador não é assinado.** Decisão registrada: certificado custa de
   R$ 1.500 a R$ 5.000 por ano e exige token físico ou HSM desde 2023. O Windows
@@ -280,6 +298,10 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`verify` divergir do CI** | Passa local, quebra no CI | `verify` roda exatamente o que o CI roda. Se o CI usa `test:cov`, `verify` também |
 | **Dinheiro virando `double`** | Centavo somindo no fechamento | Dinheiro trafega como **texto** de inteiro (ADR-0019). `JSON.parse` transforma número em `double` |
 | **CI rodando duas vezes** | 4 checks por push | Gatilho é `push:` puro. `push` + `pull_request` na mesma branch duplica |
+| **Tamanho do artefato como prova de conteúdo** | Portão verde com peça faltando | `instalador.yml` conferia "o `.exe` tem 100 MB". Passa com o Postgres dentro e o `psql.exe` fora, e a compressão sólida move o limiar a cada dependência nova. **Confira os arquivos que importam, um a um** |
+| **`pnpm deploy` não leva binário baixado** | `engine not found` na máquina do cliente | `deploy` remonta a árvore do armazém de pacotes; o que o `postinstall` baixou depois **não está lá**. Binário nativo de que a instalação depende é copiado explicitamente no workflow |
+| **`npx` numa instalação embarcada** | Falha na loja sem internet | A instalação embarca só o `node.exe`. Nada de `npm`, `npx` ou download em tempo de instalação: o que for preciso viaja dentro do instalador |
+| **Reinstalar regenerando segredo** | Vendas intactas e inalcançáveis | Instalador que gera senha nova por cima de banco existente destrói o **acesso** sem destruir o dado — nem o backup resolve. Segredo de instalação anterior é sempre preservado (`lerSegredosDoEnv`) |
 | **Aviso de commit "Unverified"** | Hook aponta `8ba140f` | Falso positivo: é o merge commit do próprio GitHub. **Não reescrever** — está em `main` e exigiria force-push |
 | **Dublê guarda referência, não cópia** | Teste de unicidade passa quando deveria falhar | O repositório em memória devolve a **mesma instância** que o caso de uso acabou de alterar. Verificação de duplicidade tem de vir **antes** da mutação — o que também é o certo contra o banco de verdade |
 | **`unbound-method` em fábrica de objeto de valor** | Lint reprova `interpretarOpcional(x, Telefone.criar, erros)` | Passar método estático solto desassocia o `this`. Embrulhe: `(valor) => Telefone.criar(valor)` |

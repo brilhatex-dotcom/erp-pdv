@@ -72,6 +72,9 @@ importers:
 
   apps/instalador:
     dependencies:
+      prisma:
+        specifier: ^6.19.1
+        version: 6.19.3(magicast@0.3.5)(typescript@5.9.3)
       zod:
         specifier: ^4.1.13
         version: 4.4.3

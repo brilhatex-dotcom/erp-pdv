@@ -9,19 +9,33 @@
 
 Um executável só. Ele:
 
-1. confere **espaço em disco** e a **porta** antes de escrever qualquer coisa;
+1. confere **espaço em disco** antes de escrever qualquer coisa, e as **portas**
+   logo depois de copiar;
 2. copia o Node, o PostgreSQL, o servidor e as telas;
-3. inicializa o banco numa **porta dedicada** (55433), isolado de qualquer
-   PostgreSQL que já exista na máquina;
-4. **gera os segredos** — senha do banco, segredo de token e segredo do Agente —
+3. **gera os segredos** — senha do banco, segredo de token e segredo do Agente —
    com gerador criptográfico, diferentes em cada instalação;
-5. aplica as migrações;
+4. inicializa o banco numa **porta dedicada** (55433), isolado de qualquer
+   PostgreSQL que já exista na máquina;
+5. cria o banco e aplica as migrações;
 6. registra dois serviços do Windows e os inicia;
 7. **confere que o sistema respondeu** antes de dizer "concluído".
 
 O passo 7 é o que separa este instalador de um que entrega "concluído" com um
 sistema que não sobe — o pior resultado possível, porque o lojista só descobre
 no dia seguinte, com a loja cheia.
+
+Os segredos vêm **antes** do banco de propósito: é a configuração que escolhe a
+senha que o `initdb` vai usar. Na ordem inversa, o sistema subiria com uma senha
+que o banco recém-criado não reconhece.
+
+### Rodar o instalador duas vezes é seguro
+
+Atualização de versão, técnico refazendo um passo, clique duplo sem querer: cada
+passo destrutivo é condicionado à ausência do que ele criaria. O cluster não é
+reinicializado, o banco não é recriado, e **os segredos da instalação anterior
+são preservados**. Sem isso, a segunda execução deixaria as vendas no disco e a
+chave para lê-las perdida — um estrago que nem o backup desfaz, porque o backup
+guarda o dado, não a senha.
 
 ---
 
@@ -63,10 +77,17 @@ C:\Program Files\ERP PDV\
 ├── postgres\        PostgreSQL embarcado
 ├── dados\           ⚠️ O BANCO DA LOJA. Nunca apagar.
 ├── servidor\        A aplicação e o .env gerado
+├── instalador\      Configuração, migrações e verificação
+├── agente\          Agente Local, para quando o servidor também é caixa
 ├── telas\           PDV e retaguarda
 ├── log\             servidor.log, com rotação a cada 10 MB
 └── backup\
 ```
+
+A pasta `instalador\` **fica na máquina** de propósito: é ela que aplica as
+migrações na próxima atualização de versão. Ela carrega o CLI do Prisma e o
+motor de schema porque a instalação embarca só o `node.exe` — não há `npm`, não
+há `npx`, e a loja pode não ter internet no dia em que a atualização rodar.
 
 ### Os dois serviços
 
