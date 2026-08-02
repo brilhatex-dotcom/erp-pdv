@@ -1,0 +1,189 @@
+name: Instalador Windows
+
+# Quando roda: **manualmente** e em tag `v*`.
+#
+# Não roda em todo push de propósito. O job baixa o Node, o PostgreSQL e o NSSM
+# — cerca de 300 MB — e monta um executável de 250 MB. Fazer isso a cada commit
+# gastaria minuto de runner Windows (que custa o dobro do Linux) para produzir
+# um artefato que ninguém baixa.
+#
+# O portão de qualidade continua sendo o `ci.yml`, que roda sempre. Este
+# workflow é de **entrega**, não de verificação — e só faz sentido depois que
+# aquele passou.
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão do instalador (ex.: 0.1.0)"
+        required: true
+        default: "0.0.0-teste"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+  # A mesma versão maior do desenvolvimento e do CI (ADR-0013). Embarcar outra
+  # invalidaria a paridade teste↔produção que motivou abandonar o SQLite.
+  POSTGRES_VERSION: "17.5-1"
+
+jobs:
+  construir:
+    name: Construir instalador
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Construir o sistema
+        run: pnpm build
+
+      # ── O que vai dentro do instalador ──────────────────────────────────
+      #
+      # Montado numa pasta só, para o NSIS copiar de uma vez. A estrutura aqui
+      # é exatamente a que o `erp-pdv.nsi` e o `configuracao.ts` esperam;
+      # divergir produz um instalador que copia tudo e não acha nada.
+      - name: Montar o conteúdo
+        shell: pwsh
+        run: |
+          $conteudo = "dist-instalador/conteudo"
+          New-Item -ItemType Directory -Force -Path $conteudo, "dist-instalador" | Out-Null
+
+          # Servidor, com as dependências de produção resolvidas.
+          New-Item -ItemType Directory -Force -Path "$conteudo/servidor" | Out-Null
+          Copy-Item -Recurse "apps/server/dist/*" "$conteudo/servidor/"
+
+          # O schema e as migrações viajam junto: `migrar.js` os procura ao lado
+          # do servidor quando roda dentro da instalação.
+          New-Item -ItemType Directory -Force -Path "$conteudo/servidor/prisma" | Out-Null
+          Copy-Item -Recurse "packages/database/prisma/*" "$conteudo/servidor/prisma/"
+
+          # `node_modules` de produção, resolvidos numa árvore plana. O monorepo
+          # usa links do pnpm, que não sobrevivem a uma cópia entre máquinas —
+          # `deploy` materializa os arquivos de verdade.
+          pnpm --filter @erp/server deploy --prod --legacy "$conteudo/servidor-deps"
+          Copy-Item -Recurse "$conteudo/servidor-deps/node_modules" "$conteudo/servidor/"
+          Remove-Item -Recurse -Force "$conteudo/servidor-deps"
+
+          # Telas: é isto que faz o service worker registrar (ADR-0023).
+          New-Item -ItemType Directory -Force -Path "$conteudo/telas/pdv", "$conteudo/telas/retaguarda" | Out-Null
+          Copy-Item -Recurse "apps/pdv/dist/*" "$conteudo/telas/pdv/"
+          Copy-Item -Recurse "apps/web/dist/*" "$conteudo/telas/retaguarda/"
+
+          # Instalador e Agente Local.
+          New-Item -ItemType Directory -Force -Path "$conteudo/instalador", "$conteudo/agente" | Out-Null
+          Copy-Item -Recurse "apps/instalador/dist/*" "$conteudo/instalador/"
+          Copy-Item -Recurse "apps/agente/dist/*" "$conteudo/agente/"
+
+      - name: Embarcar o Node
+        shell: pwsh
+        run: |
+          # A versão exata vem do que o setup-node instalou, para não divergir
+          # da que rodou os testes: embarcar outra faria a loja rodar num Node
+          # que a suíte nunca exercitou.
+          $versao = (node --version).TrimStart("v")
+          $url = "https://nodejs.org/dist/v$versao/node-v$versao-win-x64.zip"
+
+          Invoke-WebRequest -Uri $url -OutFile node.zip
+          Expand-Archive node.zip -DestinationPath node-tmp
+          New-Item -ItemType Directory -Force -Path "dist-instalador/conteudo/node" | Out-Null
+          Copy-Item "node-tmp/node-v$versao-win-x64/node.exe" "dist-instalador/conteudo/node/"
+
+      - name: Embarcar o PostgreSQL
+        shell: pwsh
+        run: |
+          # Binários portáteis da EnterpriseDB: é o mesmo Postgres, sem
+          # instalador próprio — o nosso é quem inicializa o cluster.
+          $url = "https://get.enterprisedb.com/postgresql/postgresql-${{ env.POSTGRES_VERSION }}-windows-x64-binaries.zip"
+          Invoke-WebRequest -Uri $url -OutFile pg.zip
+          Expand-Archive pg.zip -DestinationPath pg-tmp
+
+          $destino = "dist-instalador/conteudo/postgres"
+          New-Item -ItemType Directory -Force -Path $destino | Out-Null
+
+          # Só o necessário para rodar e fazer backup. `doc`, `include` e
+          # `pgAdmin` somam mais de 200 MB que ninguém abre na loja.
+          Copy-Item -Recurse "pg-tmp/pgsql/bin" "$destino/"
+          Copy-Item -Recurse "pg-tmp/pgsql/lib" "$destino/"
+          Copy-Item -Recurse "pg-tmp/pgsql/share" "$destino/"
+
+      - name: Embarcar o NSSM
+        shell: pwsh
+        run: |
+          # O Windows não supervisiona processo comum: sem o NSSM, o servidor
+          # cairia numa exceção e ninguém o levantaria até reiniciar a máquina.
+          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile nssm.zip
+          Expand-Archive nssm.zip -DestinationPath nssm-tmp
+          Copy-Item "nssm-tmp/nssm-2.24/win64/nssm.exe" "dist-instalador/conteudo/"
+
+      - name: Compilar o instalador
+        shell: pwsh
+        run: |
+          $versao = "${{ github.event.inputs.versao }}"
+          if (-not $versao) { $versao = "${{ github.ref_name }}".TrimStart("v") }
+
+          # O NSIS já vem no runner `windows-latest`.
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) { throw "makensis não encontrado em $makensis" }
+
+          & $makensis /DVERSAO=$versao apps/instalador/windows/erp-pdv.nsi
+          if ($LASTEXITCODE -ne 0) { throw "makensis falhou com código $LASTEXITCODE" }
+
+      # ⚠️ Assinatura de código: NÃO configurada, por decisão registrada.
+      #
+      # Sem certificado (R$ 1.500 a 5.000/ano), o Windows mostra "Editor
+      # desconhecido" no SmartScreen e o usuário precisa clicar em "Mais
+      # informações → Executar assim mesmo". Quando houver certificado, é um
+      # passo `signtool sign` aqui — nada no NSIS muda.
+
+      - name: Conferir que o instalador saiu
+        shell: pwsh
+        run: |
+          $arquivo = Get-ChildItem "dist-instalador/*.exe" | Select-Object -First 1
+
+          if (-not $arquivo) { throw "O instalador não foi gerado." }
+
+          # Abaixo de 100 MB significa que Node ou Postgres não entraram, e o
+          # instalador falharia na máquina do cliente em vez de aqui.
+          $mb = [math]::Round($arquivo.Length / 1MB, 1)
+          Write-Host "Instalador: $($arquivo.Name) — $mb MB"
+
+          if ($mb -lt 100) { throw "Instalador pequeno demais ($mb MB): algo não foi embarcado." }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-windows
+          path: dist-instalador/*.exe
+          retention-days: 30
+
+      - name: Publicar na release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-instalador/*.exe
+          body: |
+            ## Instalador Windows
+
+            ⚠️ **Não assinado digitalmente.** O Windows vai mostrar
+            "Editor desconhecido". Clique em **Mais informações → Executar
+            assim mesmo**.
+
+            Requisitos: Windows 10 ou 11 (64 bits), 2 GB livres em disco,
+            permissão de administrador.
+
+            O instalador registra dois serviços, libera a porta 3000 na rede
+            privada e **confere que o sistema respondeu** antes de terminar.

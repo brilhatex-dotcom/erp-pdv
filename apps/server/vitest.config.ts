@@ -12,6 +12,10 @@ export default mergeConfig(base, {
       exclude: [
         "src/**/*.{test,spec}.ts",
         "src/index.ts",
+        // Ponto de entrada do migrador: resolve dois caminhos e chama o CLI do
+        // Prisma. O que escolhe está em `schemaDoBanco.ts`, que é medido.
+        // Exercitá-lo aqui rodaria migração de verdade dentro da suíte.
+        "src/migrar.ts",
         // Infraestrutura de teste, não código de produção.
         //
         // Medi-la produz um portão que depende do ambiente: `apoio.ts` lê

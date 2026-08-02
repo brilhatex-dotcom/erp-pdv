@@ -48,6 +48,19 @@ const esquema = z.object({
    */
   LIMITE_LOGIN_MINUTO: z.coerce.number().int().min(1).default(10),
   ORIGENS_PERMITIDAS: z.string().default(""),
+  /**
+   * Onde estão as telas construídas.
+   *
+   * Vazio significa **não servir**: é o caso do desenvolvimento, em que o Vite
+   * entrega as telas com recarga a quente, e o caso do teste, que não precisa
+   * delas. O instalador preenche as duas com os caminhos de dentro da pasta
+   * instalada.
+   *
+   * Sem isto o service worker do PDV nunca registra, porque ele exige mesma
+   * origem — a PWA existiria no código e não no navegador (ADR-0023).
+   */
+  PASTA_PDV: z.string().default(""),
+  PASTA_RETAGUARDA: z.string().default(""),
 });
 
 export type Ambiente = Readonly<z.infer<typeof esquema>> & {
