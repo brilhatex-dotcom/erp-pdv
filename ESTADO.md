@@ -44,10 +44,10 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 01/08/2026 | O que ela mexe |
 |---|---|---|
-| `claude/pwa-e-quiosque` | Aguardando merge | Manifesto e service worker do PDV (`apps/pdv/src/sw/`) e a casca de quiosque (`apps/quiosque/`). **Ao mesclar, apague-a e esvazie esta tabela** |
+| `claude/financeiro` | Aguardando merge | Módulo 12 ponta a ponta: `domain/financeiro/`, `casos-de-uso/financeiro/`, tabelas `titulos` e `baixas_titulo`, `rotas/financeiro.ts`, `telas/Financeiro.tsx`. **Toca `FinalizarVenda`** (ADR-0025). Ao mesclar, apague-a e esvazie esta tabela |
 
-> Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`
-> e `claude/agente-local`.
+> Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
+> `claude/agente-local` e `claude/pwa-e-quiosque`.
 
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
@@ -91,8 +91,9 @@ movimentação é o pior de resolver.
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
+| **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
 
-**2.483 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (21 tarefas).
+**2.644 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (21 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
@@ -124,14 +125,14 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
   fala HTTP pelo `@erp/agente-contrato`.
 
-### 2.1.1 ⬅️ PRÓXIMO — Financeiro (módulo 12)
+### 2.1.1 ⬅️ PRÓXIMO — Relatórios (módulo 13)
 
-É o primeiro ⬜ da ordem pedida em §2.2. Contas a pagar e a receber; o crediário
-da venda **já grava o título**, então o que falta é a baixa, o extrato e a
-cobrança — não o registro.
+Hoje só existe a conferência de caixa. O que falta são as perguntas que o
+lojista faz todo mês: o que vendeu por período, o que deu margem, o que está
+parado no estoque.
 
-Os dois itens curtos que estavam aqui — manifesto PWA e casca de quiosque —
-foram feitos. O **ADR-0023 está encerrado**.
+Financeiro, PWA e casca de quiosque saíram desta seção — estão prontos. O
+**ADR-0023 está encerrado**.
 
 > ⚠️ **O servidor da loja ainda não serve a PWA.** Hoje a PWA sobe pelo Vite em
 > desenvolvimento; em produção quem entrega `index.html`, `sw.js` e os ícones é o
@@ -154,7 +155,7 @@ foram feitos. O **ADR-0023 está encerrado**.
 | 9 | Vendas | ✅ Pronto |
 | 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
 | 11 | Caixa | ✅ Pronto, incluindo conferência na retaguarda |
-| 12 | **Financeiro** | ⬜ Nada existe. Contas a pagar e a receber; o crediário da venda já grava o título |
+| 12 | Financeiro | ✅ Contas a receber e a pagar, baixa parcial, estorno, parcelamento, adiamento e cancelamento. **Falta a conciliação bancária** — ver §2.4 |
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ⬜ Nada existe |
@@ -193,6 +194,28 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 - **O segredo do Agente vem de `VITE_SEGREDO_AGENTE` no build da PWA.** É
   provisório e está marcado como tal em `balcao.ts`: o certo é o servidor da loja
   entregá-lo junto com a sessão, para não viajar dentro de um bundle público.
+- **Cancelar a venda não cancela os títulos dela.** Não existe caso de uso de
+  cancelar venda — o domínio tem `Venda.cancelar` e nada o chama —, então a
+  função de cancelamento em massa **não foi escrita**: código sem chamador é
+  código morto que ninguém mantém. **Gatilho:** quem escrever `CancelarVenda`
+  precisa alcançar `titulos.porDocumento(vendaId)` e cancelá-los, senão a dívida
+  sobrevive à venda e o cliente é cobrado por mercadoria devolvida. Título com
+  recebimento lançado não cancela — o caminho é estornar antes.
+- **Conciliação bancária não existe.** A permissão `financeiro:conciliar` está
+  definida e **não é usada por nada**, como `estoque:inventario` e
+  `caixa:reabrir`. Conciliar exige importar extrato (OFX) e casar lançamentos —
+  domínio novo, não rota faltando. Não bloqueia nada: o lojista de bairro
+  confere o extrato no aplicativo do banco.
+- **O recebimento de fiado não entra na sessão de caixa.** É deliberado e está
+  comentado em `MovimentarTitulo.ts`: a sessão é conferida contra a contagem
+  física do turno da **venda**, e o fiado chega dias depois, muitas vezes com
+  outro operador. Somá-lo faria o fechamento não bater por construção. Se o
+  negócio quiser o dinheiro do fiado na gaveta, é decisão que exige ADR.
+- **O PDV ainda não pergunta o número de parcelas.** O servidor aceita
+  (`crediario: { parcelas }` em `FinalizarVenda`) e a retaguarda parcela no
+  lançamento manual, mas a tela do balcão sempre manda uma parcela — a caderneta
+  clássica. Falta o passo no fechamento da venda, que é onde a pressa é maior e
+  o desenho precisa de cuidado.
 - **Pedido de compra não existe.** O que existe é a **nota de entrada**: o
   documento do que já chegou. Falta o passo anterior — pedir ao fornecedor e
   conferir o recebimento contra o pedido. Não bloqueia a operação (a loja de
