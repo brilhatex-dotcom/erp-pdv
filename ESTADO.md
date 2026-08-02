@@ -44,10 +44,10 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 01/08/2026 | O que ela mexe |
 |---|---|---|
-| `claude/financeiro` | Aguardando merge | Módulo 12 ponta a ponta: `domain/financeiro/`, `casos-de-uso/financeiro/`, tabelas `titulos` e `baixas_titulo`, `rotas/financeiro.ts`, `telas/Financeiro.tsx`. **Toca `FinalizarVenda`** (ADR-0025). Ao mesclar, apague-a e esvazie esta tabela |
+| `claude/instalacao` | Aguardando merge | Módulo 16: servidor passa a servir as telas (`http/estaticos.ts`), novo `apps/instalador`, script NSIS e workflow `instalador.yml` com runner Windows. Ao mesclar, apague-a e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
-> `claude/agente-local` e `claude/pwa-e-quiosque`.
+> `claude/agente-local`, `claude/pwa-e-quiosque` e `claude/financeiro`.
 
 **Se o seu trabalho encosta em PDV, impressão ou contingência**, fale com essa branch
 antes: ou espere o merge, ou parta dela. Começar de `main` e mexer nos mesmos arquivos
@@ -92,8 +92,10 @@ movimentação é o pior de resolver.
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 | **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
+| **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
+| **Instalador Windows** | ⚠️ Escrito e não executado — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
-**2.644 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (21 tarefas).
+**2.686 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
@@ -125,14 +127,30 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
   fala HTTP pelo `@erp/agente-contrato`.
 
-### 2.1.1 ⬅️ PRÓXIMO — Relatórios (módulo 13)
+### 2.1.1 ⬅️ PRÓXIMO — rodar o instalador de verdade
 
-Hoje só existe a conferência de caixa. O que falta são as perguntas que o
-lojista faz todo mês: o que vendeu por período, o que deu margem, o que está
-parado no estoque.
+O módulo 16 está escrito e **nunca foi executado**. Esta é a diferença que mais
+importa saber antes de continuar:
 
-Financeiro, PWA e casca de quiosque saíram desta seção — estão prontos. O
-**ADR-0023 está encerrado**.
+| Parte | Situação |
+|---|---|
+| Servidor entregar as telas | ✅ **Testado** — 14 casos contra o servidor real |
+| Preparação da instalação (segredos, `.env`, verificação) | ✅ **Testado** — 25 casos |
+| Script NSIS | ⚠️ **Escrito, nunca compilado** |
+| Workflow com runner Windows | ⚠️ **Escrito, nunca executado** |
+
+**Por que não foi executado:** o ambiente de desenvolvimento é Linux e o
+`ci.yml` só tem `ubuntu-latest`. Compilar NSIS e testar serviço do Windows exige
+Windows. O `instalador.yml` roda em `windows-latest` e é ali que a prova
+acontece — mas ele dispara **só manualmente ou em tag `v*`**, para não gastar
+minuto de runner Windows a cada commit.
+
+**O próximo passo é literalmente:** ir em Actions → "Instalador Windows" → Run
+workflow, baixar o `.exe` do artefato e rodá-lo numa máquina Windows. O que
+falhar ali é conserto de primeira execução — esperado, e é para isso que o
+workflow existe.
+
+Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 
 > ⚠️ **O servidor da loja ainda não serve a PWA.** Hoje a PWA sobe pelo Vite em
 > desenvolvimento; em produção quem entrega `index.html`, `sw.js` e os ícones é o
@@ -159,7 +177,7 @@ Financeiro, PWA e casca de quiosque saíram desta seção — estão prontos. O
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ⬜ Nada existe |
-| 16 | **Instalação** | ⬜ Instalador Windows com PostgreSQL e Agente Local embarcados. **Não depende do fiscal** (ADR-0022) |
+| 16 | Instalação | ⚠️ Escrito ponta a ponta: NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. **Nunca executado** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
@@ -183,11 +201,19 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
   um evento de correção — e isso exige ADR.
-- **O servidor da loja não serve a PWA.** `apps/pdv` gera `dist/` com
-  `index.html`, `sw.js`, manifesto e ícones, e ninguém os entrega em produção —
-  não há servidor de estáticos em `apps/server`. **Consequência direta: o service
-  worker não registra**, porque ele exige mesma origem. Entra no módulo 16
-  (Instalação), junto com a decisão de onde o `dist/` mora depois de instalado.
+- ~~O servidor da loja não serve a PWA~~ ✅ **Resolvido.** `http/estaticos.ts`
+  entrega o PDV na raiz e a retaguarda em `/retaguarda`, com `sw.js` sem cache e
+  arquivo com hash cacheado por um ano.
+- **O instalador nunca foi executado.** Ver §2.1.1 — é a maior incerteza aberta
+  no projeto hoje.
+- **O instalador não é assinado.** Decisão registrada: certificado custa de
+  R$ 1.500 a R$ 5.000 por ano e exige token físico ou HSM desde 2023. O Windows
+  mostra "Editor desconhecido"; o `docs/operacao/INSTALACAO.md` explica ao
+  técnico o que fazer. Quando houver certificado, é um passo `signtool` no
+  workflow — nada no produto muda.
+- **O modo "somente estação de caixa" não existe.** O instalador instala tudo.
+  A estação precisaria só do Agente Local (ADR-0023), e o `INSTALACAO.md` já
+  descreve o fluxo pretendido.
 - **O ícone do PWA é provisório.** Gerado por `apps/pdv/scripts/gerar-icones.mjs`,
   um cupom estilizado sem tipografia. Serve para a instalabilidade; a marca do
   produto substitui os três PNG sem tocar em código.
@@ -266,6 +292,7 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **Variável de cancelamento em laço com `await`** | Lint acusa "value is always falsy" na segunda verificação | O compilador analisa a função de parada antes de ela existir. Leia por função (`const foiCancelado = () => cancelado`) |
 | **Só o teste do pacote conta para a cobertura dele** | Consulta exercitada pelo servidor reprova em `packages/database` | Cobertura é medida por pacote. Código novo em `packages/` precisa de teste **naquele** pacote |
 | **Docker morre no reinício do contêiner** | `P1001: Can't reach database server` e testes pulados em silêncio | `nohup dockerd > /tmp/dockerd.log 2>&1 &` e `docker compose up -d`. Suíte que não alcança o banco é **pulada**, não reprovada — verde enganoso |
+| **Teste de desempenho com número cravado** | Verde local, vermelho no CI, sem nada ter mudado | Limite absoluto (`toBeLessThan(1000)`) mede a **máquina**, não o código: o runner roda dez pacotes em duas vCPUs e entregou 1.072 ms num trecho que leva ~200 ms ocioso. Guarde **ordem de grandeza** com teto folgado, e prove o que importa comparando duas medidas da mesma execução |
 | **Ordenação sem desempate** | Consulta devolve uma ordem local e outra no CI, sem nada ter mudado | `ORDER BY` só por instante deixa a sequência a cargo do plano de execução quando há empate — e empate é normal: uma nota de entrada grava todos os itens no mesmo `ocorrido_em`. Desempate com o id, que é UUIDv7 e portanto monotônico (ADR-0008) |
 | **Formulário grande digitado tecla a tecla estoura o CI** | Verde local, `Test timed out in 5000ms` no runner — e o estouro **contamina os casos seguintes**, que falham com valor de outro teste | `userEvent.type` re-renderiza o formulário a cada caractere. Em tela com mais de dez campos, preencha com `fireEvent.change` e guarde o teclado para o campo que o caso investiga (máscara, atalho). O sintoma enganoso é o teste **vizinho** falhando |
 | **Componente de design system criado duas vezes** | Conflito `add/add` no merge, com duas APIs para a mesma coisa | Em 01/08/2026 duas sessões criaram `CampoSelecao` — uma com `value`/`onChange`, outra com `valor`/`aoMudar`. Antes de criar componente em `packages/ui`, rode `git log origin/main --oneline -20` e `ls packages/ui/src/componentes`. Quem chega depois **adota o que está em `main`** e estende, em vez de defender o seu |

@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import type { Container } from "./composicao/container.js";
 import { tratadorDeErro } from "./http/erros.js";
+import { registrarTelas } from "./http/estaticos.js";
 import { rotasDeAcesso } from "./rotas/acesso.js";
 import { rotasDeCadastros } from "./rotas/cadastros.js";
 import { rotasDeCaixa } from "./rotas/caixa.js";
@@ -84,6 +85,15 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   rotasDeCompras(servidor, container);
   rotasDeEmpresa(servidor, container);
   rotasDeFinanceiro(servidor, container);
+
+  // Depois das rotas, sempre: o `notFound` das telas responde o que sobrar, e
+  // registrá-lo antes engoliria as rotas de API declaradas depois dele.
+  if (container.ambiente.PASTA_PDV !== "" || container.ambiente.PASTA_RETAGUARDA !== "") {
+    await registrarTelas(servidor, {
+      pdv: container.ambiente.PASTA_PDV,
+      retaguarda: container.ambiente.PASTA_RETAGUARDA,
+    });
+  }
 
   return servidor;
 }

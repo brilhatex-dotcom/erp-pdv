@@ -188,7 +188,21 @@ describe("Persistência", () => {
 });
 
 describe("Volume", () => {
-  it("🔑 50 mil produtos indexam abaixo de um segundo", () => {
+  /**
+   * Teto de indexação, generoso de propósito.
+   *
+   * O que este teste protege é **ordem de grandeza**: se alguém trocar o `Map`
+   * por busca linear, indexar 50 mil produtos passa de milissegundos para
+   * minutos, e o ADR-0021 — não usar banco na estação — deixa de se sustentar.
+   *
+   * Um segundo cravado media outra coisa: a velocidade da máquina. O runner do
+   * CI roda dez pacotes em duas vCPUs e entregou 1.072 ms num código que leva
+   * ~200 ms numa máquina ociosa. Teste vermelho por 7% de variação não protege
+   * nada — só ensina a equipe a reexecutar até passar.
+   */
+  const TETO_INDEXACAO_MS = 5_000;
+
+  it("🔑 50 mil produtos indexam sem virar busca linear", () => {
     // É o volume declarado no §12.2, e o número que sustenta a decisão de não
     // usar banco (ADR-0021).
     const produtos = Array.from({ length: 50_000 }, (_, i) =>
@@ -206,8 +220,56 @@ describe("Volume", () => {
     const duracao = Date.now() - inicio;
 
     expect(replica.quantidade).toBe(50_000);
-    expect(duracao).toBeLessThan(1000);
+    expect(duracao).toBeLessThan(TETO_INDEXACAO_MS);
     // E a bipada continua instantânea.
     expect(replica.porCodigo("7890000049999")?.sku).toBe("SKU49999");
+  });
+
+  it("🔑 a bipada não fica mais lenta com o catálogo cheio", () => {
+    // Esta é a garantia que o balcão sente, e ela é estável em qualquer
+    // máquina porque compara duas medidas **na mesma execução** — em vez de
+    // cravar um número que depende de quem está rodando.
+    //
+    // Se a busca virasse linear, procurar entre 50 mil levaria ordens de
+    // grandeza mais que entre 10. Com `Map`, as duas são indistinguíveis.
+    const grande = new ReplicaCatalogo();
+    grande.substituir(
+      catalogo(
+        Array.from({ length: 50_000 }, (_, i) =>
+          produto({
+            id: `id-${String(i)}`,
+            sku: `SKU${String(i)}`,
+            codigoBarras: `789${String(i).padStart(10, "0")}`,
+          }),
+        ),
+      ),
+    );
+
+    const pequeno = new ReplicaCatalogo();
+    pequeno.substituir(
+      catalogo(
+        Array.from({ length: 10 }, (_, i) =>
+          produto({
+            id: `id-${String(i)}`,
+            sku: `SKU${String(i)}`,
+            codigoBarras: `789${String(i).padStart(10, "0")}`,
+          }),
+        ),
+      ),
+    );
+
+    const medir = (replica: ReplicaCatalogo, codigo: string) => {
+      const inicio = performance.now();
+      for (let i = 0; i < 10_000; i += 1) replica.porCodigo(codigo);
+
+      return performance.now() - inicio;
+    };
+
+    const noGrande = medir(grande, "7890000049999");
+    const noPequeno = medir(pequeno, "7890000000009");
+
+    // Vinte vezes é folga enorme para ruído de medição e continua reprovando
+    // qualquer coisa que cresça com o tamanho do catálogo.
+    expect(noGrande).toBeLessThan(Math.max(noPequeno, 1) * 20);
   });
 });

@@ -1,0 +1,24 @@
+{
+  "name": "@erp/instalador",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Prepara e verifica a instalação: pastas, configuração, banco e saúde",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

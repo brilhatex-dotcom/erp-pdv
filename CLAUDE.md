@@ -268,7 +268,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 | `docs/ARQUITETURA.md` | Arquitetura completa — fonte da verdade técnica |
 | `docs/adr/` | Decisões arquiteturais. **Imutáveis**: revisão gera novo ADR que supersede |
 | `docs/fiscal/` | Notas técnicas, layouts e tabelas fiscais |
-| `docs/operacao/` | Instalação, backup, suporte |
+| `docs/operacao/` | Instalação, backup, suporte. **`INSTALACAO.md` é o guia do técnico na loja** |
 
 **Divergência entre este arquivo e `docs/ARQUITETURA.md` é defeito.** Corrigir os dois
 na mesma alteração.
