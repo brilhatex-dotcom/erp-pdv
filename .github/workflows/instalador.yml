@@ -256,6 +256,23 @@ jobs:
             throw "Faltou no instalador:`n$($faltando -join "`n")"
           }
 
+          # ── A retaguarda referencia os próprios assets ────────────────────
+          #
+          # Ela é servida sob `/retaguarda/`, e o PDV na raiz. Se o `base` do
+          # Vite escapar, o `index.html` pede `/assets/…` absoluto, o navegador
+          # busca na raiz — onde mora o PDV —, recebe 404 e mostra **tela em
+          # branco**, com o documento tendo respondido 200. Conferir o status do
+          # HTML não pega isso; conferir o que ele referencia, sim.
+          $indice = Get-Content "$conteudo/telas/retaguarda/index.html" -Raw
+
+          if ($indice -match '(src|href)="/assets/') {
+            throw "A retaguarda referencia /assets/ na raiz: falta `base: '/retaguarda/'` no Vite. A tela abriria em branco."
+          }
+
+          if ($indice -notmatch '/retaguarda/assets/') {
+            throw "A retaguarda não referencia /retaguarda/assets/: o `base` do Vite não foi aplicado."
+          }
+
           # O motor de consulta do Prisma é nativo e tem o nome da plataforma no
           # arquivo; conferir por padrão em vez de por nome exato evita quebrar a
           # cada versão do Prisma que renomeia o binário.
