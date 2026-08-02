@@ -1,4 +1,4 @@
-; Instalador do ERP + PDV para Windows.
+﻿; Instalador do ERP + PDV para Windows.
 ;
 ; O que ele faz, em ordem:
 ;   1. confere espaço em disco antes de escrever qualquer coisa;
@@ -58,6 +58,20 @@ SetCompressor /SOLID lzma
 !define PORTA_SERVIDOR "3000"
 !define PORTA_POSTGRES "55433"
 
+; ── Onde ficam os dados ───────────────────────────────────────────────────
+;
+; **Fora de `Program Files`, e isto não é preferência.** Ao perceber privilégio
+; administrativo, o `initdb` cria um token restrito — sem o grupo
+; Administradores — e se re-executa com ele, para que o cluster não pertença a
+; um administrador. `Program Files` concede escrita só a Administradores e ao
+; SYSTEM, exatamente o que o token acabou de perder: o `initdb` falha ao ajustar
+; as permissões da própria pasta de dados.
+;
+; `SetShellVarContext all` faz `$APPDATA` apontar para `C:\ProgramData`, que é o
+; lugar do Windows para dado que um serviço escreve. Resolve junto o `log\` e o
+; `backup\`, que têm o mesmo impedimento. Ver `caminhos.ts`.
+Var Dados
+
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -69,6 +83,9 @@ SetCompressor /SOLID lzma
 
 Section "Sistema" SEC_SISTEMA
   SectionIn RO
+
+  SetShellVarContext all
+  StrCpy $Dados "$APPDATA\ERP PDV"
 
   ; ── Verificação antes de escrever qualquer coisa ────────────────────────
   ;
@@ -97,8 +114,10 @@ Section "Sistema" SEC_SISTEMA
   ; do banco fica em `senha-inicial.txt` para o `initdb` ler logo abaixo.
   ; Inverter esta ordem — gerar a senha depois de criar o cluster — produziria
   ; um `.env` que não abre o banco recém-criado. Ver `configuracao.ts`.
+  CreateDirectory "$Dados"
+
   DetailPrint "Configurando..."
-  nsExec::ExecToLog '"$INSTDIR\node\node.exe" "$INSTDIR\instalador\index.js" preparar --raiz "$INSTDIR" --porta ${PORTA_SERVIDOR} --porta-postgres ${PORTA_POSTGRES}'
+  nsExec::ExecToLog '"$INSTDIR\node\node.exe" "$INSTDIR\instalador\index.js" preparar --raiz "$INSTDIR" --dados "$Dados" --porta ${PORTA_SERVIDOR} --porta-postgres ${PORTA_POSTGRES}'
   Pop $0
   ${If} $0 != 0
     MessageBox MB_ICONSTOP "Falha ao configurar o sistema.$\n$\nAnote o código $0 e envie ao suporte."
@@ -113,7 +132,7 @@ Section "Sistema" SEC_SISTEMA
   ;
   ; Numa reinstalação as portas estão ocupadas pelos **nossos próprios**
   ; serviços; por isso a conferência só vale quando o banco ainda não existe.
-  ${IfNot} ${FileExists} "$INSTDIR\dados\PG_VERSION"
+  ${IfNot} ${FileExists} "$Dados\dados\PG_VERSION"
     DetailPrint "Conferindo as portas..."
     nsExec::ExecToLog '"$INSTDIR\node\node.exe" "$INSTDIR\instalador\index.js" conferir --porta ${PORTA_SERVIDOR} --porta-postgres ${PORTA_POSTGRES}'
     Pop $0
@@ -127,9 +146,13 @@ Section "Sistema" SEC_SISTEMA
   ;
   ; `PG_VERSION` só existe num cluster já inicializado. Rodar `initdb` sobre ele
   ; falharia — e, se não falhasse, apagaria as vendas da loja.
-  ${IfNot} ${FileExists} "$INSTDIR\dados\PG_VERSION"
+  ${IfNot} ${FileExists} "$Dados\dados\PG_VERSION"
     DetailPrint "Preparando o banco de dados..."
-    CreateDirectory "$INSTDIR\dados"
+
+    ; A pasta do cluster **não** é criada aqui: quem a cria tem de ser o próprio
+    ; `initdb`, para que o token restrito dele seja o dono. Criá-la antes, com o
+    ; instalador elevado, produz o "alterando permissões no diretório existente"
+    ; seguido de falha — foi assim que este defeito apareceu.
 
     ; `initdb` com ICU pt-BR: a mesma collation do desenvolvimento e do CI. Sem
     ; isto, ordenação e índice se comportam diferente na loja — e o defeito
@@ -137,17 +160,17 @@ Section "Sistema" SEC_SISTEMA
     ;
     ; A senha vai por arquivo, nunca por argumento: argumento de processo é
     ; legível por qualquer usuário da máquina.
-    nsExec::ExecToLog '"$INSTDIR\postgres\bin\initdb.exe" -D "$INSTDIR\dados" -U erp --auth=scram-sha-256 --pwfile="$INSTDIR\senha-inicial.txt" --locale-provider=icu --icu-locale=pt-BR --encoding=UTF8'
+    nsExec::ExecToLog '"$INSTDIR\postgres\bin\initdb.exe" -D "$Dados\dados" -U erp --auth=scram-sha-256 --pwfile="$Dados\senha-inicial.txt" --locale-provider=icu --icu-locale=pt-BR --encoding=UTF8'
     Pop $0
     ${If} $0 != 0
-      Delete "$INSTDIR\senha-inicial.txt"
+      Delete "$Dados\senha-inicial.txt"
       MessageBox MB_ICONSTOP "Falha ao preparar o banco de dados.$\n$\nAnote o código $0 e envie ao suporte."
       Abort
     ${EndIf}
 
     ; Escuta só em localhost, na porta dedicada. O servidor da loja é o único
     ; que fala com o banco; as estações falam com o servidor, nunca com o banco.
-    FileOpen $9 "$INSTDIR\dados\postgresql.auto.conf" a
+    FileOpen $9 "$Dados\dados\postgresql.auto.conf" a
     FileSeek $9 0 END
     FileWrite $9 "$\r$\nport = ${PORTA_POSTGRES}$\r$\n"
     FileWrite $9 "listen_addresses = 'localhost'$\r$\n"
@@ -164,12 +187,12 @@ Section "Sistema" SEC_SISTEMA
 
   ; Fora do `${If}`: se o `initdb` foi pulado, o arquivo ainda assim foi escrito
   ; pelo `preparar` — e um arquivo com a senha do banco não pode ficar no disco.
-  Delete "$INSTDIR\senha-inicial.txt"
+  Delete "$Dados\senha-inicial.txt"
 
   DetailPrint "Registrando o banco como serviço..."
   ; Numa reinstalação o serviço já existe e o `register` falha; o que importa é
   ; que ele esteja no ar para os passos seguintes.
-  nsExec::ExecToLog '"$INSTDIR\postgres\bin\pg_ctl.exe" register -N "ERPPDVBanco" -D "$INSTDIR\dados" -S auto'
+  nsExec::ExecToLog '"$INSTDIR\postgres\bin\pg_ctl.exe" register -N "ERPPDVBanco" -D "$Dados\dados" -S auto'
   Pop $0
   nsExec::ExecToLog 'net start ERPPDVBanco'
   Pop $0
@@ -211,9 +234,9 @@ Section "Sistema" SEC_SISTEMA
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" DependOnService "ERPPDVBanco"'
   Pop $0
-  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppStdout "$INSTDIR\log\servidor.log"'
+  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppStdout "$Dados\log\servidor.log"'
   Pop $0
-  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppStderr "$INSTDIR\log\servidor.log"'
+  nsExec::ExecToLog '"$INSTDIR\nssm.exe" set "ERPPDVServidor" AppStderr "$Dados\log\servidor.log"'
   Pop $0
   ; Rotação por tamanho: log que cresce sem limite enche o disco da loja em
   ; alguns meses, e aí o Postgres para de escrever.
@@ -246,7 +269,7 @@ Section "Sistema" SEC_SISTEMA
   nsExec::ExecToLog '"$INSTDIR\node\node.exe" "$INSTDIR\instalador\index.js" verificar --porta ${PORTA_SERVIDOR}'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONEXCLAMATION "O sistema foi instalado, mas não respondeu na verificação.$\n$\nAbra os Serviços do Windows e confira se $\"ERP PDV — Servidor$\" está em execução.$\n$\nO relatório está em:$\n$INSTDIR\log\servidor.log"
+    MessageBox MB_ICONEXCLAMATION "O sistema foi instalado, mas não respondeu na verificação.$\n$\nAbra os Serviços do Windows e confira se $\"ERP PDV — Servidor$\" está em execução.$\n$\nO relatório está em:$\n$Dados\log\servidor.log"
   ${EndIf}
 
   ; ── Atalhos ─────────────────────────────────────────────────────────────
@@ -282,10 +305,16 @@ FunctionEnd
 
 ; ── Desinstalação ─────────────────────────────────────────────────────────
 ;
-; **As pastas `dados` e `backup` não são apagadas.** Elas contêm as vendas da
-; loja, e um desinstalador que leva o banco junto é perda de dado irreversível
-; por um clique errado. Quem quiser removê-las faz isso à mão, sabendo o que faz.
+; **Nada em `C:\ProgramData\ERP PDV` é apagado** — é lá que moram o banco e os
+; backups. Um desinstalador que leva as vendas junto é perda irreversível por um
+; clique errado. Quem quiser removê-las faz isso à mão, sabendo o que faz.
+;
+; Só o `log\` poderia sair sem prejuízo, e mesmo ele fica: é o primeiro lugar que
+; o suporte pede quando a loja liga depois de uma reinstalação que deu errado.
 Section "Uninstall"
+  SetShellVarContext all
+  StrCpy $Dados "$APPDATA\ERP PDV"
+
   nsExec::ExecToLog 'net stop ERPPDVServidor'
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\nssm.exe" remove "ERPPDVServidor" confirm'
@@ -305,7 +334,6 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\telas"
   RMDir /r "$INSTDIR\instalador"
   RMDir /r "$INSTDIR\agente"
-  RMDir /r "$INSTDIR\log"
   Delete "$INSTDIR\nssm.exe"
   Delete "$INSTDIR\desinstalar.exe"
 
@@ -315,5 +343,5 @@ Section "Uninstall"
 
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ERPPDV"
 
-  MessageBox MB_ICONINFORMATION "O ERP PDV foi removido.$\n$\nOs dados da loja foram mantidos em:$\n$INSTDIR\dados$\n$\nApague essa pasta apenas se tiver certeza — ela contém todas as vendas."
+  MessageBox MB_ICONINFORMATION "O ERP PDV foi removido.$\n$\nOs dados da loja foram mantidos em:$\n$Dados$\n$\nApague essa pasta apenas se tiver certeza — ela contém todas as vendas e os backups."
 SectionEnd

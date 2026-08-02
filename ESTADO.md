@@ -158,7 +158,8 @@ duplicada a cada reinstalação; e as portas nunca eram conferidas, apesar de
 | Servidor subindo pela carga do instalador | ✅ **Executado** — PDV, `sw.js`, manifesto e retaguarda respondendo 200, lendo o `.env` gerado, contra Postgres real |
 | Script NSIS | ✅ **Compila** — run 30746227226 |
 | Executável gerado | ✅ `erp-pdv-0.1.0-teste-instalador.exe`, **77,2 MB** (de 450,9 MB de carga) |
-| Instalação numa máquina Windows | ⚠️ **Nunca feita** — é o que falta |
+| Sequência completa ensaiada no Linux | ✅ `preparar` → `conferir` → `initdb` → `criar-banco` → `migrar` → `verificar`, com Postgres real, 27 tabelas, primeiro acesso e reinstalação por cima preservando os segredos |
+| Instalação numa máquina Windows | ⚠️ **1ª tentativa em 02/08/2026: falhou no `initdb`** por permissão de `Program Files`. Corrigido; falta repetir |
 
 **Por que o resto não foi executado:** o ambiente de desenvolvimento é Linux.
 Compilar NSIS e registrar serviço do Windows exige Windows. O `instalador.yml`
@@ -316,6 +317,8 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`.env` que ninguém lê** | Serviço morre na partida; verificação diz "não respondeu" | O Node **não** lê `.env` sozinho — exige `--env-file`, e o serviço sobe com `node index.js` e mais nada. `index.ts` chama `carregarArquivoDeAmbiente` ao lado do executável. Só apareceu porque a carga foi **executada**, não lida |
 | **Caminho longo do pnpm no Windows** | `File: failed opening file` no meio do NSIS | O armazém `.pnpm` põe o nome do pacote com hash no caminho e passa de 230 caracteres, contra o limite de 260. `NPM_CONFIG_NODE_LINKER=hoisted` no `deploy`, e o workflow reprova qualquer caminho relativo acima de 180 |
 | **Comparação de 32 bits no NSIS** | Recusa a máquina mais folgada | `${DriveSpace}` em kilobytes estoura em disco de 4 TB e vira negativo. Medir em megabytes |
+| **Banco em `Program Files`** | `initdb` falha em "alterando permissões no diretório existente" | Ao ver privilégio de administrador, o `initdb` cria um **token restrito** sem o grupo Administradores — justamente o único com escrita ali. Dado de serviço vai em `C:\ProgramData`, e a pasta do cluster é criada **pelo `initdb`**, nunca antes |
+| **`.nsi` UTF-8 sem BOM** | `código` vira `cÃ³digo` na tela do lojista | `Unicode true` diz respeito ao instalador gerado, não à leitura do script: sem BOM o `makensis` lê como ACP (o log do build diz `(ACP)`) |
 | **Aviso de commit "Unverified"** | Hook aponta `8ba140f` | Falso positivo: é o merge commit do próprio GitHub. **Não reescrever** — está em `main` e exigiria force-push |
 | **Dublê guarda referência, não cópia** | Teste de unicidade passa quando deveria falhar | O repositório em memória devolve a **mesma instância** que o caso de uso acabou de alterar. Verificação de duplicidade tem de vir **antes** da mutação — o que também é o certo contra o banco de verdade |
 | **`unbound-method` em fábrica de objeto de valor** | Lint reprova `interpretarOpcional(x, Telefone.criar, erros)` | Passar método estático solto desassocia o `this`. Embrulhe: `(valor) => Telefone.criar(valor)` |

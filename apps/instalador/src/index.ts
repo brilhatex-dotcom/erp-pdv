@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import path, { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -9,6 +9,7 @@ import {
   argumentosDoCreatedb,
   bancoExiste,
 } from "./banco.js";
+import { caminhosDeDados, PASTA_DE_DADOS_PADRAO } from "./caminhos.js";
 import {
   conteudoDoEnv,
   gerarSegredos,
@@ -48,6 +49,16 @@ function caminhoDoEnv(raiz: string): string {
 }
 
 /**
+ * Onde o serviço escreve.
+ *
+ * Fora de `Program Files`, por decisão registrada em `caminhos.ts`: é o token
+ * restrito do `initdb` que obriga a isso.
+ */
+function caminhosDaInstalacao(): ReturnType<typeof caminhosDeDados> {
+  return caminhosDeDados(argumento("dados", PASTA_DE_DADOS_PADRAO), path);
+}
+
+/**
  * Os segredos desta instalação.
  *
  * Preserva os de uma instalação anterior; só gera quando não há o que
@@ -72,8 +83,14 @@ function preparar(): void {
     argumento("porta-postgres", String(PORTA_POSTGRES_PADRAO)),
   );
 
-  for (const pasta of ["log", "backup", "telas"]) {
-    mkdirSync(join(raiz, pasta), { recursive: true });
+  const caminhos = caminhosDaInstalacao();
+
+  // O cluster **não** entra aqui: quem o cria é o `initdb`, e é preciso que o
+  // token restrito dele seja o dono da pasta. Criá-la antes, com o instalador
+  // elevado, é o que produz o "alterando permissões no diretório existente"
+  // seguido de falha.
+  for (const pasta of [caminhos.log, caminhos.backup]) {
+    mkdirSync(pasta, { recursive: true });
   }
 
   const segredos = segredosDaInstalacao(raiz);
@@ -93,9 +110,7 @@ function preparar(): void {
   // O `initdb` lê a senha daqui — ele não a aceita por argumento, de propósito:
   // argumento aparece na lista de processos da máquina. O NSIS apaga o arquivo
   // assim que o `initdb` termina.
-  writeFileSync(join(raiz, "senha-inicial.txt"), segredos.senhaBanco, {
-    mode: 0o600,
-  });
+  writeFileSync(caminhos.senhaInicial, segredos.senhaBanco, { mode: 0o600 });
 }
 
 /**

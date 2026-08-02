@@ -72,17 +72,30 @@ mesmo**.
 ### O que fica na máquina
 
 ```
-C:\Program Files\ERP PDV\
+C:\Program Files\ERP PDV\          ← o programa (só leitura em uso)
 ├── node\            Node.js embarcado
 ├── postgres\        PostgreSQL embarcado
-├── dados\           ⚠️ O BANCO DA LOJA. Nunca apagar.
 ├── servidor\        A aplicação e o .env gerado
 ├── instalador\      Configuração, migrações e verificação
 ├── agente\          Agente Local, para quando o servidor também é caixa
-├── telas\           PDV e retaguarda
+└── telas\           PDV e retaguarda
+
+C:\ProgramData\ERP PDV\            ← o que o serviço escreve
+├── dados\           ⚠️ O BANCO DA LOJA. Nunca apagar.
 ├── log\             servidor.log, com rotação a cada 10 MB
 └── backup\
 ```
+
+**Por que o banco não fica junto do programa.** `Program Files` concede escrita
+apenas a Administradores e ao SYSTEM. Isso parece bastar num instalador que roda
+elevado — e não basta: ao perceber privilégio administrativo, o `initdb` cria um
+**token restrito**, sem o grupo Administradores, e se re-executa com ele, para
+que o cluster não pertença a um administrador. O processo que de fato cria o
+banco perdeu exatamente o grupo que dava acesso à pasta.
+
+`C:\ProgramData` existe para isto, e é a convenção do Windows: em `Program
+Files` fica o que só é lido; o que muda mora fora. Vale também para `log\` e
+`backup\`.
 
 A pasta `instalador\` **fica na máquina** de propósito: é ela que aplica as
 migrações na próxima atualização de versão. Ela carrega o CLI do Prisma e o
@@ -150,7 +163,7 @@ Windows (`services.msc`) e veja `ERP PDV — Servidor`:
 | Parado | Clique com o botão direito → **Iniciar**. Se voltar a parar, veja o log |
 | Em execução | O sistema deve estar no ar. Tente `http://localhost:3000/` |
 
-O log fica em `C:\Program Files\ERP PDV\log\servidor.log`. As últimas linhas
+O log fica em `C:\ProgramData\ERP PDV\log\servidor.log`. As últimas linhas
 dizem o que houve.
 
 ### A estação não enxerga o servidor
@@ -176,12 +189,13 @@ ou reinstale escolhendo outra porta.
 
 ### Preciso reinstalar
 
-Desinstale pelo Painel de Controle. **A pasta `dados` não é apagada** — o
-desinstalador a mantém de propósito, porque ela contém todas as vendas da loja.
-Reinstalar por cima reaproveita o banco.
+Desinstale pelo Painel de Controle. **Nada em `C:\ProgramData\ERP PDV` é
+apagado** — o desinstalador mantém banco, log e backups de propósito, porque ali
+estão todas as vendas da loja. Reinstalar por cima reaproveita o banco e
+preserva os segredos.
 
-Para começar do zero — e **perder tudo** —, apague `dados` à mão antes de
-reinstalar.
+Para começar do zero — e **perder tudo** —, apague `C:\ProgramData\ERP PDV` à
+mão antes de reinstalar.
 
 ---
 
@@ -190,7 +204,7 @@ reinstalar.
 Registrado com honestidade, para o técnico não procurar o que não há:
 
 - **Backup automático.** A pasta existe e nada a preenche ainda (módulo 15).
-  Até lá, copie `C:\Program Files\ERP PDV\dados` com o serviço parado.
+  Até lá, copie `C:\ProgramData\ERP PDV\dados` com o serviço parado.
 - **Atualização automática.** Atualizar hoje é rodar o instalador da versão
   nova por cima (módulo 17).
 - **Instalação da estação em modo separado.** O instalador ainda instala tudo;
