@@ -1,4 +1,6 @@
-import { carregarAmbiente } from "./ambiente.js";
+import { fileURLToPath } from "node:url";
+
+import { carregarAmbiente, carregarArquivoDeAmbiente } from "./ambiente.js";
 import { montarContainer } from "./composicao/container.js";
 import { montarServidor } from "./servidor.js";
 
@@ -10,6 +12,10 @@ import { montarServidor } from "./servidor.js";
  * é o único que fica fora da cobertura, e por isso precisa ser trivial.
  */
 async function principal(): Promise<void> {
+  // Ao lado do executável, e não no diretório de trabalho: o serviço do Windows
+  // pode ser iniciado de qualquer lugar, e o `.env` mora junto do `index.js`.
+  carregarArquivoDeAmbiente(fileURLToPath(new URL(".env", import.meta.url)));
+
   const ambiente = carregarAmbiente();
   const container = montarContainer(ambiente);
   const servidor = await montarServidor(container);

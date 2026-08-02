@@ -29,6 +29,11 @@ env:
   # A mesma versão maior do desenvolvimento e do CI (ADR-0013). Embarcar outra
   # invalidaria a paridade teste↔produção que motivou abandonar o SQLite.
   POSTGRES_VERSION: "17.5-1"
+  # Fixada, e não "a mais nova": o compilador do instalador entra no produto que
+  # o cliente executa. Versão que muda sozinha significa que dois clientes
+  # recebem executáveis diferentes do mesmo commit — e o defeito que aparece num
+  # deles não reproduz no outro.
+  NSIS_VERSION: "3.11.0"
 
 jobs:
   construir:
@@ -59,9 +64,40 @@ jobs:
       # divergir produz um instalador que copia tudo e não acha nada.
       - name: Montar o conteúdo
         shell: pwsh
+        env:
+          # ── Por que a árvore precisa ser plana ──────────────────────────
+          #
+          # O `deploy` sozinho não basta: com o linker padrão ele reproduz o
+          # armazém virtual `.pnpm`, cujos diretórios carregam o nome do pacote
+          # com hash — e um `.d.ts.map` lá dentro chega a 230 caracteres. O
+          # `File /r` do NSIS estoura no limite de 260 do Windows e a compilação
+          # morre no meio da árvore.
+          #
+          # `hoisted` acha tudo direto em `node_modules/`: o caminho mais longo
+          # cai para ~100 caracteres, e some a estrutura de links que não
+          # sobrevive a uma cópia entre máquinas — o motivo de usar `deploy`
+          # desde o início.
+          NPM_CONFIG_NODE_LINKER: hoisted
         run: |
           $conteudo = "dist-instalador/conteudo"
           New-Item -ItemType Directory -Force -Path $conteudo, "dist-instalador" | Out-Null
+
+          # `.bin` são atalhos para executáveis de linha de comando. A instalação
+          # roda `node index.js` direto, nunca um deles — e num Windows sem modo
+          # de desenvolvedor eles viram cópias inúteis ou links quebrados.
+          function Limpar-Arvore($raiz) {
+            Get-ChildItem $raiz -Recurse -Force -Directory -Filter ".bin" |
+              Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+            # Mapas de código dentro de `node_modules`. O serviço roda
+            # `node index.js` sem `--enable-source-maps`, então **nada** os lê
+            # em produção — e são justamente os nomes mais longos da árvore
+            # (`CriarPrimeiroAdministrador.d.ts.map` é quem estourou o limite).
+            # Os do `servidor/` ficam: se um dia o suporte precisar de pilha
+            # legível, basta a variável de ambiente, sem reinstalar.
+            Get-ChildItem $raiz -Recurse -Force -File -Filter "*.map" |
+              Remove-Item -Force -ErrorAction SilentlyContinue
+          }
 
           # Servidor, com as dependências de produção resolvidas.
           New-Item -ItemType Directory -Force -Path "$conteudo/servidor" | Out-Null
@@ -75,19 +111,56 @@ jobs:
           # `node_modules` de produção, resolvidos numa árvore plana. O monorepo
           # usa links do pnpm, que não sobrevivem a uma cópia entre máquinas —
           # `deploy` materializa os arquivos de verdade.
-          pnpm --filter @erp/server deploy --prod --legacy "$conteudo/servidor-deps"
-          Copy-Item -Recurse "$conteudo/servidor-deps/node_modules" "$conteudo/servidor/"
-          Remove-Item -Recurse -Force "$conteudo/servidor-deps"
+          pnpm --filter @erp/server deploy --prod --legacy "dist-instalador/servidor-deps"
+          Copy-Item -Recurse "dist-instalador/servidor-deps/node_modules" "$conteudo/servidor/"
+          Remove-Item -Recurse -Force "dist-instalador/servidor-deps"
+
+          Limpar-Arvore "$conteudo/servidor/node_modules"
 
           # Telas: é isto que faz o service worker registrar (ADR-0023).
           New-Item -ItemType Directory -Force -Path "$conteudo/telas/pdv", "$conteudo/telas/retaguarda" | Out-Null
           Copy-Item -Recurse "apps/pdv/dist/*" "$conteudo/telas/pdv/"
           Copy-Item -Recurse "apps/web/dist/*" "$conteudo/telas/retaguarda/"
 
-          # Instalador e Agente Local.
-          New-Item -ItemType Directory -Force -Path "$conteudo/instalador", "$conteudo/agente" | Out-Null
-          Copy-Item -Recurse "apps/instalador/dist/*" "$conteudo/instalador/"
+          # Agente Local.
+          New-Item -ItemType Directory -Force -Path "$conteudo/agente" | Out-Null
           Copy-Item -Recurse "apps/agente/dist/*" "$conteudo/agente/"
+
+          # ── Instalador ────────────────────────────────────────────────────
+          #
+          # Vai com `node_modules` porque é ele quem aplica as migrações, e o
+          # CLI do Prisma é uma dependência de verdade. A instalação embarca só
+          # o `node.exe` — não há `npm`, não há `npx`, e a loja pode não ter
+          # internet no dia. O CLI viaja junto.
+          New-Item -ItemType Directory -Force -Path "$conteudo/instalador" | Out-Null
+          pnpm --filter @erp/instalador deploy --prod --legacy "dist-instalador/instalador-deps"
+
+          # `dist/*` na raiz e não em `dist/`: o `erp-pdv.nsi` chama
+          # `instalador\index.js`, e `migrar.ts` procura o `node_modules` ao
+          # lado dele.
+          Copy-Item -Recurse "dist-instalador/instalador-deps/dist/*" "$conteudo/instalador/"
+          Copy-Item -Recurse "dist-instalador/instalador-deps/node_modules" "$conteudo/instalador/"
+          Remove-Item -Recurse -Force "dist-instalador/instalador-deps"
+
+          Limpar-Arvore "$conteudo/instalador/node_modules"
+
+          # ── Motor de schema do Prisma ─────────────────────────────────────
+          #
+          # `pnpm deploy` remonta a árvore a partir do armazém de pacotes, e o
+          # motor **não está lá**: ele é baixado pelo `prisma generate` para
+          # dentro do `node_modules` da raiz. Sem copiá-lo aqui, o CLI tentaria
+          # baixá-lo na máquina do lojista, no meio da instalação, e falharia em
+          # toda loja sem internet no dia. Ver `migrar.ts`.
+          $motor = Get-ChildItem -Recurse -Path "node_modules/.pnpm" `
+            -Filter "schema-engine-windows.exe" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (-not $motor) {
+            throw "schema-engine-windows.exe não encontrado: o instalador não conseguiria migrar."
+          }
+
+          New-Item -ItemType Directory -Force -Path "$conteudo/instalador/engines" | Out-Null
+          Copy-Item $motor.FullName "$conteudo/instalador/engines/"
 
       - name: Embarcar o Node
         shell: pwsh
@@ -130,16 +203,100 @@ jobs:
           Expand-Archive nssm.zip -DestinationPath nssm-tmp
           Copy-Item "nssm-tmp/nssm-2.24/win64/nssm.exe" "dist-instalador/conteudo/"
 
+      # ── Conferência do conteúdo, antes de compilar ──────────────────────
+      #
+      # Confere os arquivos **um a um**, e não o tamanho do executável no fim.
+      #
+      # A versão anterior usava "o .exe tem mais de 100 MB" como sinal de que
+      # tudo entrou. É um sinal indireto: passa quando o Postgres entra e o
+      # `psql.exe` não, e a compressão sólida move o limiar a cada dependência
+      # nova. Conferir o que se quer garantir custa o mesmo e falha aqui, no
+      # runner, em vez de na loja.
+      - name: Conferir o conteúdo
+        shell: pwsh
+        run: |
+          $conteudo = "dist-instalador/conteudo"
+
+          $exigidos = @(
+            "node/node.exe",
+            "nssm.exe",
+            # Todos os binários que o `erp-pdv.nsi` e o `banco.ts` invocam.
+            "postgres/bin/postgres.exe",
+            "postgres/bin/initdb.exe",
+            "postgres/bin/pg_ctl.exe",
+            "postgres/bin/psql.exe",
+            "postgres/bin/createdb.exe",
+            "servidor/index.js",
+            "servidor/prisma/schema.prisma",
+            "servidor/node_modules/@erp/database/dist/gerado/schema.prisma",
+            "telas/pdv/index.html",
+            "telas/pdv/sw.js",
+            "telas/retaguarda/index.html",
+            "instalador/index.js",
+            "instalador/node_modules/prisma/build/index.js",
+            "instalador/engines/schema-engine-windows.exe",
+            "agente/index.js"
+          )
+
+          $faltando = $exigidos | Where-Object { -not (Test-Path "$conteudo/$_") }
+
+          if ($faltando) {
+            throw "Faltou no instalador:`n$($faltando -join "`n")"
+          }
+
+          # O motor de consulta do Prisma é nativo e tem o nome da plataforma no
+          # arquivo; conferir por padrão em vez de por nome exato evita quebrar a
+          # cada versão do Prisma que renomeia o binário.
+          $motorConsulta = Get-ChildItem `
+            "$conteudo/servidor/node_modules/@erp/database/dist/gerado" `
+            -Filter "*query_engine*windows*" -ErrorAction SilentlyContinue
+
+          if (-not $motorConsulta) {
+            throw "Motor de consulta do Prisma para Windows ausente: o servidor não abriria o banco."
+          }
+
+          # ── Limite de 260 caracteres do Windows ───────────────────────────
+          #
+          # Foi o que quebrou a 2ª execução: o armazém virtual do pnpm produzia
+          # caminhos de 230 caracteres e o `File /r` do NSIS morria no meio da
+          # árvore, com uma mensagem que não diz "caminho longo demais".
+          #
+          # O teto é sobre o caminho **relativo**, porque na loja ele ganha o
+          # prefixo da pasta de instalação. 180 deixa 80 caracteres para o
+          # técnico que escolhe um destino mais fundo que o padrão.
+          $LIMITE = 180
+
+          $longos = Get-ChildItem $conteudo -Recurse -File |
+            ForEach-Object { $_.FullName.Substring((Resolve-Path $conteudo).Path.Length + 1) } |
+            Where-Object { $_.Length -gt $LIMITE }
+
+          if ($longos) {
+            $exemplo = $longos | Sort-Object Length -Descending | Select-Object -First 3
+            throw "Caminhos acima de $LIMITE caracteres ($($longos.Count)): o NSIS falharia ao copiá-los.`n$($exemplo -join "`n")"
+          }
+
+          $mb = [math]::Round(
+            ((Get-ChildItem $conteudo -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 1)
+          Write-Host "Conteúdo conferido: $mb MB antes da compressão."
+
+      - name: Instalar o NSIS
+        shell: pwsh
+        run: |
+          # Não vem mais pronto no runner `windows-latest`. Versão fixada em
+          # `env`: o compilador entra no produto que o cliente executa.
+          choco install nsis --version=${{ env.NSIS_VERSION }} -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "choco falhou ao instalar o NSIS" }
+
       - name: Compilar o instalador
         shell: pwsh
         run: |
           $versao = "${{ github.event.inputs.versao }}"
           if (-not $versao) { $versao = "${{ github.ref_name }}".TrimStart("v") }
 
-          # O NSIS já vem no runner `windows-latest`.
           $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
           if (-not (Test-Path $makensis)) { throw "makensis não encontrado em $makensis" }
 
+          & $makensis /VERSION
           & $makensis /DVERSAO=$versao apps/instalador/windows/erp-pdv.nsi
           if ($LASTEXITCODE -ne 0) { throw "makensis falhou com código $LASTEXITCODE" }
 
@@ -157,12 +314,13 @@ jobs:
 
           if (-not $arquivo) { throw "O instalador não foi gerado." }
 
-          # Abaixo de 100 MB significa que Node ou Postgres não entraram, e o
-          # instalador falharia na máquina do cliente em vez de aqui.
+          # O conteúdo já foi conferido arquivo a arquivo antes de compilar;
+          # aqui só resta saber se o `makensis` produziu algo plausível em vez
+          # de um executável vazio.
           $mb = [math]::Round($arquivo.Length / 1MB, 1)
           Write-Host "Instalador: $($arquivo.Name) — $mb MB"
 
-          if ($mb -lt 100) { throw "Instalador pequeno demais ($mb MB): algo não foi embarcado." }
+          if ($mb -lt 30) { throw "Instalador pequeno demais ($mb MB): a compilação não embarcou o conteúdo." }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 import { z } from "zod";
 
 /**
@@ -74,6 +76,42 @@ export type Ambiente = Readonly<z.infer<typeof esquema>> & {
  * Recebe a fonte por parâmetro em vez de ler `process.env` direto: é o que
  * torna a validação testável sem sujar o ambiente do processo de teste.
  */
+/**
+ * Carrega o `.env` gravado ao lado do servidor, se existir.
+ *
+ * ### Por que o servidor lê o arquivo, e não quem o inicia
+ *
+ * O instalador grava `servidor/.env` com a senha do banco e o segredo de token
+ * (ver `configuracao.ts` do instalador), mas **o Node não lê `.env` sozinho** —
+ * é preciso `--env-file` na linha de comando. O serviço do Windows sobe com
+ * `node index.js` e mais nada, então sem esta chamada a instalação inteira
+ * subiria sem configuração: o serviço morre na partida e a verificação final
+ * diz "o sistema não respondeu", sem nunca apontar a causa.
+ *
+ * Fazer isso aqui, e não no lançador, é o que garante o mesmo comportamento
+ * quando o técnico roda `node index.js` à mão para diagnosticar — que é
+ * exatamente o momento em que ninguém quer descobrir uma diferença.
+ *
+ * ### O ambiente real ganha do arquivo
+ *
+ * É a semântica do `process.loadEnvFile`: variável já definida não é
+ * sobrescrita. Isso mantém contêiner e CI no comando, e evita que um `.env`
+ * esquecido numa pasta de trabalho passe por cima da configuração de verdade.
+ */
+export function carregarArquivoDeAmbiente(
+  caminho: string,
+  existe: (caminho: string) => boolean = existsSync,
+  carregar: (caminho: string) => void = (alvo) => {
+    process.loadEnvFile(alvo);
+  },
+): boolean {
+  if (!existe(caminho)) return false;
+
+  carregar(caminho);
+
+  return true;
+}
+
 export function carregarAmbiente(fonte: NodeJS.ProcessEnv = process.env): Ambiente {
   const resultado = esquema.safeParse(fonte);
 
