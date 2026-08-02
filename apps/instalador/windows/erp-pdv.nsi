@@ -103,6 +103,29 @@ Section "Sistema" SEC_SISTEMA
     Abort
   ${EndIf}
 
+  ; ── Parar os serviços antes de copiar ───────────────────────────────────
+  ;
+  ; Numa reinstalação, o serviço do banco continua no ar segurando os próprios
+  ; binários: `libssl-3-x64.dll`, `libpgtypes.dll` e companhia. O Windows não
+  ; deixa sobrescrever arquivo aberto, e o `File /r` desanda numa enxurrada de
+  ; "erro ao abrir o arquivo pra gravação", uma caixa por DLL.
+  ;
+  ; O pior não é o incômodo: quem clica em "Ignorar" — a saída óbvia — termina a
+  ; instalação com **binários de duas versões misturados**, e o estrago aparece
+  ; depois, numa troca de versão do PostgreSQL, longe da causa.
+  ;
+  ; Falha aqui é esperada e ignorada: numa instalação nova não há serviço nenhum
+  ; para parar.
+  DetailPrint "Parando os serviços, se já estiverem instalados..."
+  nsExec::ExecToLog 'net stop ERPPDVServidor'
+  Pop $0
+  nsExec::ExecToLog 'net stop ERPPDVBanco'
+  Pop $0
+
+  ; O `net stop` volta quando o gerenciador de serviços dá o processo por
+  ; encerrado; o Windows ainda leva um instante para soltar os arquivos.
+  Sleep 2000
+
   SetOutPath "$INSTDIR"
 
   DetailPrint "Copiando arquivos..."
