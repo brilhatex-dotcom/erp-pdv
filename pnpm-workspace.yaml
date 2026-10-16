@@ -7,3 +7,22 @@ packages:
 # aprovado conscientemente (defesa contra supply chain — CLAUDE.md §1, papel 5).
 onlyBuiltDependencies:
   - esbuild
+
+# Versões mínimas forçadas em dependências **transitivas** com vulnerabilidade
+# alta (`pnpm audit --prod --audit-level high`, portão do CLAUDE.md §7).
+#
+# Override, e não espera: o pacote que nos traz cada uma delas (fastify,
+# @fastify/static, prisma) ainda declara uma faixa que aceita a versão
+# vulnerável, e o lockfile continuaria resolvendo nela. Cada linha só sobe
+# patch ou minor dentro da mesma linha maior — exceto `deepmerge-ts`, que o
+# `@prisma/config` 6 fixa em 7.1.5; a 8 mantém a API usada por ele, e o
+# `prisma generate` e o `migrate deploy` foram executados depois da troca.
+#
+# Ao atualizar o pacote de origem, confira se a linha ainda é necessária: um
+# override esquecido prende a árvore numa versão que já envelheceu.
+overrides:
+  "fast-uri@>=3.0.0 <3.1.7": "3.1.8"
+  "fast-uri@>=4.0.0 <4.1.4": "^4.1.4"
+  "brace-expansion@>=4.0.0 <5.0.11": "5.0.12"
+  "source-map-js@>=1.0.0 <1.2.2": "1.2.2"
+  "deepmerge-ts@<8.0.0": "8.0.2"
