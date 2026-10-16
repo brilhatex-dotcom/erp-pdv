@@ -242,9 +242,35 @@ describe("Autorização — sangria e estorno", () => {
 });
 
 describe("Autorização — cancelamento de venda", () => {
-  it("🔑 o operador de caixa não cancela venda finalizada", () => {
+  it("🔑 o operador de caixa não cancela sozinho: pede o supervisor", () => {
+    const decisao = avaliar(comPapel("OPERADOR_CAIXA"), {
+      tipo: "CANCELAR_VENDA",
+      minutosDesdeFinalizacao: 1,
+    });
+
+    expect(decisao).toEqual({
+      tipo: "REQUER_SUPERVISOR",
+      permissaoNecessaria: "venda:cancelar",
+      motivo: "Para cancelar uma venda concluída, chame o supervisor.",
+    });
+  });
+
+  it("🔑 quem libera o cancelamento é limitado pela própria janela", () => {
+    const pedidoDeOntem: AcaoSolicitada = {
+      tipo: "CANCELAR_VENDA",
+      minutosDesdeFinalizacao: 60 * 24,
+    };
+    const decisao = avaliar(comPapel("OPERADOR_CAIXA"), pedidoDeOntem);
+    if (decisao.tipo !== "REQUER_SUPERVISOR") throw new Error("fixture inválida");
+
+    // O supervisor tem 30 minutos; o gerente, sem teto.
+    expect(podeAutorizar(comPapel("SUPERVISOR"), decisao, pedidoDeOntem)).toBe(false);
+    expect(podeAutorizar(comPapel("GERENTE"), decisao, pedidoDeOntem)).toBe(true);
+  });
+
+  it("papel que nem vende não pede cancelamento", () => {
     expect(
-      avaliar(comPapel("OPERADOR_CAIXA"), {
+      avaliar(comPapel("ESTOQUISTA"), {
         tipo: "CANCELAR_VENDA",
         minutosDesdeFinalizacao: 1,
       }).tipo,

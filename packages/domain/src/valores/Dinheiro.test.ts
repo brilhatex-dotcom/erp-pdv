@@ -442,10 +442,25 @@ describe("Dinheiro.mediaPonderada", () => {
 describe("Dinheiro — percentuais em pontos-base", () => {
   const reais = (valor: string): Dinheiro => Dinheiro.deReais(valor).unwrap();
 
-  it("aplica 10% com arredondamento comercial", () => {
-    expect(reais("24,80").aplicarPercentual(1000).formatar()).toBe("R$ 2,48");
-    // 5% de 0,30 = 0,015 → 0,02.
-    expect(reais("0,30").aplicarPercentual(500).formatar()).toBe("R$ 0,02");
+  it("aplica o percentual exato quando ele cabe em centavos", () => {
+    expect(reais("24,80").percentualSemExceder(1000).formatar()).toBe("R$ 2,48");
+  });
+
+  it("🔑 trunca no centavo: o valor nunca passa do percentual pedido", () => {
+    // 5% de R$ 12,50 = R$ 0,625 → R$ 0,62; 5% de R$ 0,30 = R$ 0,015 → R$ 0,01.
+    expect(reais("12,50").percentualSemExceder(500).formatar()).toBe("R$ 0,62");
+    expect(reais("0,30").percentualSemExceder(500).formatar()).toBe("R$ 0,01");
+  });
+
+  it("🔑 medido de volta, cabe no teto que foi pedido", () => {
+    // É a garantia que a alçada precisa: quem pode 5% e pede 5% não chama
+    // ninguém, seja qual for o preço.
+    for (const valor of ["12,50", "0,30", "19,99", "7,77", "1234,57"]) {
+      const base = reais(valor);
+      expect(base.percentualSemExceder(500).proporcaoEmBps(base)).toBeLessThanOrEqual(
+        500,
+      );
+    }
   });
 
   it("mede quanto representa de um todo", () => {

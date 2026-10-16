@@ -503,6 +503,119 @@ describe("Alteração de produto", () => {
   });
 });
 
+describe("Produto — reposição, fornecedor, foto e botão", () => {
+  it("🔑 estoque mínimo, fornecedor, foto e botão rápido vão e voltam", async () => {
+    const imagem = cenario.geradorId.proximo();
+    await cenario.imagens.salvar({
+      id: imagem,
+      tipo: "image/png",
+      conteudo: new Uint8Array([1]),
+      hash: "abc",
+    });
+    const produto = await cadastrado({
+      estoqueMinimo: 6_000n,
+      imagemId: imagem,
+      botaoRapido: true,
+    });
+
+    expect(produto.estoqueMinimo?.formatar()).toBe("6 un");
+    expect(produto.botaoRapido).toBe(true);
+
+    const alterado = (
+      await cenario.alterar.executar(
+        alteracaoBase(produto.id, { estoqueMinimo: 12_000n, imagemId: imagem }),
+      )
+    ).unwrap();
+
+    expect(alterado.estoqueMinimo?.formatar()).toBe("12 un");
+    // Formulário completo: botão ausente é botão desligado.
+    expect(alterado.botaoRapido).toBe(false);
+  });
+
+  it("recusa fornecedor ou foto que não existem — no cadastro e na alteração", async () => {
+    const semFornecedor = await cenario.cadastrar.executar(
+      entradaBase({ fornecedorId: AUSENTE }),
+    );
+    expect(semFornecedor.isErr()).toBe(true);
+
+    const produto = await cadastrado();
+
+    const semFoto = await cenario.alterar.executar(
+      alteracaoBase(produto.id, { imagemId: AUSENTE }),
+    );
+    expect(semFoto.isErr() && semFoto.error.mensagem).toContain("imagem");
+
+    const semFornecedorNaAlteracao = await cenario.alterar.executar(
+      alteracaoBase(produto.id, { fornecedorId: AUSENTE }),
+    );
+    expect(
+      semFornecedorNaAlteracao.isErr() && semFornecedorNaAlteracao.error.mensagem,
+    ).toContain("fornecedor");
+  });
+
+  it("🔑 recusa preço e custo negativos de uma vez, campo a campo", async () => {
+    const produto = await cadastrado();
+
+    const resultado = await cenario.alterar.executar(
+      alteracaoBase(produto.id, { precoVenda: -100n, custo: -1n }),
+    );
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(JSON.stringify(resultado.error.detalhes)).toContain(
+        "PRODUTO_PRECO_NEGATIVO",
+      );
+      expect(JSON.stringify(resultado.error.detalhes)).toContain(
+        "PRODUTO_CUSTO_NEGATIVO",
+      );
+    }
+  });
+
+  it("recusa embalagem repetida na alteração", async () => {
+    const produto = await cadastrado();
+
+    const resultado = await cenario.alterar.executar(
+      alteracaoBase(produto.id, {
+        embalagens: [
+          { unidade: "FD", fator: 12n },
+          { unidade: "FD", fator: 12n },
+        ],
+      }),
+    );
+
+    expect(resultado.isErr()).toBe(true);
+  });
+
+  it("recusa estoque mínimo negativo na alteração", async () => {
+    const produto = await cadastrado();
+
+    const resultado = await cenario.alterar.executar(
+      alteracaoBase(produto.id, { estoqueMinimo: -1n }),
+    );
+
+    expect(resultado.isErr()).toBe(true);
+  });
+
+  it("🔑 a troca de preço vai para a auditoria com quem trocou", async () => {
+    const produto = await cadastrado();
+
+    await cenario.alterar.executar(alteracaoBase(produto.id, { precoVenda: 1090n }));
+
+    const [registro] = cenario.auditoria.da("PRECO_ALTERADO");
+    expect(registro?.usuarioId?.equals(USUARIO)).toBe(true);
+    expect(registro?.descricao).toContain("R$ 9,90");
+    expect(registro?.descricao).toContain("R$ 10,90");
+  });
+
+  it("salvar sem mudar o preço não suja a auditoria", async () => {
+    const produto = await cadastrado();
+
+    await cenario.alterar.executar(alteracaoBase(produto.id, { descricao: "Outra" }));
+
+    expect(cenario.auditoria.da("PRECO_ALTERADO")).toHaveLength(0);
+  });
+});
+
 describe("Alteração só do preço", () => {
   it("🔑 acerta o preço da etiqueta com o cliente no caixa", async () => {
     const produto = await cadastrado();

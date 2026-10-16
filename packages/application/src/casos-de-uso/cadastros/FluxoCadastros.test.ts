@@ -172,6 +172,74 @@ describe("Categoria", () => {
     }
   });
 
+  it("🔑 guarda o ícone do botão do caixa e a foto", async () => {
+    const imagem = cenario.geradorId.proximo();
+    await cenario.imagens.salvar({
+      id: imagem,
+      tipo: "image/png",
+      conteudo: new Uint8Array([1]),
+      hash: "abc",
+    });
+
+    const criada = (
+      await cenario.cadastrarCategoria.executar({
+        nome: "Padaria",
+        icone: "🍞",
+        imagemId: imagem,
+      })
+    ).unwrap();
+
+    expect(criada.icone).toBe("🍞");
+    expect(criada.imagemId?.equals(imagem)).toBe(true);
+
+    const alterada = (
+      await cenario.alterarCategoria.executar({
+        id: criada.id,
+        nome: "Padaria",
+        ativa: true,
+        icone: "🥖",
+      })
+    ).unwrap();
+
+    // Formulário completo: a imagem ausente na alteração é a imagem retirada.
+    expect(alterada.icone).toBe("🥖");
+    expect(alterada.imagemId).toBeUndefined();
+  });
+
+  it("recusa foto que não existe — no cadastro e na alteração", async () => {
+    const cadastro = await cenario.cadastrarCategoria.executar({
+      nome: "Padaria",
+      imagemId: AUSENTE,
+    });
+    expect(cadastro.isErr() && cadastro.error.codigo).toBe("IMAGEM_NAO_ENCONTRADA");
+
+    const criada = (
+      await cenario.cadastrarCategoria.executar({ nome: "Padaria" })
+    ).unwrap();
+    const alteracao = await cenario.alterarCategoria.executar({
+      id: criada.id,
+      nome: "Padaria",
+      ativa: true,
+      imagemId: AUSENTE,
+    });
+    expect(alteracao.isErr() && alteracao.error.codigo).toBe("IMAGEM_NAO_ENCONTRADA");
+  });
+
+  it("recusa ícone comprido demais para o botão", async () => {
+    const criada = (
+      await cenario.cadastrarCategoria.executar({ nome: "Padaria" })
+    ).unwrap();
+
+    const resultado = await cenario.alterarCategoria.executar({
+      id: criada.id,
+      nome: "Padaria",
+      ativa: true,
+      icone: "PÃO FRANCÊS QUENTINHO",
+    });
+
+    expect(resultado.isErr()).toBe(true);
+  });
+
   it("lista só as ativas quando pedido", async () => {
     const ativa = (
       await cenario.cadastrarCategoria.executar({ nome: "Bebidas" })

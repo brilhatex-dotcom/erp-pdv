@@ -40,18 +40,16 @@ const SO_PELO_SISTEMA: ReadonlySet<TipoMovimento> = new Set<TipoMovimento>([
   "TRANSFERENCIA_SAIDA",
 ]);
 
-const ACAO_AUDITADA: Partial<
-  Record<TipoMovimento, "ESTOQUE_AJUSTADO" | "ESTOQUE_PERDA">
+/** Os movimentos que vão para a auditoria, e como o dono os lê lá. */
+const AUDITADOS: Partial<
+  Record<
+    TipoMovimento,
+    { readonly acao: "ESTOQUE_AJUSTADO" | "ESTOQUE_PERDA"; readonly texto: string }
+  >
 > = {
-  AJUSTE_POSITIVO: "ESTOQUE_AJUSTADO",
-  AJUSTE_NEGATIVO: "ESTOQUE_AJUSTADO",
-  PERDA: "ESTOQUE_PERDA",
-};
-
-const DESCRICAO_TIPO: Partial<Record<TipoMovimento, string>> = {
-  AJUSTE_POSITIVO: "Ajuste para mais",
-  AJUSTE_NEGATIVO: "Ajuste para menos",
-  PERDA: "Perda",
+  AJUSTE_POSITIVO: { acao: "ESTOQUE_AJUSTADO", texto: "Ajuste para mais" },
+  AJUSTE_NEGATIVO: { acao: "ESTOQUE_AJUSTADO", texto: "Ajuste para menos" },
+  PERDA: { acao: "ESTOQUE_PERDA", texto: "Perda" },
 };
 
 export interface EntradaMovimento {
@@ -154,16 +152,23 @@ export class RegistrarMovimento {
       // pelo caixa. Ficam na auditoria com o motivo, ao lado do resto do que
       // mexe com dinheiro — e não só no extrato do produto, que ninguém abre
       // sem já saber qual produto procurar.
-      const acao = ACAO_AUDITADA[entrada.tipo];
+      const auditado = AUDITADOS[entrada.tipo];
 
-      if (acao !== undefined) {
+      if (auditado !== undefined) {
         const lancado = movimento.unwrap();
 
         await auditar(repositorios, this.geradorId, {
           ocorridoEm: agora,
-          acao,
+          acao: auditado.acao,
           usuarioId: entrada.usuarioId,
-          descricao: `${DESCRICAO_TIPO[entrada.tipo] ?? entrada.tipo} de ${lancado.quantidade.formatar()} em ${produto.descricao}: ${lancado.observacao ?? ""}`,
+          // A justificativa é obrigatória nestes tipos (o movimento já a
+          // exigiu); o `filter` só evita imprimir "undefined" se isso mudar.
+          descricao: [
+            `${auditado.texto} de ${lancado.quantidade.formatar()} em ${produto.descricao}`,
+            lancado.observacao,
+          ]
+            .filter((parte) => parte !== undefined)
+            .join(": "),
           entidade: "produto",
           entidadeId: produto.id,
           dados: {

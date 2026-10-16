@@ -238,6 +238,7 @@ function aplicar(produto: Produto, mudancas: Mudancas): ErroValidacao[] {
   if (embalagens.isErr()) falhas.push(...embalagens.error);
 
   const minimo = produto.definirEstoqueMinimo(mudancas.estoqueMinimo);
+  /* v8 ignore next -- inalcançável: montado na unidade do produto, e o negativo já foi recusado */
   if (minimo.isErr()) falhas.push(...minimo.error);
 
   produto.definirCodigoBarras(mudancas.codigoBarras);

@@ -223,6 +223,36 @@ describe("Ajuste e perda", () => {
     expect((await saldo()).milesimos).toBe(8_000n);
   });
 
+  it("🔑 ajuste e perda vão para a auditoria com o motivo", async () => {
+    await cenario.registrar.executar({
+      produtoId: PRODUTO,
+      tipo: "AJUSTE_NEGATIVO",
+      quantidade: 1_000n,
+      unidade: "UN",
+      observacao: "Contagem da prateleira",
+      usuarioId: USUARIO,
+    });
+    await cenario.registrar.executar({
+      produtoId: PRODUTO,
+      tipo: "PERDA",
+      quantidade: 1_000n,
+      unidade: "UN",
+      observacao: "Vencido",
+      usuarioId: USUARIO,
+    });
+
+    expect(cenario.auditoria.da("ESTOQUE_AJUSTADO")[0]?.descricao).toBe(
+      "Ajuste para menos de 1 un em Refrigerante Cola 2 Litros: Contagem da prateleira",
+    );
+    expect(cenario.auditoria.da("ESTOQUE_PERDA")[0]?.descricao).toBe(
+      "Perda de 1 un em Refrigerante Cola 2 Litros: Vencido",
+    );
+  });
+
+  it("a entrada de mercadoria não vai para a auditoria — o registro dela é a nota", () => {
+    expect(cenario.auditoria.registros).toHaveLength(0);
+  });
+
   it("🔑 ajuste e perda exigem justificativa", async () => {
     // Ajuste sem motivo é a porta de saída preferida de quem desvia mercadoria.
     for (const tipo of ["AJUSTE_POSITIVO", "AJUSTE_NEGATIVO", "PERDA"] as const) {

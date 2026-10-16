@@ -47,7 +47,10 @@ export interface EntradaAplicarDesconto {
  * operador, e o registro guarda os dois nomes.
  *
  * O percentual que a política confere é medido com arredondamento **para
- * cima** (`Dinheiro.proporcaoEmBps`): 5,004% não passa por um teto de 5%.
+ * cima** (`Dinheiro.proporcaoEmBps`): 5,004% não passa por um teto de 5%. Por
+ * isso o desconto pedido em percentual é **truncado** no centavo
+ * (`Dinheiro.percentualSemExceder`): 5% de R$ 12,50 são R$ 0,62, e medido de
+ * volta cabe nos 5% que o operador pode dar sozinho.
  *
  * Desconto zero é tirar o desconto — não pede autorização nem se audita,
  * porque devolve o preço cheio e não tira nada de ninguém.
@@ -79,7 +82,8 @@ export class AplicarDesconto {
       if (alvo.isErr()) return err(alvo.error);
 
       const { base, texto } = alvo.unwrap();
-      const valor = entrada.valor ?? base.aplicarPercentual(entrada.percentualBps ?? 0);
+      const valor =
+        entrada.valor ?? base.percentualSemExceder(entrada.percentualBps ?? 0);
 
       // Conferido antes da alçada: pedir o PIN do gerente para um desconto que
       // a venda vai recusar faria o gerente atravessar a loja à toa.

@@ -64,11 +64,12 @@ const PERMISSAO_BASE: Record<Exclude<AcaoSolicitada["tipo"], "PERMISSAO">, Permi
   DESCONTO_VENDA: "venda:desconto",
   SANGRIA: "caixa:sangria",
   ESTORNO_EM_DINHEIRO: "caixa:sangria",
-  CANCELAR_VENDA: "venda:cancelar",
-  // As três abaixo partem de quem **vende**: é o operador que bipou errado,
-  // que chegou ao produto sem saldo, que tem o cliente do fiado na frente. A
-  // permissão dele é a de vender; o que ele pode não ter é a alçada para
-  // seguir sozinho — e aí o supervisor libera com o PIN, sem trocar a sessão.
+  // As quatro abaixo partem de quem **vende**: é o operador que bipou errado,
+  // que chegou ao produto sem saldo, que tem o cliente do fiado na frente, que
+  // vê o cliente desistir da compra que acabou de passar. A permissão dele é a
+  // de vender; o que ele pode não ter é a alçada para seguir sozinho — e aí o
+  // supervisor libera com o PIN, sem trocar a sessão (ARQUITETURA.md §9.4).
+  CANCELAR_VENDA: "venda:criar",
   REMOVER_ITEM: "venda:criar",
   VENDA_SEM_ESTOQUE: "venda:criar",
   FIADO_ACIMA_DO_LIMITE: "venda:criar",
@@ -137,6 +138,18 @@ export function avaliar(usuario: Usuario, acao: AcaoSolicitada): Decisao {
       );
 
     case "CANCELAR_VENDA":
+      // Sem a alçada, o cancelamento não é negado: o supervisor libera com o
+      // PIN, e o registro guarda quem pediu e quem liberou. A janela que vale
+      // então é a **dele** (`podeAutorizar`) — o supervisor de 30 minutos não
+      // libera o cancelamento de ontem.
+      if (!usuario.temPermissao("venda:cancelar")) {
+        return {
+          tipo: "REQUER_SUPERVISOR",
+          permissaoNecessaria: "venda:cancelar",
+          motivo: "Para cancelar uma venda concluída, chame o supervisor.",
+        };
+      }
+
       return avaliarJanela(
         acao.minutosDesdeFinalizacao,
         limites.minutosParaCancelarVenda,

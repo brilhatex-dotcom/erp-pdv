@@ -120,13 +120,19 @@ export class Dinheiro implements ValueObject<Dinheiro> {
   }
 
   /**
-   * Aplica um percentual em pontos-base: `aplicarPercentual(1000)` é 10%.
+   * Aplica um percentual em pontos-base **sem passar dele**:
+   * `percentualSemExceder(1000)` é 10%, truncado no centavo.
    *
-   * Meio-para-cima, como todo arredondamento monetário daqui: 5% de R$ 0,30
-   * são R$ 0,02 (R$ 0,015 arredondado), não R$ 0,01.
+   * É a exceção ao meio-para-cima do resto do sistema, e o motivo é o desconto
+   * pedido em percentual. O operador com teto de 5% que digita "5%" num bolo de
+   * R$ 12,50 precisa receber R$ 0,62 — e não R$ 0,63, que medido de volta dá
+   * 5,04% e pediria o supervisor para o desconto que ele está autorizado a dar.
+   * O centavo truncado fica com a loja; a alternativa seria a alçada recusar o
+   * que o próprio operador vê na tela como dentro do limite.
    */
-  aplicarPercentual(bps: number): Dinheiro {
-    return this.escalar(BigInt(Math.trunc(bps)), 10_000n);
+  percentualSemExceder(bps: number): Dinheiro {
+    // A divisão de `bigint` trunca em direção ao zero: o módulo nunca cresce.
+    return new Dinheiro((this.#centavos * BigInt(Math.trunc(bps))) / 10_000n);
   }
 
   /**
