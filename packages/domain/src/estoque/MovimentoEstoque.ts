@@ -14,7 +14,8 @@ import {
 
 /** De onde o movimento veio, para rastrear até o documento de origem. */
 export interface OrigemMovimento {
-  readonly tipo: "VENDA" | "COMPRA" | "INVENTARIO" | "TRANSFERENCIA" | "MANUAL";
+  readonly tipo:
+    "VENDA" | "COMPRA" | "DEVOLUCAO" | "INVENTARIO" | "TRANSFERENCIA" | "MANUAL";
   /** Documento que originou: venda, nota de compra, inventário. */
   readonly documentoId?: Identificador | undefined;
 }

@@ -42,6 +42,9 @@ const OPERADOR_CAIXA: ModeloPapel = {
     "venda:criar",
     "venda:desconto",
     "venda:consultar_propria",
+    // Corrigir a bipada errada é parte de vender. A loja que quiser supervisor
+    // nisso retira a permissão do papel, e o caixa passa a pedir o PIN dele.
+    "venda:remover_item",
     "caixa:abrir",
     "caixa:fechar",
     "fiscal:emitir",
@@ -64,6 +67,8 @@ const SUPERVISOR: ModeloPapel = {
     "venda:cancelar",
     "venda:desconto_acima_limite",
     "venda:consultar_todas",
+    "venda:devolver",
+    "venda:sem_estoque",
     "caixa:sangria",
     "produto:alterar_preco",
     "fiscal:cancelar",
@@ -123,6 +128,8 @@ const GERENTE: ModeloPapel = {
     "caixa:reabrir",
     "relatorio:margem",
     "config:empresa",
+    "backup:executar",
+    "auditoria:consultar",
   ],
   limites: {
     descontoMaximoItemBps: 3000,

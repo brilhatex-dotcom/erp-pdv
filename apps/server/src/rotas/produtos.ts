@@ -81,6 +81,14 @@ const camposProduto = {
   categoriaId: z.uuid().optional(),
   referencias: z.array(zReferencia).max(50).optional(),
   embalagens: z.array(zEmbalagem).max(10).optional(),
+  /** Milésimos da unidade base, em texto — como toda quantidade na fronteira. */
+  estoqueMinimo: z
+    .string()
+    .regex(/^\d{1,15}$/, "estoque mínimo inválido")
+    .optional(),
+  fornecedorId: z.uuid().optional(),
+  imagemId: z.uuid().optional(),
+  botaoRapido: z.boolean().optional(),
 };
 
 const corpoCadastro = z.object({
@@ -194,8 +202,12 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
       const entrada = corpoCadastro.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Confira os campos do produto.");
 
-      const categoriaId = interpretarCategoria(entrada.data.categoriaId);
+      const categoriaId = identificadorOpcional(entrada.data.categoriaId);
       if (categoriaId === "INVALIDA") return recusar(resposta, "Categoria inválida.");
+
+      const vinculos = interpretarVinculos(entrada.data);
+      if (vinculos === "INVALIDOS")
+        return recusar(resposta, "Fornecedor ou imagem inválidos.");
 
       // Quem não pode ver o custo também não o define: aceitar o número que ele
       // mandou seria confiar num campo que a tela dele nem mostra.
@@ -212,12 +224,16 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
         tipo: entrada.data.tipo,
         unidadeBase: entrada.data.unidadeBase,
         precoVenda: BigInt(entrada.data.precoVenda),
-        custo: podeVerCusto ? centavosOpcionais(entrada.data.custo) : undefined,
+        custo: podeVerCusto ? inteiroOpcional(entrada.data.custo) : undefined,
         codigoBarras: entrada.data.codigoBarras,
         codigoBalanca: entrada.data.codigoBalanca,
         categoriaId,
         referencias: entrada.data.referencias,
         embalagens: interpretarEmbalagens(entrada.data.embalagens),
+        estoqueMinimo: inteiroOpcional(entrada.data.estoqueMinimo),
+        fornecedorId: vinculos.fornecedorId,
+        imagemId: vinculos.imagemId,
+        botaoRapido: entrada.data.botaoRapido,
       });
 
       if (resultado.isErr()) return responderErro(resposta, resultado.error);
@@ -238,8 +254,16 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
       const entrada = corpoAlteracao.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Confira os campos do produto.");
 
-      const categoriaId = interpretarCategoria(entrada.data.categoriaId);
+      const categoriaId = identificadorOpcional(entrada.data.categoriaId);
       if (categoriaId === "INVALIDA") return recusar(resposta, "Categoria inválida.");
+
+      const vinculos = interpretarVinculos(entrada.data);
+      if (vinculos === "INVALIDOS")
+        return recusar(resposta, "Fornecedor ou imagem inválidos.");
+
+      const usuarioId = requisicao.autenticado?.usuarioId;
+      /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
+      if (usuarioId === undefined) return resposta.status(401).send();
 
       const podeVerCusto = await autenticadoTem(
         container,
@@ -254,13 +278,18 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
         descricaoPdv: entrada.data.descricaoPdv,
         precoVenda: BigInt(entrada.data.precoVenda),
         // `undefined` significa "mantenha o que está lá".
-        custo: podeVerCusto ? centavosOpcionais(entrada.data.custo) : undefined,
+        custo: podeVerCusto ? inteiroOpcional(entrada.data.custo) : undefined,
         codigoBarras: entrada.data.codigoBarras,
         codigoBalanca: entrada.data.codigoBalanca,
         categoriaId,
         referencias: entrada.data.referencias,
         embalagens: interpretarEmbalagens(entrada.data.embalagens),
         ativo: entrada.data.ativo,
+        estoqueMinimo: inteiroOpcional(entrada.data.estoqueMinimo),
+        fornecedorId: vinculos.fornecedorId,
+        imagemId: vinculos.imagemId,
+        botaoRapido: entrada.data.botaoRapido,
+        usuarioId,
         podeAlterarPreco: await autenticadoTem(
           container,
           requisicao,
@@ -284,9 +313,14 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
       const entrada = corpoPreco.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Informe o novo preço.");
 
+      const usuarioId = requisicao.autenticado?.usuarioId;
+      /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
+      if (usuarioId === undefined) return resposta.status(401).send();
+
       const resultado = await container.alterarPrecoDoProduto.executar({
         id,
         precoVenda: BigInt(entrada.data.precoVenda),
+        usuarioId,
       });
 
       if (resultado.isErr()) return responderErro(resposta, resultado.error);
@@ -336,6 +370,10 @@ function apresentarProduto(
       fator: embalagem.fator.toString(),
       codigoBarras: embalagem.codigoBarras?.valor,
     })),
+    estoqueMinimo: produto.estoqueMinimo?.milesimos.toString(),
+    fornecedorId: produto.fornecedorId?.valor,
+    imagemId: produto.imagemId?.valor,
+    botaoRapido: produto.botaoRapido,
     ativo: produto.ativo,
   };
 }
@@ -351,7 +389,7 @@ function identificadorDaRota(requisicao: FastifyRequest): Identificador | undefi
   return identificador.isErr() ? undefined : identificador.unwrap();
 }
 
-function interpretarCategoria(
+function identificadorOpcional(
   bruta: string | undefined,
 ): Identificador | undefined | "INVALIDA" {
   if (bruta === undefined) return undefined;
@@ -360,8 +398,33 @@ function interpretarCategoria(
   return identificador.isErr() ? "INVALIDA" : identificador.unwrap();
 }
 
-function centavosOpcionais(bruto: string | undefined): bigint | undefined {
+/** Inteiro em texto (centavos ou milésimos) para `bigint`, mantendo o ausente. */
+function inteiroOpcional(bruto: string | undefined): bigint | undefined {
   return bruto === undefined ? undefined : BigInt(bruto);
+}
+
+/**
+ * Fornecedor e imagem que o formulário escolheu.
+ *
+ * O Zod já garantiu o formato de UUID; o que pode falhar aqui é a versão, que
+ * `Identificador` confere. Se existem de fato é pergunta do caso de uso, que
+ * responde com a mensagem certa para cada um.
+ */
+function interpretarVinculos(dados: {
+  readonly fornecedorId?: string | undefined;
+  readonly imagemId?: string | undefined;
+}):
+  | {
+      readonly fornecedorId: Identificador | undefined;
+      readonly imagemId: Identificador | undefined;
+    }
+  | "INVALIDOS" {
+  const fornecedorId = identificadorOpcional(dados.fornecedorId);
+  const imagemId = identificadorOpcional(dados.imagemId);
+
+  if (fornecedorId === "INVALIDA" || imagemId === "INVALIDA") return "INVALIDOS";
+
+  return { fornecedorId, imagemId };
 }
 
 /** Fator vem em texto e vira `bigint` aqui, na fronteira — não no domínio. */

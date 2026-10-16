@@ -4,6 +4,7 @@ import {
   Dinheiro,
   Embalagem,
   type ErroValidacao,
+  Quantidade,
   ReferenciaProduto,
   type TipoReferencia,
 } from "@erp/domain";
@@ -104,6 +105,29 @@ export function interpretarEmbalagens(
  * em texto (ADR-0019), e quem converte para número no caminho reintroduz o
  * `double` que o ADR-0009 proíbe.
  */
+/**
+ * O estoque mínimo, na unidade do produto. Ausente é "não acompanhar".
+ *
+ * Chega em milésimos, como toda quantidade que cruza a fronteira: 12 unidades
+ * são `12000`, meio quilo é `500`.
+ */
+export function interpretarEstoqueMinimo(
+  milesimos: bigint | undefined,
+  unidade: CodigoUnidade,
+  erros: ErroValidacao[],
+): Quantidade | undefined {
+  if (milesimos === undefined) return undefined;
+
+  const resultado = Quantidade.deMilesimos(milesimos, unidade);
+
+  if (resultado.isErr()) {
+    erros.push(resultado.error);
+    return undefined;
+  }
+
+  return resultado.unwrap();
+}
+
 export function interpretarCentavos(
   centavos: bigint | undefined,
   erros: ErroValidacao[],

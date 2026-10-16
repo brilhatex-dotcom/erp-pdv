@@ -44,6 +44,16 @@ export function paraDominio(linha: SessaoCompleta): SessaoCaixa {
     trocoDevolvido: paraDinheiro(linha.trocoDevolvido),
     totalVendido: paraDinheiro(linha.totalVendido),
     quantidadeVendas: linha.quantidadeVendas,
+    descontosConcedidos: paraDinheiro(linha.descontosConcedidos),
+    cancelamentos: {
+      quantidade: linha.quantidadeCancelamentos,
+      total: paraDinheiro(linha.totalCancelado),
+    },
+    devolucoes: {
+      quantidade: linha.quantidadeDevolucoes,
+      total: paraDinheiro(linha.totalDevolvido),
+    },
+    devolvidoEmDinheiro: paraDinheiro(linha.devolvidoEmDinheiro),
     movimentos: [...linha.movimentos]
       .sort((a, b) => a.ocorridoEm.getTime() - b.ocorridoEm.getTime())
       .map((movimento) =>
@@ -75,6 +85,12 @@ export function paraLinha(sessao: SessaoCaixa): SessaoLinha {
     totalVendido: sessao.totalVendido.centavos,
     quantidadeVendas: sessao.quantidadeVendas,
     contadoEmDinheiro: ouNulo(sessao.conferencia?.contadoEmDinheiro.centavos),
+    descontosConcedidos: sessao.descontosConcedidos.centavos,
+    quantidadeCancelamentos: sessao.cancelamentos.quantidade,
+    totalCancelado: sessao.cancelamentos.total.centavos,
+    quantidadeDevolucoes: sessao.devolucoes.quantidade,
+    totalDevolvido: sessao.devolucoes.total.centavos,
+    devolvidoEmDinheiro: sessao.devolvidoEmDinheiro.centavos,
   };
 }
 

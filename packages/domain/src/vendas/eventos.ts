@@ -38,9 +38,35 @@ export interface VendaCancelada extends DomainEvent {
   readonly tipo: "VendaCancelada";
   readonly numero: number;
   readonly motivo: string;
-  readonly autorizadoPorId: Identificador;
+  /** Quem pediu o cancelamento — o operador da venda, quase sempre. */
+  readonly solicitadoPorId: Identificador;
+  /** Quem liberou, quando o pedido passou da alçada de quem pediu. */
+  readonly autorizadoPorId?: Identificador | undefined;
   readonly total: Dinheiro;
   readonly itens: readonly ItemVendido[];
 }
 
-export type EventoVenda = VendaFinalizada | VendaCancelada;
+/** Item devolvido, no formato que o estoque precisa. */
+export interface ItemDevolvidoNoEvento {
+  readonly produtoId: Identificador;
+  readonly quantidade: Quantidade;
+  /** `PERDA` quando o produto voltou sem condição de venda. */
+  readonly destino: "ESTOQUE" | "PERDA";
+}
+
+/**
+ * Devolução registrada.
+ *
+ * Não altera a venda — ela continua finalizada, com o valor que teve. A
+ * devolução é um fato **posterior**, com data, valor e responsável próprios,
+ * que é como o fechamento e a nota fiscal de devolução precisam enxergá-la.
+ */
+export interface DevolucaoRegistrada extends DomainEvent {
+  readonly tipo: "DevolucaoRegistrada";
+  readonly vendaId: Identificador;
+  readonly valor: Dinheiro;
+  readonly formaReembolso: string;
+  readonly itens: readonly ItemDevolvidoNoEvento[];
+}
+
+export type EventoVenda = VendaFinalizada | VendaCancelada | DevolucaoRegistrada;

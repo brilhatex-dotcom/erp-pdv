@@ -244,3 +244,57 @@ describe("Quantidade", () => {
     });
   });
 });
+
+describe("Quantidade — conversão entre gramas e quilos", () => {
+  it("🔑 350 g viram exatamente 0,350 kg", () => {
+    const gramas = Quantidade.de("350", "G").unwrap();
+
+    expect(gramas.converterMedida("KG").unwrap().formatar()).toBe("0,35 kg");
+    expect(gramas.converterMedida("KG").unwrap().milesimos).toBe(350n);
+  });
+
+  it("1,250 kg viram 1.250 g", () => {
+    const quilos = Quantidade.de("1,250", "KG").unwrap();
+
+    expect(quilos.converterMedida("G").unwrap().formatar()).toBe("1250 g");
+  });
+
+  it("litro e mililitro também convertem", () => {
+    expect(
+      Quantidade.de("0,5", "L").unwrap().converterMedida("ML").unwrap().formatar(),
+    ).toBe("500 mL");
+    expect(
+      Quantidade.de("250", "ML").unwrap().converterMedida("L").unwrap().formatar(),
+    ).toBe("0,25 L");
+  });
+
+  it("grama fracionada arredonda para o grama mais próximo, meio para cima", () => {
+    expect(
+      Quantidade.de("0,5", "G").unwrap().converterMedida("KG").unwrap().milesimos,
+    ).toBe(1n);
+    expect(
+      Quantidade.de("0,4", "G").unwrap().converterMedida("KG").unwrap().milesimos,
+    ).toBe(0n);
+    expect(
+      Quantidade.de("-0,5", "G").unwrap().converterMedida("KG").unwrap().milesimos,
+    ).toBe(-1n);
+  });
+
+  it("mesma unidade devolve o próprio valor", () => {
+    const quilos = Quantidade.de("2", "KG").unwrap();
+
+    expect(quilos.converterMedida("KG").unwrap()).toBe(quilos);
+  });
+
+  it("não converte peso em contagem", () => {
+    const resultado = Quantidade.de("1", "KG").unwrap().converterMedida("UN");
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("QUANTIDADE_CONVERSAO_INDISPONIVEL");
+      expect(resultado.error.mensagem).toBe(
+        "Não dá para converter quilograma em unidade.",
+      );
+    }
+  });
+});

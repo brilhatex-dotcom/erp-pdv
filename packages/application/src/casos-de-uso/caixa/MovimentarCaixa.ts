@@ -9,6 +9,7 @@ import {
   type Result,
 } from "@erp/domain";
 
+import { auditar } from "../../auditoria/RegistroAuditoria.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
@@ -80,15 +81,32 @@ export class RegistrarSangria {
 
       if (decisao.isErr()) return err(decisao.error);
 
+      const { autorizadoPorId } = decisao.unwrap();
+      const agora = this.relogio.agora();
+
+      // Quem liberou vai **no movimento**, e não só no evento da outbox: é ao
+      // lado do valor que se procura quando a gaveta não bate.
       const movimento = sessao.registrarSangria(
         this.geradorId.proximo(),
         entrada.valor,
         entrada.motivo,
         entrada.operadorId,
-        this.relogio.agora(),
+        agora,
+        autorizadoPorId,
       );
 
       if (movimento.isErr()) return err(movimento.error);
+
+      await auditar(repositorios, this.geradorId, {
+        ocorridoEm: agora,
+        acao: "SANGRIA",
+        usuarioId: entrada.operadorId,
+        autorizadoPorId,
+        descricao: `Sangria de ${entrada.valor.formatar()}: ${movimento.unwrap().motivo}`,
+        entidade: "sessao_caixa",
+        entidadeId: sessao.id,
+        dados: { valor: entrada.valor.centavos.toString() },
+      });
 
       await repositorios.caixas.salvar(sessao);
       await repositorios.outbox.enfileirar(sessao.coletarEventos());
@@ -113,15 +131,27 @@ export class RegistrarSuprimento {
 
       if (sessao === undefined) return err(semCaixa());
 
+      const agora = this.relogio.agora();
+
       const movimento = sessao.registrarSuprimento(
         this.geradorId.proximo(),
         entrada.valor,
         entrada.motivo,
         entrada.operadorId,
-        this.relogio.agora(),
+        agora,
       );
 
       if (movimento.isErr()) return err(movimento.error);
+
+      await auditar(repositorios, this.geradorId, {
+        ocorridoEm: agora,
+        acao: "SUPRIMENTO",
+        usuarioId: entrada.operadorId,
+        descricao: `Suprimento de ${entrada.valor.formatar()}: ${movimento.unwrap().motivo}`,
+        entidade: "sessao_caixa",
+        entidadeId: sessao.id,
+        dados: { valor: entrada.valor.centavos.toString() },
+      });
 
       await repositorios.caixas.salvar(sessao);
       await repositorios.outbox.enfileirar(sessao.coletarEventos());

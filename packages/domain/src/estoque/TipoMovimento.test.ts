@@ -11,6 +11,7 @@ import {
 const ENTRADAS: readonly TipoMovimento[] = [
   "ENTRADA",
   "DEVOLUCAO_CLIENTE",
+  "ESTORNO_VENDA",
   "AJUSTE_POSITIVO",
   "TRANSFERENCIA_ENTRADA",
 ];
@@ -38,7 +39,7 @@ describe("TipoMovimento", () => {
 
   it("cobre todos os tipos declarados", () => {
     // Se um tipo novo for adicionado sem direção, este teste falha.
-    expect(ENTRADAS.length + SAIDAS.length).toBe(9);
+    expect(ENTRADAS.length + SAIDAS.length).toBe(10);
   });
 
   it("apenas ENTRADA afeta o custo médio", () => {

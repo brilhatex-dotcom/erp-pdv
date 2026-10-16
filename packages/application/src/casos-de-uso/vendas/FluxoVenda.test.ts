@@ -1,9 +1,10 @@
 import {
+  type AlteracaoConfiguracaoLoja,
   Cliente,
   CodigoBarras,
+  ConfiguracaoLoja,
   Dinheiro,
   Identificador,
-  LAYOUT_BALANCA_PADRAO,
   Produto,
   Quantidade,
   SessaoCaixa,
@@ -12,6 +13,7 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { montarAmbiente } from "../../testes/dubles.js";
+import { AutorizarOperacao } from "../acesso/AutorizarOperacao.js";
 import { AdicionarItemPorCodigo } from "./AdicionarItemPorCodigo.js";
 import { FinalizarVenda } from "./FinalizarVenda.js";
 import { IniciarVenda } from "./IniciarVenda.js";
@@ -27,6 +29,15 @@ const AGORA = new Date("2026-07-30T12:00:00.000Z");
 
 function reais(valor: string): Dinheiro {
   return Dinheiro.deReais(valor).unwrap();
+}
+
+/** Configuração gravada pela loja: a mista de fábrica com o que o teste muda. */
+function configuracao(alteracao: AlteracaoConfiguracaoLoja): ConfiguracaoLoja {
+  const atual = ConfiguracaoLoja.padrao(
+    Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f60ff").unwrap(),
+  );
+  atual.alterar(alteracao).unwrap();
+  return atual;
 }
 
 /** Refrigerante com EAN — produto unitário comum. */
@@ -91,8 +102,19 @@ function montar() {
       ambiente.relogio,
       ambiente.geradorId,
     ),
-    adicionarItem: new AdicionarItemPorCodigo(ambiente.unitOfWork, LAYOUT_BALANCA_PADRAO),
-    registrarPagamento: new RegistrarPagamento(ambiente.unitOfWork),
+    adicionarItem: new AdicionarItemPorCodigo(
+      ambiente.unitOfWork,
+      ambiente.geradorId,
+      ambiente.relogio,
+      new AutorizarOperacao(ambiente.relogio, ambiente.hasher),
+    ),
+    registrarPagamento: new RegistrarPagamento(
+      ambiente.unitOfWork,
+      ambiente.geradorId,
+      ambiente.relogio,
+      new AutorizarOperacao(ambiente.relogio, ambiente.hasher),
+      { permiteSimulacao: false },
+    ),
     finalizarVenda: new FinalizarVenda(
       ambiente.unitOfWork,
       ambiente.relogio,
@@ -117,16 +139,19 @@ describe("Fluxo de venda — caminho feliz completo", () => {
 
     await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "7891000315507",
     });
     await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "7891000315507",
     });
 
     const pagamento = (
       await sistema.registrarPagamento.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         forma: "DINHEIRO",
         valor: reais("20,00"),
       })
@@ -144,7 +169,9 @@ describe("Fluxo de venda — caminho feliz completo", () => {
     expect(fechada.troco.formatar()).toBe("R$ 0,20");
 
     // Estoque baixado: um movimento de saída por item.
-    expect(sistema.estoque.movimentos).toHaveLength(2);
+    // A segunda bipada somou na mesma linha: um item de 2 un, uma baixa de 2.
+    expect(sistema.estoque.movimentos).toHaveLength(1);
+    expect(sistema.estoque.movimentos[0]?.quantidade.formatar()).toBe("2 un");
     expect(sistema.estoque.movimentos.every((m) => m.tipo === "SAIDA")).toBe(true);
     expect(sistema.estoque.movimentos[0]?.origem.tipo).toBe("VENDA");
 
@@ -162,9 +189,14 @@ describe("Fluxo de venda — caminho feliz completo", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "PIX",
       valor: reais("9,90"),
     });
@@ -189,9 +221,10 @@ describe("Fluxo de venda — etiqueta de balança", () => {
     const item = (
       await sistema.adicionarItem.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         codigo: "2012345012509",
       })
-    ).unwrap();
+    ).unwrap().item;
 
     expect(item.descricao).toBe("Picanha Bovina");
     expect(item.quantidade.formatar()).toBe("1,25 kg");
@@ -207,6 +240,7 @@ describe("Fluxo de venda — etiqueta de balança", () => {
     // 2 · 999999 · 01250 · dígito
     const resultado = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "2999999012508",
     });
 
@@ -224,6 +258,7 @@ describe("Fluxo de venda — etiqueta de balança", () => {
 
     const resultado = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "2012345012500",
     });
 
@@ -244,7 +279,11 @@ describe("Fluxo de venda — busca de produto", () => {
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
-    const item = await sistema.adicionarItem.executar({ vendaId: venda.id, codigo });
+    const item = await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo,
+    });
 
     expect(item.isOk()).toBe(true);
   });
@@ -257,9 +296,10 @@ describe("Fluxo de venda — busca de produto", () => {
     const item = (
       await sistema.adicionarItem.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         codigo: "7891000315507",
       })
-    ).unwrap();
+    ).unwrap().item;
 
     expect(item.descricao).toBe("REFRI COLA 2L");
   });
@@ -272,9 +312,10 @@ describe("Fluxo de venda — busca de produto", () => {
     const item = (
       await sistema.adicionarItem.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         codigo: "REF001",
       })
-    ).unwrap();
+    ).unwrap().item;
 
     expect(item.quantidade.formatar()).toBe("1 un");
   });
@@ -287,10 +328,11 @@ describe("Fluxo de venda — busca de produto", () => {
     const item = (
       await sistema.adicionarItem.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         codigo: "REF001",
         quantidade: Quantidade.de("6", "UN").unwrap(),
       })
-    ).unwrap();
+    ).unwrap().item;
 
     expect(item.total.formatar()).toBe("R$ 59,40");
   });
@@ -302,12 +344,15 @@ describe("Fluxo de venda — busca de produto", () => {
 
     const resultado = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "0000000000000",
     });
 
     expect(resultado.isErr()).toBe(true);
     if (resultado.isErr()) {
-      expect(resultado.error.mensagem).toBe("Produto não encontrado. Confira o código.");
+      expect(resultado.error.mensagem).toBe(
+        "Produto não encontrado. Confira o código ou procure pelo nome.",
+      );
     }
   });
 
@@ -322,6 +367,7 @@ describe("Fluxo de venda — busca de produto", () => {
 
     const resultado = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "REF001",
     });
 
@@ -334,6 +380,7 @@ describe("Fluxo de venda — busca de produto", () => {
   it("recusa venda inexistente", async () => {
     const resultado = await sistema.adicionarItem.executar({
       vendaId: CLIENTE,
+      operadorId: OPERADOR,
       codigo: "REF001",
     });
 
@@ -352,6 +399,7 @@ describe("Fluxo de venda — controle de estoque opcional", () => {
 
     const item = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "REF001",
     });
 
@@ -359,14 +407,15 @@ describe("Fluxo de venda — controle de estoque opcional", () => {
   });
 
   it("bloqueia quando a loja exige saldo", async () => {
+    sistema.configuracao.configuracao = configuracao({ vendaSemEstoque: "BLOQUEAR" });
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
     const resultado = await sistema.adicionarItem.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "REF001",
-      exigirEstoque: true,
     });
 
     expect(resultado.isErr()).toBe(true);
@@ -413,9 +462,14 @@ describe("Fluxo de venda — caixa", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "DINHEIRO",
       valor: reais("9,90"),
     });
@@ -449,9 +503,14 @@ describe("Fluxo de venda — crediário", () => {
       })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
@@ -480,9 +539,14 @@ describe("Fluxo de venda — crediário", () => {
       })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
@@ -510,11 +574,24 @@ describe("Fluxo de venda — crediário", () => {
       })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("29,70"),
     });
@@ -542,6 +619,15 @@ describe("Fluxo de venda — crediário", () => {
       "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f6099",
     ).unwrap();
 
+    sistema.clientes.adicionar(
+      Cliente.criar({
+        id: outroCliente,
+        nome: "Cliente Que Vai Sumir",
+        tipoPessoa: "FISICA",
+        limiteCredito: reais("100,00"),
+      }).unwrap(),
+    );
+
     const venda = (
       await sistema.iniciarVenda.executar({
         estacaoId: ESTACAO,
@@ -550,12 +636,20 @@ describe("Fluxo de venda — crediário", () => {
       })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
+
+    // Some entre o pagamento — que conferiu o limite dele — e a conclusão.
+    sistema.clientes.itens.delete(outroCliente.valor);
 
     const fechada = await sistema.finalizarVenda.executar({ vendaId: venda.id });
 
@@ -574,9 +668,14 @@ describe("Fluxo de venda — crediário", () => {
       })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
@@ -594,9 +693,14 @@ describe("Fluxo de venda — crediário", () => {
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "DINHEIRO",
       valor: reais("10,00"),
     });
@@ -610,10 +714,15 @@ describe("Fluxo de venda — crediário", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
 
     const resultado = await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "CREDIARIO",
       valor: reais("9,90"),
     });
@@ -643,9 +752,14 @@ describe("Fluxo de venda — recusas na finalização", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await sistema.registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "DINHEIRO",
       valor: reais("5,00"),
     });
@@ -663,7 +777,11 @@ describe("Fluxo de venda — recusas na finalização", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
 
     await sistema.finalizarVenda.executar({ vendaId: venda.id });
 
@@ -684,6 +802,7 @@ describe("Fluxo de venda — recusas na finalização", () => {
   it("recusa pagamento em venda inexistente", async () => {
     const resultado = await sistema.registrarPagamento.executar({
       vendaId: CLIENTE,
+      operadorId: OPERADOR,
       forma: "DINHEIRO",
       valor: reais("10,00"),
     });
@@ -698,7 +817,11 @@ describe("Fluxo de venda — recusas na finalização", () => {
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await sistema.adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await sistema.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     sistema.caixas.itens.clear();
 
     const resultado = await sistema.finalizarVenda.executar({ vendaId: venda.id });
@@ -746,15 +869,20 @@ describe("Fluxo de venda — balança com preço embutido", () => {
   } as const;
 
   it("deduz a quantidade dividindo o preço da etiqueta pelo preço unitário", async () => {
-    const adicionar = new AdicionarItemPorCodigo(sistema.unitOfWork, LAYOUT_PRECO);
+    sistema.configuracao.configuracao = configuracao({ layoutBalanca: LAYOUT_PRECO });
+    const adicionar = sistema.adicionarItem;
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
     // 2 · 012345 · 09988 · 6 → R$ 99,88 de picanha a R$ 79,90/kg → 1,250 kg
     const item = (
-      await adicionar.executar({ vendaId: venda.id, codigo: "2012345099883" })
-    ).unwrap();
+      await adicionar.executar({
+        vendaId: venda.id,
+        operadorId: OPERADOR,
+        codigo: "2012345099883",
+      })
+    ).unwrap().item;
 
     expect(item.quantidade.formatar()).toBe("1,25 kg");
   });
@@ -773,13 +901,15 @@ describe("Fluxo de venda — balança com preço embutido", () => {
     }).unwrap();
     sistema.produtos.adicionar(semPreco);
 
-    const adicionar = new AdicionarItemPorCodigo(sistema.unitOfWork, LAYOUT_PRECO);
+    sistema.configuracao.configuracao = configuracao({ layoutBalanca: LAYOUT_PRECO });
+    const adicionar = sistema.adicionarItem;
     const venda = (
       await sistema.iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
     const resultado = await adicionar.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       codigo: "2012345099883",
     });
 

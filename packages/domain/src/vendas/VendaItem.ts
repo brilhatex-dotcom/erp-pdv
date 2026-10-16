@@ -18,6 +18,16 @@ export interface DadosItemVenda {
   readonly descricao: string;
   readonly quantidade: Quantidade;
   readonly precoUnitario: Dinheiro;
+  /**
+   * Custo da unidade **no instante da venda**, congelado como o preço.
+   *
+   * É o que permite responder "quanto eu ganhei em julho" em dezembro: o custo
+   * do cadastro muda a cada compra, e calcular a margem de uma venda antiga com
+   * o custo de hoje produz um lucro que nunca existiu. Ausente quando a loja
+   * ainda não informou custo nenhum — e aí a margem dessa venda é desconhecida,
+   * não zero.
+   */
+  readonly custoUnitario?: Dinheiro | undefined;
 }
 
 /**
@@ -33,6 +43,7 @@ export class VendaItem {
   readonly #descricao: string;
   #quantidade: Quantidade;
   readonly #precoUnitario: Dinheiro;
+  readonly #custoUnitario: Dinheiro | undefined;
   #desconto: Dinheiro;
   #descontoRateado: Dinheiro;
 
@@ -42,6 +53,7 @@ export class VendaItem {
     this.#descricao = dados.descricao.trim();
     this.#quantidade = dados.quantidade;
     this.#precoUnitario = dados.precoUnitario;
+    this.#custoUnitario = dados.custoUnitario;
     this.#desconto = Dinheiro.zero();
     this.#descontoRateado = Dinheiro.zero();
   }
@@ -73,6 +85,15 @@ export class VendaItem {
         new ErroValidacao(
           "ITEM_PRECO_NEGATIVO",
           "O preço do item não pode ser negativo.",
+        ),
+      );
+    }
+
+    if (dados.custoUnitario?.ehNegativo() === true) {
+      return err(
+        new ErroValidacao(
+          "ITEM_CUSTO_NEGATIVO",
+          "O custo do item não pode ser negativo.",
         ),
       );
     }
@@ -127,6 +148,47 @@ export class VendaItem {
   /** Parcela do desconto da venda que coube a este item. */
   get descontoRateado(): Dinheiro {
     return this.#descontoRateado;
+  }
+
+  /** Custo da unidade congelado na venda. Ausente quando desconhecido. */
+  get custoUnitario(): Dinheiro | undefined {
+    return this.#custoUnitario;
+  }
+
+  /**
+   * Custo da quantidade vendida — a parcela deste item no CMV.
+   *
+   * Arredonda como o preço (meio-para-cima), pela mesma conta: custo × peso em
+   * milésimos. Ausente quando o custo é desconhecido, para que o relatório
+   * diga "margem estimada sem X itens" em vez de tratá-los como custo zero e
+   * inflar o lucro.
+   */
+  get custoTotal(): Dinheiro | undefined {
+    return this.#custoUnitario?.escalar(this.#quantidade.milesimos, 1000n);
+  }
+
+  /**
+   * Se uma nova leitura do mesmo produto deve **somar** a este item.
+   *
+   * É o que deixa a rebipada previsível: a segunda leitura do refrigerante vira
+   * "2 un" na mesma linha, em vez de uma linha nova que o operador precisa
+   * conferir. Mas só soma quando não há nada que distinga as duas leituras:
+   *
+   * - **unidade inteira** — cada pesagem é uma embalagem diferente, com etiqueta
+   *   própria; juntá-las esconderia do cliente qual pacote pesou quanto;
+   * - **mesmo preço** — uma promoção que começou entre as duas leituras não
+   *   pode ser aplicada retroativamente à primeira;
+   * - **sem desconto próprio** — o desconto foi calculado sobre a quantidade
+   *   antiga, e somar quantidade a ele mudaria o percentual sem ninguém pedir.
+   */
+  aceitaSomar(dados: DadosItemVenda): boolean {
+    return (
+      this.#produtoId.equals(dados.produtoId) &&
+      !this.#quantidade.unidade.fracionavel &&
+      this.#quantidade.unidade.codigo === dados.quantidade.unidade.codigo &&
+      this.#precoUnitario.equals(dados.precoUnitario) &&
+      this.#desconto.ehZero()
+    );
   }
 
   /** Preço × quantidade, antes de qualquer desconto. */

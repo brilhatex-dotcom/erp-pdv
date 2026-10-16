@@ -1,3 +1,4 @@
+import { ehEntrada } from "@erp/domain";
 import { normalizarParaBusca } from "@erp/utils";
 
 import type { PrismaClient } from "../gerado/index.js";
@@ -142,14 +143,6 @@ export interface MovimentoDoExtrato {
   readonly ocorridoEm: string;
 }
 
-/** Tipos que somam ao saldo. Espelha `efeitoDoTipo` do domínio. */
-const ENTRADAS: ReadonlySet<string> = new Set([
-  "ENTRADA",
-  "DEVOLUCAO_CLIENTE",
-  "AJUSTE_POSITIVO",
-  "TRANSFERENCIA_ENTRADA",
-]);
-
 /**
  * Extrato de um produto, do mais recente para o mais antigo.
  *
@@ -195,7 +188,9 @@ export async function extratoDeEstoque(
     tipo: linha.tipo,
     quantidade: linha.quantidade.toString(),
     unidade: linha.unidade,
-    efeito: ENTRADAS.has(linha.tipo) ? (1 as const) : (-1 as const),
+    // Do domínio, e não de uma lista copiada aqui: a cópia antiga não conhecia
+    // `ESTORNO_VENDA`, e o extrato mostraria o cancelamento como saída.
+    efeito: ehEntrada(linha.tipo) ? (1 as const) : (-1 as const),
     origemTipo: linha.origemTipo,
     origemDocumentoId: linha.origemDocumentoId ?? undefined,
     usuarioId: linha.usuarioId,

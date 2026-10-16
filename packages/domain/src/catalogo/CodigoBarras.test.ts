@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { CodigoBarras, temDigitoVerificadorValido } from "./CodigoBarras.js";
+import {
+  calcularDigitoVerificador,
+  CodigoBarras,
+  temDigitoVerificadorValido,
+} from "./CodigoBarras.js";
 
 describe("CodigoBarras", () => {
   describe("padrões GS1", () => {
@@ -145,5 +149,19 @@ describe("temDigitoVerificadorValido", () => {
 
   it.each(["7891000315508", "12345671", "123456789013"])("rejeita %s", (codigo) => {
     expect(temDigitoVerificadorValido(codigo)).toBe(false);
+  });
+});
+
+describe("calcularDigitoVerificador", () => {
+  it.each([
+    // EAN-13 real, o mesmo dos testes acima.
+    ["789100031550", 7],
+    // A etiqueta de balança de 350 g do produto 123.
+    ["200012300350", 4],
+    // EAN-8 sem verificador.
+    ["1234567", 0],
+  ])("%s → %s", (semVerificador, esperado) => {
+    expect(calcularDigitoVerificador(semVerificador)).toBe(esperado);
+    expect(temDigitoVerificadorValido(semVerificador + String(esperado))).toBe(true);
   });
 });

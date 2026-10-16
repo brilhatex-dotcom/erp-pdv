@@ -50,20 +50,32 @@ model Produto {
   /// produto não tem tributação, e nada fora do fiscal depende disso (ADR-0016).
   perfilTributarioId String?     @map("perfil_tributario_id") @db.Uuid
   ativo              Boolean     @default(true)
+  /// Milésimos, na unidade base. NULL significa "não acompanhar" — e não zero.
+  estoqueMinimo      BigInt?     @map("estoque_minimo")
+  /// Fornecedor de costume, para a lista de reposição.
+  fornecedorId       String?     @map("fornecedor_id") @db.Uuid
+  imagemId           String?     @map("imagem_id") @db.Uuid
+  /// Aparece como botão no caixa: o pão, a banana, o refrigerante de sempre.
+  botaoRapido        Boolean     @default(false) @map("botao_rapido")
   criadoEm           DateTime    @default(now()) @map("criado_em") @db.Timestamptz(3)
   atualizadoEm       DateTime    @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
-  referencias   ReferenciaProduto[]
-  embalagens    Embalagem[]
-  movimentos    MovimentoEstoque[]
-  saldo         SaldoEstoque?
-  itensVenda    VendaItem[]
-  itensDeCompra ItemNotaCompra[]
+  fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  imagem     Imagem?     @relation(fields: [imagemId], references: [id])
+
+  referencias     ReferenciaProduto[]
+  embalagens      Embalagem[]
+  movimentos      MovimentoEstoque[]
+  saldo           SaldoEstoque?
+  itensVenda      VendaItem[]
+  itensDeCompra   ItemNotaCompra[]
+  itensDevolvidos DevolucaoItem[]
 
   // Só produtos ativos aparecem na busca do PDV; o índice parcial mantém a
   // estrutura pequena e o plano previsível (RNF-02).
   @@index([descricaoBusca], map: "idx_produtos_busca")
   @@index([ativo], map: "idx_produtos_ativo")
+  @@index([fornecedorId], map: "idx_produtos_fornecedor")
   @@map("produtos")
 }
 
@@ -116,6 +128,7 @@ model Embalagem {
 enum TipoMovimentoEstoque {
   ENTRADA
   DEVOLUCAO_CLIENTE
+  ESTORNO_VENDA
   AJUSTE_POSITIVO
   TRANSFERENCIA_ENTRADA
   SAIDA
@@ -128,6 +141,7 @@ enum TipoMovimentoEstoque {
 enum OrigemMovimentoEstoque {
   VENDA
   COMPRA
+  DEVOLUCAO
   INVENTARIO
   TRANSFERENCIA
   MANUAL
@@ -202,14 +216,29 @@ model SessaoCaixa {
   // aqui pelo mesmo motivo de `saldos_estoque`: reabrir a gaveta não pode
   // depender de somar as 2.000 vendas do dia (RNF-01).
   /// Centavos — troco devolvido acumulado.
-  trocoDevolvido   BigInt @default(0) @map("troco_devolvido")
+  trocoDevolvido          BigInt @default(0) @map("troco_devolvido")
   /// Centavos — total vendido na sessão.
-  totalVendido     BigInt @default(0) @map("total_vendido")
-  quantidadeVendas Int    @default(0) @map("quantidade_vendas")
+  totalVendido            BigInt @default(0) @map("total_vendido")
+  quantidadeVendas        Int    @default(0) @map("quantidade_vendas")
+  /// Centavos — descontos das vendas que ficaram de pé.
+  descontosConcedidos     BigInt @default(0) @map("descontos_concedidos")
+  quantidadeCancelamentos Int    @default(0) @map("quantidade_cancelamentos")
+  /// Centavos.
+  totalCancelado          BigInt @default(0) @map("total_cancelado")
+  quantidadeDevolucoes    Int    @default(0) @map("quantidade_devolucoes")
+  /// Centavos — todas as devoluções do turno, em qualquer forma.
+  totalDevolvido          BigInt @default(0) @map("total_devolvido")
+  /// Centavos — a parte que saiu da gaveta em espécie.
+  devolvidoEmDinheiro     BigInt @default(0) @map("devolvido_em_dinheiro")
+
+  /// Chave estrangeira criada `NOT VALID` na migração `balcao_completo`: vale
+  /// para toda sessão nova, sem reprovar a instalação por uma linha antiga.
+  operador Usuario @relation("SessaoCaixaOperador", fields: [operadorId], references: [id])
 
   movimentos MovimentoCaixa[]
   recebidos  RecebimentoCaixa[]
   vendas     Venda[]
+  devolucoes Devolucao[]
 
   // Só pode existir uma sessão aberta por estação — garantido por índice
   // parcial na migração, porque o Prisma não expressa índice condicional.
@@ -281,10 +310,22 @@ model Venda {
   abertaEm      DateTime    @map("aberta_em") @db.Timestamptz(3)
   finalizadaEm  DateTime?   @map("finalizada_em") @db.Timestamptz(3)
 
-  sessao     SessaoCaixa     @relation(fields: [sessaoCaixaId], references: [id])
-  itens      VendaItem[]
-  pagamentos Pagamento[]
-  importada  VendaImportada?
+  /// Venda guardada para depois. NULL quando está na frente do operador.
+  suspensaEm      DateTime? @map("suspensa_em") @db.Timestamptz(3)
+  rotuloSuspensao String?   @map("rotulo_suspensao") @db.VarChar(40)
+
+  canceladaEm                 DateTime? @map("cancelada_em") @db.Timestamptz(3)
+  motivoCancelamento          String?   @map("motivo_cancelamento") @db.VarChar(200)
+  canceladaPorId              String?   @map("cancelada_por_id") @db.Uuid
+  cancelamentoAutorizadoPorId String?   @map("cancelamento_autorizado_por_id") @db.Uuid
+
+  sessao                    SessaoCaixa     @relation(fields: [sessaoCaixaId], references: [id])
+  canceladaPor              Usuario?        @relation("VendaCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: Restrict)
+  cancelamentoAutorizadoPor Usuario?        @relation("VendaCancelamentoAutorizadoPor", fields: [cancelamentoAutorizadoPorId], references: [id], onDelete: Restrict)
+  itens                     VendaItem[]
+  pagamentos                Pagamento[]
+  importada                 VendaImportada?
+  devolucoes                Devolucao[]
 
   // Numeração fiscal é sequencial e sem lacuna POR ESTAÇÃO (uma série por PDV).
   @@unique([estacaoId, numero], map: "uq_vendas_estacao_numero")
@@ -294,21 +335,24 @@ model Venda {
 }
 
 model VendaItem {
-  vendaId         String @map("venda_id") @db.Uuid
+  vendaId         String  @map("venda_id") @db.Uuid
   /// Sequencial dentro da venda. Vira `nItem` no XML fiscal.
   numero          Int
-  produtoId       String @map("produto_id") @db.Uuid
+  produtoId       String  @map("produto_id") @db.Uuid
   /// Congelada no momento da venda — não referencia o cadastro.
-  descricao       String @db.VarChar(120)
+  descricao       String  @db.VarChar(120)
   /// Milésimos.
   quantidade      BigInt
-  unidade         String @db.VarChar(6)
+  unidade         String  @db.VarChar(6)
   /// Centavos — congelado no momento da venda.
-  precoUnitario   BigInt @map("preco_unitario")
+  precoUnitario   BigInt  @map("preco_unitario")
   /// Centavos — desconto dado neste item.
-  desconto        BigInt @default(0)
+  desconto        BigInt  @default(0)
   /// Centavos — parcela do desconto da venda que coube a este item.
-  descontoRateado BigInt @default(0) @map("desconto_rateado")
+  descontoRateado BigInt  @default(0) @map("desconto_rateado")
+  /// Centavos — custo da unidade **no instante da venda**. NULL quando a loja
+  /// ainda não tinha custo nenhum: margem desconhecida, não margem cheia.
+  custoUnitario   BigInt? @map("custo_unitario")
 
   venda   Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
   produto Produto @relation(fields: [produtoId], references: [id])
@@ -327,10 +371,16 @@ model Pagamento {
   valor       BigInt
   autorizacao String? @db.VarChar(40)
   parcelas    Int     @default(1)
+  /// Quem confirmou: MANUAL (operador), INTEGRACAO (TEF/PSP) ou SIMULADA
+  /// (só no treinamento). CHECK na migração.
+  confirmacao String  @default("MANUAL") @db.VarChar(12)
+  /// Gerada pela estação antes do envio: o reenvio não duplica o pagamento.
+  chave       String? @db.VarChar(64)
 
   venda Venda @relation(fields: [vendaId], references: [id], onDelete: Cascade)
 
   @@id([vendaId, ordem])
+  @@unique([vendaId, chave], map: "uq_pagamentos_venda_chave")
   @@map("pagamentos")
 }
 
@@ -437,6 +487,15 @@ model Usuario {
   estacoes EstacaoPermitida[]
   sessoes  SessaoAcesso[]
 
+  sessoesDeCaixa           SessaoCaixa[]       @relation("SessaoCaixaOperador")
+  vendasCanceladas         Venda[]             @relation("VendaCanceladaPor")
+  cancelamentosAutorizados Venda[]             @relation("VendaCancelamentoAutorizadoPor")
+  devolucoesRegistradas    Devolucao[]         @relation("DevolucaoUsuario")
+  devolucoesAutorizadas    Devolucao[]         @relation("DevolucaoAutorizadaPor")
+  registrosDeAuditoria     RegistroAuditoria[] @relation("AuditoriaUsuario")
+  autorizacoesNaAuditoria  RegistroAuditoria[] @relation("AuditoriaAutorizadoPor")
+  execucoesDeBackup        ExecucaoBackup[]
+
   @@index([papelId], map: "idx_usuarios_papel")
   @@map("usuarios")
 }
@@ -496,8 +555,13 @@ model Categoria {
   /// do relatório sem que ninguém percebesse na tela.
   nomeBusca    String   @unique @map("nome_busca")
   ativa        Boolean  @default(true)
+  /// Emoji do botão no caixa — "🍞 Pães". A foto, quando há, vence.
+  icone        String?  @db.VarChar(16)
+  imagemId     String?  @map("imagem_id") @db.Uuid
   criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
   atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  imagem Imagem? @relation(fields: [imagemId], references: [id])
 
   @@map("categorias")
 }
@@ -604,6 +668,7 @@ model Fornecedor {
   atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
   notasDeCompra NotaDeCompra[]
+  produtos      Produto[]
 
   @@index([razaoSocialBusca(ops: raw("text_pattern_ops"))], map: "ix_fornecedor_razao_busca", type: BTree)
   @@map("fornecedores")
@@ -797,4 +862,171 @@ enum OrigemTitulo {
 enum TipoBaixa {
   PAGAMENTO
   ESTORNO
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Balcão completo — configuração, devolução, auditoria, imagens e backup
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Como a loja vende. **Uma linha** por instalação, como a empresa (ADR-0024).
+///
+/// Os valores enumerados ficam em texto com CHECK na migração, como `forma` em
+/// `pagamentos`: o domínio fecha a lista, e um enum do PostgreSQL só cresceria
+/// com `ALTER TYPE`, que não se desfaz numa reversão.
+model ConfiguracaoLoja {
+  id                   String   @id @db.Uuid
+  segmento             String   @db.VarChar(12)
+  recursos             String[]
+  vendaSemEstoque      String   @default("PERMITIR") @map("venda_sem_estoque") @db.VarChar(10)
+  larguraCupom         Int      @default(80) @map("largura_cupom")
+  impressaoComprovante String   @default("SEMPRE") @map("impressao_comprovante") @db.VarChar(10)
+  balancaPrefixos      String[] @default(["2"]) @map("balanca_prefixos")
+  balancaTamanhoCodigo Int      @default(6) @map("balanca_tamanho_codigo")
+  balancaConteudo      String   @default("PESO") @map("balanca_conteudo") @db.VarChar(5)
+  balancaCasasDecimais Int      @default(3) @map("balanca_casas_decimais")
+  /// Sempre `true`. Existe só para o índice único garantir a linha única.
+  unica                Boolean  @unique @default(true)
+  criadoEm             DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+  atualizadoEm         DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@map("configuracao_loja")
+}
+
+/// Devolução de mercadoria, ligada à venda original. **Append-only**: devolução
+/// errada se corrige com outra operação, nunca reescrevendo esta.
+model Devolucao {
+  id              String   @id @db.Uuid
+  vendaId         String   @map("venda_id") @db.Uuid
+  /// Congelado: é o número que o cliente leu no cupom.
+  numeroVenda     Int      @map("numero_venda")
+  formaReembolso  String   @map("forma_reembolso") @db.VarChar(12)
+  motivo          String   @db.VarChar(200)
+  usuarioId       String   @map("usuario_id") @db.Uuid
+  autorizadoPorId String?  @map("autorizado_por_id") @db.Uuid
+  /// Caixa de onde saiu o dinheiro. NULL quando o reembolso não passou pela gaveta.
+  sessaoCaixaId   String?  @map("sessao_caixa_id") @db.Uuid
+  ocorridaEm      DateTime @map("ocorrida_em") @db.Timestamptz(3)
+
+  venda         Venda           @relation(fields: [vendaId], references: [id])
+  usuario       Usuario         @relation("DevolucaoUsuario", fields: [usuarioId], references: [id])
+  autorizadoPor Usuario?        @relation("DevolucaoAutorizadaPor", fields: [autorizadoPorId], references: [id], onDelete: Restrict)
+  sessao        SessaoCaixa?    @relation(fields: [sessaoCaixaId], references: [id], onDelete: Restrict)
+  itens         DevolucaoItem[]
+
+  @@index([vendaId], map: "idx_devolucoes_venda")
+  @@index([sessaoCaixaId], map: "idx_devolucoes_sessao")
+  @@index([ocorridaEm], map: "idx_devolucoes_data")
+  @@map("devolucoes")
+}
+
+model DevolucaoItem {
+  devolucaoId String @map("devolucao_id") @db.Uuid
+  /// Número do item **na venda original**.
+  numeroItem  Int    @map("numero_item")
+  produtoId   String @map("produto_id") @db.Uuid
+  descricao   String @db.VarChar(120)
+  /// Milésimos.
+  quantidade  BigInt
+  unidade     String @db.VarChar(6)
+  /// Centavos — o que este item devolveu, já com os descontos que teve.
+  valor       BigInt
+  /// ESTOQUE ou PERDA. CHECK na migração.
+  destino     String @db.VarChar(8)
+
+  devolucao Devolucao @relation(fields: [devolucaoId], references: [id], onDelete: Cascade)
+  produto   Produto   @relation(fields: [produtoId], references: [id])
+
+  @@id([devolucaoId, numeroItem])
+  @@index([produtoId], map: "idx_devolucao_itens_produto")
+  @@map("devolucao_itens")
+}
+
+/// Quem fez o quê no que mexe com dinheiro, estoque e preço. **Append-only**,
+/// gravado na mesma transação da operação: auditoria que pode faltar não prova
+/// nada.
+model RegistroAuditoria {
+  id              String   @id @db.Uuid
+  ocorridoEm      DateTime @map("ocorrido_em") @db.Timestamptz(3)
+  acao            String   @db.VarChar(40)
+  /// NULL nas ações do próprio sistema, como o backup agendado.
+  usuarioId       String?  @map("usuario_id") @db.Uuid
+  autorizadoPorId String?  @map("autorizado_por_id") @db.Uuid
+  /// Escrita para o dono ler: "Desconto de R$ 2,00 (10%) no item 3 da venda 47".
+  descricao       String   @db.VarChar(300)
+  entidade        String?  @db.VarChar(30)
+  entidadeId      String?  @map("entidade_id") @db.Uuid
+  /// Detalhes para diagnóstico. Dinheiro vai como texto de centavos.
+  dados           Json?
+
+  usuario       Usuario? @relation("AuditoriaUsuario", fields: [usuarioId], references: [id], onDelete: Restrict)
+  autorizadoPor Usuario? @relation("AuditoriaAutorizadoPor", fields: [autorizadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([ocorridoEm], map: "idx_auditoria_data")
+  @@index([acao, ocorridoEm], map: "idx_auditoria_acao_data")
+  @@index([usuarioId, ocorridoEm], map: "idx_auditoria_usuario_data")
+  @@index([entidadeId], map: "idx_auditoria_entidade")
+  @@map("registros_auditoria")
+}
+
+/// Foto de produto, de categoria ou o logotipo da loja.
+///
+/// No banco, e não em pasta, para que o backup leve tudo num arquivo só: a
+/// restauração que devolve as vendas e esquece as fotos é a que o lojista só
+/// descobre quando o caixa abre sem botões.
+model Imagem {
+  id       String   @id @db.Uuid
+  /// image/png, image/jpeg ou image/webp — conferido pelos bytes, não pelo nome.
+  tipo     String   @db.VarChar(20)
+  conteudo Bytes
+  bytes    Int
+  /// SHA-256: a mesma foto enviada duas vezes vira uma imagem só.
+  hash     String   @unique @db.VarChar(64)
+  criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
+
+  produtos   Produto[]
+  categorias Categoria[]
+
+  @@map("imagens")
+}
+
+/// Agenda e destino do backup. **Uma linha** por instalação.
+model ConfiguracaoBackup {
+  id             String   @id @db.Uuid
+  /// NULL usa a pasta padrão da instalação.
+  pasta          String?  @db.VarChar(260)
+  /// De quantas em quantas horas. Zero desliga o agendamento.
+  intervaloHoras Int      @default(24) @map("intervalo_horas")
+  aoFecharCaixa  Boolean  @default(true) @map("ao_fechar_caixa")
+  /// Quantos arquivos guardar. Os mais antigos saem.
+  manterUltimos  Int      @default(30) @map("manter_ultimos")
+  unica          Boolean  @unique @default(true)
+  atualizadoEm   DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
+
+  @@map("configuracao_backup")
+}
+
+/// Cada tentativa de backup ou restauração — inclusive as que falharam.
+///
+/// É o que o suporte lê remotamente quando o lojista diz "acho que o backup não
+/// está funcionando", e o que a tela mostra como "último backup: ontem, 23h".
+model ExecucaoBackup {
+  id          String    @id @db.Uuid
+  /// BACKUP ou RESTAURACAO.
+  operacao    String    @db.VarChar(12)
+  /// MANUAL, AGENDADO ou FECHAMENTO.
+  origem      String    @db.VarChar(12)
+  /// EM_ANDAMENTO, CONCLUIDO ou FALHOU.
+  situacao    String    @db.VarChar(14)
+  arquivo     String?   @db.VarChar(260)
+  bytes       BigInt?
+  hash        String?   @db.VarChar(64)
+  erro        String?   @db.VarChar(500)
+  usuarioId   String?   @map("usuario_id") @db.Uuid
+  iniciadaEm  DateTime  @map("iniciada_em") @db.Timestamptz(3)
+  concluidaEm DateTime? @map("concluida_em") @db.Timestamptz(3)
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([iniciadaEm], map: "idx_execucoes_backup_data")
+  @@map("execucoes_backup")
 }

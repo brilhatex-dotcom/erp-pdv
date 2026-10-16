@@ -10,11 +10,14 @@ import {
 } from "@erp/domain";
 
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
+import { imagemAusente } from "./CadastrarCategoria.js";
 
 export interface EntradaAlterarCategoria {
   readonly id: Identificador;
   readonly nome: string;
   readonly ativa: boolean;
+  readonly icone?: string | undefined;
+  readonly imagemId?: Identificador | undefined;
 }
 
 /**
@@ -42,6 +45,18 @@ export class AlterarCategoria {
 
       const renomeada = categoria.renomear(entrada.nome);
       if (renomeada.isErr()) return err(renomeada.error);
+
+      const icone = categoria.definirIcone(entrada.icone);
+      if (icone.isErr()) return err(icone.error);
+
+      if (
+        entrada.imagemId !== undefined &&
+        !(await repositorios.imagens.existe(entrada.imagemId))
+      ) {
+        return err(imagemAusente());
+      }
+
+      categoria.definirImagem(entrada.imagemId);
 
       const homonima = await repositorios.categorias.porNome(categoria.nomeBusca);
 

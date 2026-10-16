@@ -8,6 +8,7 @@ import { AlterarProduto, type EntradaAlterarProduto } from "./AlterarProduto.js"
 import { CadastrarProduto, type EntradaCadastrarProduto } from "./CadastrarProduto.js";
 
 const AUSENTE = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f9999").unwrap();
+const USUARIO = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f9998").unwrap();
 
 function montar() {
   const ambiente = montarAmbiente();
@@ -15,8 +16,16 @@ function montar() {
   return {
     ...ambiente,
     cadastrar: new CadastrarProduto(ambiente.unitOfWork, ambiente.geradorId),
-    alterar: new AlterarProduto(ambiente.unitOfWork, ambiente.relogio),
-    alterarPreco: new AlterarPrecoDoProduto(ambiente.unitOfWork, ambiente.relogio),
+    alterar: new AlterarProduto(
+      ambiente.unitOfWork,
+      ambiente.relogio,
+      ambiente.geradorId,
+    ),
+    alterarPreco: new AlterarPrecoDoProduto(
+      ambiente.unitOfWork,
+      ambiente.relogio,
+      ambiente.geradorId,
+    ),
   };
 }
 
@@ -61,6 +70,7 @@ function alteracaoBase(
     precoVenda: 990n,
     ativo: true,
     podeAlterarPreco: true,
+    usuarioId: USUARIO,
     ...sobrescritas,
   };
 }
@@ -499,6 +509,7 @@ describe("Alteração só do preço", () => {
 
     const alterado = await cenario.alterarPreco.executar({
       id: produto.id,
+      usuarioId: USUARIO,
       precoVenda: 490n,
     });
 
@@ -511,6 +522,7 @@ describe("Alteração só do preço", () => {
 
     const alterado = await cenario.alterarPreco.executar({
       id: produto.id,
+      usuarioId: USUARIO,
       precoVenda: 490n,
     });
 
@@ -522,6 +534,7 @@ describe("Alteração só do preço", () => {
 
     const alterado = await cenario.alterarPreco.executar({
       id: produto.id,
+      usuarioId: USUARIO,
       precoVenda: -100n,
     });
 
@@ -536,6 +549,7 @@ describe("Alteração só do preço", () => {
 
     const alterado = await cenario.alterarPreco.executar({
       id: produto.id,
+      usuarioId: USUARIO,
       precoVenda: 10n ** 20n,
     });
 
@@ -545,6 +559,7 @@ describe("Alteração só do preço", () => {
   it("recusa produto que não existe", async () => {
     const alterado = await cenario.alterarPreco.executar({
       id: AUSENTE,
+      usuarioId: USUARIO,
       precoVenda: 490n,
     });
 

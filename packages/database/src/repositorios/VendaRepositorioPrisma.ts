@@ -43,6 +43,22 @@ export class VendaRepositorioPrisma implements VendaRepository {
   }
 
   /**
+   * Vendas abertas de uma sessão, da mais antiga para a mais nova.
+   *
+   * O filtro principal é a sessão, coberto por `idx_vendas_sessao`; o status
+   * corre sobre as linhas já localizadas, que são as vendas de um turno.
+   */
+  async abertasNaSessao(sessaoCaixaId: Identificador): Promise<readonly Venda[]> {
+    const linhas = await this.prisma.venda.findMany({
+      where: { sessaoCaixaId: sessaoCaixaId.valor, status: "ABERTA" },
+      include: INCLUIR,
+      orderBy: [{ abertaEm: "asc" }, { id: "asc" }],
+    });
+
+    return linhas.map(paraDominio);
+  }
+
+  /**
    * Grava a venda e seus filhos.
    *
    * Itens e pagamentos são regravados por completo: uma venda tem dezenas de

@@ -1,4 +1,11 @@
-import { Dinheiro, ehCodigoFormaPagamento, Identificador } from "@erp/domain";
+import {
+  type CodigoFormaPagamento,
+  Dinheiro,
+  type DomainError,
+  ehCodigoFormaPagamento,
+  Identificador,
+  type Quantidade,
+} from "@erp/domain";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -100,6 +107,17 @@ export function rotasDeSincronizacao(
       /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
       if (operadorId === undefined) return resposta.status(401).send();
 
+      // Tudo o que pode ser recusado por formato é conferido **antes** de a
+      // venda existir: recusar no meio deixaria uma venda pela metade no
+      // servidor.
+      const itens = interpretarItens(dados.itens);
+      if (itens === "INVALIDA") return recusar(resposta, "Quantidade inválida.");
+
+      const pagamentos = interpretarPagamentos(dados.pagamentos);
+      if (pagamentos === "INVALIDA") {
+        return recusar(resposta, "Forma de pagamento não reconhecida.");
+      }
+
       const iniciada = await container.iniciarVenda.executar({
         estacaoId: Identificador.criar(dados.estacaoId).unwrap(),
         operadorId,
@@ -109,38 +127,28 @@ export function rotasDeSincronizacao(
 
       const vendaId = iniciada.unwrap().id;
 
-      for (const item of dados.itens) {
-        const quantidade = interpretarQuantidade(item.quantidade);
-        if (quantidade === "INVALIDA") return recusar(resposta, "Quantidade inválida.");
+      const falha = await remontar(container, vendaId, operadorId, itens, pagamentos);
 
-        const adicionado = await container.adicionarItem.executar({
+      if (falha !== undefined) {
+        // Produto apagado depois da venda offline, preço que subiu e não fecha
+        // mais com o que foi pago: são recusas de negócio, e a estação não deve
+        // reenviar para sempre. A venda que ficou pela metade é descartada —
+        // aberta com itens, ela impediria o fechamento deste caixa.
+        const descartada = await container.cancelarVenda.executar({
           vendaId,
-          codigo: item.codigo,
-          quantidade,
+          operadorId,
+          motivo: `Venda offline recusada na importação: ${falha.mensagem}`,
         });
 
-        // Produto apagado depois da venda offline, estoque insuficiente: são
-        // recusas de negócio, e a estação não deve reenviar para sempre.
-        if (adicionado.isErr()) return responderErro(resposta, adicionado.error);
-      }
-
-      for (const pagamento of dados.pagamentos) {
-        if (!ehCodigoFormaPagamento(pagamento.forma)) {
-          return recusar(resposta, "Forma de pagamento não reconhecida.");
+        if (descartada.isErr()) {
+          requisicao.log.warn(
+            { vendaId: vendaId.valor, codigo: descartada.error.codigo },
+            "venda offline recusada ficou aberta no servidor",
+          );
         }
 
-        const registrado = await container.registrarPagamento.executar({
-          vendaId,
-          forma: pagamento.forma,
-          valor: Dinheiro.deCentavos(BigInt(pagamento.valor)).unwrap(),
-          parcelas: pagamento.parcelas,
-        });
-
-        if (registrado.isErr()) return responderErro(resposta, registrado.error);
+        return responderErro(resposta, falha);
       }
-
-      const finalizada = await container.finalizarVenda.executar({ vendaId });
-      if (finalizada.isErr()) return responderErro(resposta, finalizada.error);
 
       // A marca de importada é gravada **depois** de a venda existir: gravá-la
       // antes faria uma falha no meio do caminho bloquear o reenvio de uma
@@ -156,6 +164,95 @@ export function rotasDeSincronizacao(
       return resposta.status(201).send({ jaExistia: false, vendaId: vendaId.valor });
     },
   );
+}
+
+interface ItemImportado {
+  readonly codigo: string;
+  readonly quantidade: Quantidade | undefined;
+}
+
+interface PagamentoImportado {
+  readonly forma: CodigoFormaPagamento;
+  readonly valor: Dinheiro;
+  readonly parcelas: number | undefined;
+}
+
+function interpretarItens(
+  brutos: z.infer<typeof corpoImportacao>["itens"],
+): readonly ItemImportado[] | "INVALIDA" {
+  const itens: ItemImportado[] = [];
+
+  for (const bruto of brutos) {
+    const quantidade = interpretarQuantidade(bruto.quantidade);
+    if (quantidade === "INVALIDA") return "INVALIDA";
+
+    itens.push({ codigo: bruto.codigo, quantidade });
+  }
+
+  return itens;
+}
+
+function interpretarPagamentos(
+  brutos: z.infer<typeof corpoImportacao>["pagamentos"],
+): readonly PagamentoImportado[] | "INVALIDA" {
+  const pagamentos: PagamentoImportado[] = [];
+
+  for (const bruto of brutos) {
+    if (!ehCodigoFormaPagamento(bruto.forma)) return "INVALIDA";
+
+    pagamentos.push({
+      forma: bruto.forma,
+      // O schema só deixa passar inteiro positivo.
+      valor: Dinheiro.deCentavos(BigInt(bruto.valor)).unwrap(),
+      parcelas: bruto.parcelas,
+    });
+  }
+
+  return pagamentos;
+}
+
+/**
+ * Passa a venda offline pelos casos de uso do balcão.
+ *
+ * Com `origem: "IMPORTACAO"`: a venda **já aconteceu**, e as regras que
+ * existem para impedir uma venda (estoque, limite de fiado) não têm mais o
+ * que impedir — recusar agora só perderia o registro do que saiu da loja.
+ */
+async function remontar(
+  container: Container,
+  vendaId: Identificador,
+  operadorId: Identificador,
+  itens: readonly ItemImportado[],
+  pagamentos: readonly PagamentoImportado[],
+): Promise<DomainError | undefined> {
+  for (const item of itens) {
+    const adicionado = await container.adicionarItem.executar({
+      vendaId,
+      operadorId,
+      codigo: item.codigo,
+      quantidade: item.quantidade,
+      origem: "IMPORTACAO",
+    });
+
+    if (adicionado.isErr()) return adicionado.error;
+  }
+
+  for (const pagamento of pagamentos) {
+    const registrado = await container.registrarPagamento.executar({
+      vendaId,
+      operadorId,
+      forma: pagamento.forma,
+      valor: pagamento.valor,
+      parcelas: pagamento.parcelas,
+      origem: "IMPORTACAO",
+    });
+
+    if (registrado.isErr()) return registrado.error;
+  }
+
+  const finalizada = await container.finalizarVenda.executar({ vendaId });
+
+  return finalizada.isErr() ? finalizada.error : undefined;
 }
 
 function operadorAutenticado(requisicao: FastifyRequest): Identificador | undefined {

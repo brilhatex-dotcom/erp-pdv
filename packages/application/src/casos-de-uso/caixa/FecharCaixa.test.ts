@@ -45,6 +45,7 @@ function montar() {
     total: reais("250,00"),
     troco: reais("50,00"),
     pagamentos: [{ forma: "DINHEIRO", valor: reais("300,00") }],
+    desconto: Dinheiro.zero(),
   });
 
   ambiente.caixas.adicionar(sessao);
@@ -52,7 +53,7 @@ function montar() {
   return {
     ...ambiente,
     sessao,
-    fechar: new FecharCaixa(ambiente.unitOfWork, ambiente.relogio),
+    fechar: new FecharCaixa(ambiente.unitOfWork, ambiente.relogio, ambiente.geradorId),
   };
 }
 
@@ -67,6 +68,7 @@ describe("Fechamento de caixa", () => {
     // Fundo 100 + recebido 300 − troco 50 = 350 esperado.
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
     });
 
@@ -85,6 +87,7 @@ describe("Fechamento de caixa", () => {
     // saída — e a falta continuaria existindo.
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("330,00"),
     });
 
@@ -97,6 +100,7 @@ describe("Fechamento de caixa", () => {
   it("sobra também é divergência", async () => {
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("370,00"),
     });
 
@@ -110,6 +114,7 @@ describe("Fechamento de caixa", () => {
     // falta, e ninguém consegue explicar de onde veio — o dinheiro está certo.
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
       vendasPendentesNaEstacao: 3,
     });
@@ -125,6 +130,7 @@ describe("Fechamento de caixa", () => {
   it("a mensagem concorda em número com uma venda só", async () => {
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
       vendasPendentesNaEstacao: 1,
     });
@@ -137,6 +143,7 @@ describe("Fechamento de caixa", () => {
   it("fila vazia não bloqueia", async () => {
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
       vendasPendentesNaEstacao: 0,
     });
@@ -147,6 +154,7 @@ describe("Fechamento de caixa", () => {
   it("estação sem caixa aberto recusa", async () => {
     const resultado = await sistema.fechar.executar({
       estacaoId: OUTRA_ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
     });
 
@@ -160,11 +168,13 @@ describe("Fechamento de caixa", () => {
     // que só existe uma, e ela já foi fechada.
     await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
     });
 
     const segunda = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
     });
 
@@ -174,6 +184,7 @@ describe("Fechamento de caixa", () => {
   it("contagem negativa é recusada", async () => {
     const resultado = await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("-10,00"),
     });
 
@@ -184,6 +195,7 @@ describe("Fechamento de caixa", () => {
     const { conferencia } = (
       await sistema.fechar.executar({
         estacaoId: ESTACAO,
+        operadorId: OPERADOR,
         contadoEmDinheiro: reais("350,00"),
       })
     ).unwrap();
@@ -198,6 +210,7 @@ describe("Fechamento de caixa", () => {
   it("o fechamento vira evento na outbox", async () => {
     await sistema.fechar.executar({
       estacaoId: ESTACAO,
+      operadorId: OPERADOR,
       contadoEmDinheiro: reais("350,00"),
     });
 

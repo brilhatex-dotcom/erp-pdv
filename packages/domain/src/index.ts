@@ -82,12 +82,15 @@ export {
 export {
   type ConteudoBalanca,
   ehCodigoDeBalanca,
+  gerarEtiquetaBalanca,
   interpretarCodigoBalanca,
   LAYOUT_BALANCA_PADRAO,
   type LayoutBalanca,
   type LeituraBalanca,
+  validarLayoutBalanca,
 } from "./catalogo/CodigoBalanca.js";
 export {
+  calcularDigitoVerificador,
   CodigoBarras,
   type PadraoCodigo,
   temDigitoVerificadorValido,
@@ -138,19 +141,44 @@ export {
   FORMAS_PAGAMENTO,
   obterFormaPagamento,
 } from "./vendas/FormaPagamento.js";
-export { Pagamento } from "./vendas/Pagamento.js";
 export {
+  CONFIRMACOES_PAGAMENTO,
+  type ConfirmacaoPagamento,
+  ehConfirmacaoPagamento,
+  type OpcoesPagamento,
+  Pagamento,
+  pareceNumeroDeCartao,
+} from "./vendas/Pagamento.js";
+export {
+  type DevolucaoRegistrada,
   type EventoVenda,
+  type ItemDevolvidoNoEvento,
   type ItemVendido,
   type VendaCancelada,
   type VendaFinalizada,
 } from "./vendas/eventos.js";
 export {
+  type CancelamentoVenda,
   type DadosReconstituicaoVenda,
   type DadosVenda,
+  type LeituraRegistrada,
   type StatusVenda,
+  type SuspensaoVenda,
   Venda,
 } from "./vendas/Venda.js";
+export {
+  type DadosDevolucao,
+  type DadosReconstituicaoDevolucao,
+  type DestinoDevolucao,
+  Devolucao,
+  ehDestinoDevolucao,
+  ehFormaReembolso,
+  FORMAS_REEMBOLSO,
+  type FormaReembolso,
+  type ItemDevolvido,
+  type JaDevolvido,
+  type PedidoDeItemDevolvido,
+} from "./vendas/Devolucao.js";
 export { type DadosItemVenda, VendaItem } from "./vendas/VendaItem.js";
 
 // ── Caixa ───────────────────────────────────────────────────────────────
@@ -169,7 +197,29 @@ export {
   type ResumoVenda,
   SessaoCaixa,
   type StatusCaixa,
+  type TotalDeOcorrencias,
 } from "./caixa/SessaoCaixa.js";
+
+// ── Configuração da loja ────────────────────────────────────────────────
+export {
+  type AlteracaoConfiguracaoLoja,
+  ConfiguracaoLoja,
+  type DadosConfiguracaoLoja,
+  ehImpressaoComprovante,
+  ehLarguraCupom,
+  ehRecurso,
+  ehRegraVendaSemEstoque,
+  ehSegmento,
+  type ImpressaoComprovante,
+  type LarguraCupom,
+  RECURSOS,
+  type Recurso,
+  recursosDoSegmento,
+  REGRAS_VENDA_SEM_ESTOQUE,
+  type RegraVendaSemEstoque,
+  SEGMENTOS,
+  type Segmento,
+} from "./configuracao/ConfiguracaoLoja.js";
 
 // ── Identidade ──────────────────────────────────────────────────────────
 export { CredencialHash } from "./identidade/CredencialHash.js";

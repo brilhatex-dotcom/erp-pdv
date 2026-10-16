@@ -80,6 +80,8 @@ export class CategoriaRepositorioPrisma implements CategoriaRepository {
       nome: categoria.nome,
       nomeBusca: categoria.nomeBusca,
       ativa: categoria.ativa,
+      icone: categoria.icone ?? null,
+      imagemId: categoria.imagemId?.valor ?? null,
     };
 
     await this.prisma.categoria.upsert({
@@ -90,11 +92,19 @@ export class CategoriaRepositorioPrisma implements CategoriaRepository {
   }
 }
 
-function paraCategoria(linha: { id: string; nome: string; ativa: boolean }): Categoria {
+function paraCategoria(linha: {
+  id: string;
+  nome: string;
+  ativa: boolean;
+  icone: string | null;
+  imagemId: string | null;
+}): Categoria {
   return Categoria.reconstituir({
     id: paraId(linha.id),
     nome: linha.nome,
     ativa: linha.ativa,
+    icone: linha.icone ?? undefined,
+    imagemId: linha.imagemId === null ? undefined : paraId(linha.imagemId),
   });
 }
 

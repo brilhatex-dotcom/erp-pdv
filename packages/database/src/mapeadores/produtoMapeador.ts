@@ -5,7 +5,14 @@ import type {
   Produto as ProdutoLinha,
   ReferenciaProduto as ReferenciaLinha,
 } from "../gerado/index.js";
-import { ouNulo, paraDinheiro, paraId, paraIdOpcional, paraUnidade } from "./comuns.js";
+import {
+  ouNulo,
+  paraDinheiro,
+  paraId,
+  paraIdOpcional,
+  paraQuantidade,
+  paraUnidade,
+} from "./comuns.js";
 
 export type ProdutoCompleto = ProdutoLinha & {
   readonly referencias: readonly ReferenciaLinha[];
@@ -32,6 +39,14 @@ export function paraDominio(linha: ProdutoCompleto): Produto {
     categoriaId: paraIdOpcional(linha.categoriaId),
     perfilTributarioId: paraIdOpcional(linha.perfilTributarioId),
     ativo: linha.ativo,
+    // O mínimo vive na unidade base: a mesma do produto, como na gravação.
+    estoqueMinimo:
+      linha.estoqueMinimo === null
+        ? undefined
+        : paraQuantidade(linha.estoqueMinimo, linha.unidadeBase),
+    fornecedorId: paraIdOpcional(linha.fornecedorId),
+    imagemId: paraIdOpcional(linha.imagemId),
+    botaoRapido: linha.botaoRapido,
     referencias: linha.referencias.map((referencia) =>
       ReferenciaProduto.criar(referencia.tipo, referencia.valor).unwrap(),
     ),
@@ -66,5 +81,9 @@ export function paraLinha(
     categoriaId: ouNulo(produto.categoriaId?.valor),
     perfilTributarioId: ouNulo(produto.perfilTributarioId?.valor),
     ativo: produto.ativo,
+    estoqueMinimo: ouNulo(produto.estoqueMinimo?.milesimos),
+    fornecedorId: ouNulo(produto.fornecedorId?.valor),
+    imagemId: ouNulo(produto.imagemId?.valor),
+    botaoRapido: produto.botaoRapido,
   };
 }

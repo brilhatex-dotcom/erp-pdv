@@ -50,7 +50,76 @@ export {
 export {
   AdicionarItemPorCodigo,
   type EntradaAdicionarItem,
+  type SaidaAdicionarItem,
 } from "./casos-de-uso/vendas/AdicionarItemPorCodigo.js";
+export {
+  type AlvoDesconto,
+  AplicarDesconto,
+  type EntradaAplicarDesconto,
+} from "./casos-de-uso/vendas/AplicarDesconto.js";
+export {
+  CancelarVenda,
+  type EntradaCancelarVenda,
+  type EstornoAoCliente,
+  type SaidaCancelarVenda,
+} from "./casos-de-uso/vendas/CancelarVenda.js";
+export {
+  AlterarQuantidadeItem,
+  type EntradaAlterarQuantidade,
+  type EntradaRemoverItem,
+  type EntradaRemoverPagamento,
+  RemoverItem,
+  RemoverPagamento,
+} from "./casos-de-uso/vendas/CorrigirVenda.js";
+export {
+  type EntradaRetomarVenda,
+  type EntradaSuspenderVenda,
+  RetomarVenda,
+  SuspenderVenda,
+} from "./casos-de-uso/vendas/GuardarVenda.js";
+export {
+  type EntradaIdentificarCliente,
+  IdentificarCliente,
+} from "./casos-de-uso/vendas/IdentificarCliente.js";
+export {
+  type EntradaRegistrarDevolucao,
+  RegistrarDevolucao,
+} from "./casos-de-uso/vendas/RegistrarDevolucao.js";
+export {
+  configuracaoDaLoja,
+  custoNoMomento,
+  formatarPercentual,
+  resumoParaCaixa,
+} from "./casos-de-uso/vendas/apoio.js";
+
+// ── Configuração, imagens e auditoria ───────────────────────────────────
+export {
+  DefinirConfiguracaoLoja,
+  type EntradaDefinirConfiguracao,
+  ObterConfiguracaoLoja,
+} from "./casos-de-uso/configuracao/ConfigurarLoja.js";
+export {
+  detectarTipoImagem,
+  GuardarImagem,
+  type ResumoDeConteudo,
+  TAMANHO_MAXIMO_IMAGEM,
+  type TipoImagem,
+} from "./casos-de-uso/imagens/GuardarImagem.js";
+export {
+  type AcaoAuditada,
+  ACOES_AUDITADAS,
+  auditar,
+  type DadoAuditado,
+  ehAcaoAuditada,
+  type RegistroAuditoria,
+} from "./auditoria/RegistroAuditoria.js";
+export type {
+  AuditoriaRepository,
+  ConfiguracaoLojaRepository,
+  DevolucaoRepository,
+  ImagemParaGravar,
+  ImagemRepository,
+} from "./portas/repositorios/RepositoriosBalcao.js";
 export {
   type EntradaFinalizarVenda,
   FinalizarVenda,
@@ -62,6 +131,7 @@ export {
 } from "./casos-de-uso/vendas/IniciarVenda.js";
 export {
   type EntradaRegistrarPagamento,
+  type OpcoesRegistrarPagamento,
   RegistrarPagamento,
   type SaidaRegistrarPagamento,
 } from "./casos-de-uso/vendas/RegistrarPagamento.js";
@@ -82,6 +152,7 @@ export {
   vencimento,
 } from "./casos-de-uso/acesso/Autenticar.js";
 export {
+  type Autorizacao,
   AutorizarOperacao,
   type CredencialSupervisor,
   type EntradaAutorizar,

@@ -1,3 +1,9 @@
+import {
+  AuditoriaRepositorioPrisma,
+  ConfiguracaoLojaRepositorioPrisma,
+  DevolucaoRepositorioPrisma,
+  ImagemRepositorioPrisma,
+} from "./repositorios/BalcaoRepositoriosPrisma.js";
 import { ErroInfraestrutura, type Repositorios, type UnitOfWork } from "@erp/application";
 import { type DomainError, err, type Result } from "@erp/domain";
 
@@ -120,5 +126,9 @@ export function montarRepositorios(tx: Prisma.TransactionClient): Repositorios {
     clientes: new ClienteRepositorioPrisma(tx),
     fornecedores: new FornecedorRepositorioPrisma(tx),
     notasDeCompra: new CompraRepositorioPrisma(tx),
+    configuracao: new ConfiguracaoLojaRepositorioPrisma(tx),
+    devolucoes: new DevolucaoRepositorioPrisma(tx),
+    auditoria: new AuditoriaRepositorioPrisma(tx),
+    imagens: new ImagemRepositorioPrisma(tx),
   };
 }

@@ -35,6 +35,18 @@ import {
   FinalizarVenda,
   RegistrarPagamento,
   RenovarSessao,
+  AlterarQuantidadeItem,
+  AplicarDesconto,
+  CancelarVenda,
+  DefinirConfiguracaoLoja,
+  GuardarImagem,
+  IdentificarCliente,
+  ObterConfiguracaoLoja,
+  RegistrarDevolucao,
+  RemoverItem,
+  RemoverPagamento,
+  RetomarVenda,
+  SuspenderVenda,
   type Relogio,
   type Repositorios,
   type UnitOfWork,
@@ -46,13 +58,8 @@ import {
   type PrismaClient,
   UnitOfWorkPrisma,
 } from "@erp/database";
-import {
-  BYTES_ALEATORIOS_UUID_V7,
-  type Identificador,
-  LAYOUT_BALANCA_PADRAO,
-  montarUuidV7,
-} from "@erp/domain";
-import { randomBytes, randomUUID } from "node:crypto";
+import { BYTES_ALEATORIOS_UUID_V7, type Identificador, montarUuidV7 } from "@erp/domain";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import type { Ambiente } from "../ambiente.js";
 
@@ -72,8 +79,19 @@ import type { Ambiente } from "../ambiente.js";
  * para a empresa que não emite documento (ADR-0016) — sem um `if` sequer dentro
  * do domínio.
  */
+/**
+ * Qual banco este container serve.
+ *
+ * O modo treinamento é uma **segunda instalação lógica** dentro do mesmo
+ * servidor: outro banco, outras vendas, os mesmos casos de uso (ADR-0026). O
+ * modo vai no container, e não numa variável global, para que nada fora da
+ * composição precise saber qual dos dois está atendendo.
+ */
+export type ModoOperacao = "REAL" | "TREINAMENTO";
+
 export interface Container {
   readonly ambiente: Ambiente;
+  readonly modo: ModoOperacao;
   readonly prisma: PrismaClient;
   readonly unitOfWork: UnitOfWork;
   /**
@@ -106,6 +124,19 @@ export interface Container {
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
   readonly finalizarVenda: FinalizarVenda;
+  readonly alterarQuantidadeItem: AlterarQuantidadeItem;
+  readonly removerItem: RemoverItem;
+  readonly removerPagamento: RemoverPagamento;
+  readonly aplicarDesconto: AplicarDesconto;
+  readonly identificarCliente: IdentificarCliente;
+  readonly suspenderVenda: SuspenderVenda;
+  readonly retomarVenda: RetomarVenda;
+  readonly cancelarVenda: CancelarVenda;
+  readonly registrarDevolucao: RegistrarDevolucao;
+
+  readonly obterConfiguracao: ObterConfiguracaoLoja;
+  readonly definirConfiguracao: DefinirConfiguracaoLoja;
+  readonly guardarImagem: GuardarImagem;
 
   readonly registrarMovimento: RegistrarMovimento;
 
@@ -160,9 +191,13 @@ function gerarRefresh(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export function montarContainer(ambiente: Ambiente): Container {
+export function montarContainer(
+  ambiente: Ambiente,
+  modo: ModoOperacao = "REAL",
+  urlBanco: string = ambiente.DATABASE_URL,
+): Container {
   const prisma = criarPrismaClient({
-    urlBanco: ambiente.DATABASE_URL,
+    urlBanco,
     registrarConsultas: !ambiente.ehProducao,
   });
 
@@ -177,6 +212,7 @@ export function montarContainer(ambiente: Ambiente): Container {
 
   return {
     ambiente,
+    modo,
     prisma,
     unitOfWork,
     leitura: montarRepositorios(prisma),
@@ -207,11 +243,39 @@ export function montarContainer(ambiente: Ambiente): Container {
     abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
     registrarSangria: new RegistrarSangria(unitOfWork, relogio, geradorId, autorizar),
     registrarSuprimento: new RegistrarSuprimento(unitOfWork, relogio, geradorId),
-    fecharCaixa: new FecharCaixa(unitOfWork, relogio),
+    fecharCaixa: new FecharCaixa(unitOfWork, relogio, geradorId),
     iniciarVenda: new IniciarVenda(unitOfWork, relogio, geradorId),
-    adicionarItem: new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO),
-    registrarPagamento: new RegistrarPagamento(unitOfWork),
+    adicionarItem: new AdicionarItemPorCodigo(unitOfWork, geradorId, relogio, autorizar),
+    registrarPagamento: new RegistrarPagamento(
+      unitOfWork,
+      geradorId,
+      relogio,
+      autorizar,
+      {
+        // Ligado só no banco de treinamento (ADR-0026). Na operação real, um
+        // pagamento "simulado" seria dinheiro que nunca entrou.
+        permiteSimulacao: modo === "TREINAMENTO",
+      },
+    ),
     finalizarVenda: new FinalizarVenda(unitOfWork, relogio, geradorId),
+    alterarQuantidadeItem: new AlterarQuantidadeItem(
+      unitOfWork,
+      geradorId,
+      relogio,
+      autorizar,
+    ),
+    removerItem: new RemoverItem(unitOfWork, geradorId, relogio, autorizar),
+    removerPagamento: new RemoverPagamento(unitOfWork, geradorId, relogio),
+    aplicarDesconto: new AplicarDesconto(unitOfWork, geradorId, relogio, autorizar),
+    identificarCliente: new IdentificarCliente(unitOfWork),
+    suspenderVenda: new SuspenderVenda(unitOfWork, relogio),
+    retomarVenda: new RetomarVenda(unitOfWork),
+    cancelarVenda: new CancelarVenda(unitOfWork, geradorId, relogio, autorizar),
+    registrarDevolucao: new RegistrarDevolucao(unitOfWork, geradorId, relogio, autorizar),
+
+    obterConfiguracao: new ObterConfiguracaoLoja(unitOfWork, geradorId),
+    definirConfiguracao: new DefinirConfiguracaoLoja(unitOfWork, geradorId, relogio),
+    guardarImagem: new GuardarImagem(unitOfWork, geradorId, resumoSha256),
 
     registrarMovimento: new RegistrarMovimento(unitOfWork, relogio, geradorId),
 
@@ -219,8 +283,8 @@ export function montarContainer(ambiente: Ambiente): Container {
     cancelarNotaDeCompra: new CancelarNotaDeCompra(unitOfWork, relogio, geradorId),
 
     cadastrarProduto: new CadastrarProduto(unitOfWork, geradorId),
-    alterarProduto: new AlterarProduto(unitOfWork, relogio),
-    alterarPrecoDoProduto: new AlterarPrecoDoProduto(unitOfWork, relogio),
+    alterarProduto: new AlterarProduto(unitOfWork, relogio, geradorId),
+    alterarPrecoDoProduto: new AlterarPrecoDoProduto(unitOfWork, relogio, geradorId),
 
     cadastrarCategoria: new CadastrarCategoria(unitOfWork, geradorId),
     alterarCategoria: new AlterarCategoria(unitOfWork),
@@ -241,6 +305,12 @@ export function montarContainer(ambiente: Ambiente): Container {
     },
   };
 }
+
+/** SHA-256 do conteúdo, em hexadecimal — a chave de deduplicação das imagens. */
+const resumoSha256 = {
+  sha256: (conteudo: Uint8Array): string =>
+    createHash("sha256").update(conteudo).digest("hex"),
+};
 
 /** Identificador de dispositivo, quando o cliente não informou um. */
 export function novoDispositivoId(): string {

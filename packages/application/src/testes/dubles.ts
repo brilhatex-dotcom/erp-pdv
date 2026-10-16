@@ -2,7 +2,9 @@ import {
   type Categoria,
   type Cliente,
   type CodigoUnidade,
+  type ConfiguracaoLoja,
   CredencialHash,
+  type Devolucao,
   type Documento,
   type DomainError,
   type DomainEvent,
@@ -57,6 +59,14 @@ import type {
   FiltroTitulos,
   TituloRepository,
 } from "../portas/repositorios/RepositoriosFinanceiro.js";
+import type {
+  AuditoriaRepository,
+  ConfiguracaoLojaRepository,
+  DevolucaoRepository,
+  ImagemParaGravar,
+  ImagemRepository,
+} from "../portas/repositorios/RepositoriosBalcao.js";
+import type { RegistroAuditoria } from "../auditoria/RegistroAuditoria.js";
 
 /**
  * Dublês em memória das portas.
@@ -171,6 +181,71 @@ export class VendaRepositorioEmMemoria implements VendaRepository {
     const numero = this.#proximo;
     this.#proximo += 1;
     return Promise.resolve(numero);
+  }
+
+  abertasNaSessao(sessaoCaixaId: Identificador): Promise<readonly Venda[]> {
+    return Promise.resolve(
+      [...this.itens.values()].filter(
+        (venda) => venda.estaAberta && venda.sessaoCaixaId.equals(sessaoCaixaId),
+      ),
+    );
+  }
+}
+
+export class ConfiguracaoLojaRepositorioEmMemoria implements ConfiguracaoLojaRepository {
+  configuracao: ConfiguracaoLoja | undefined;
+
+  atual(): Promise<ConfiguracaoLoja | undefined> {
+    return Promise.resolve(this.configuracao);
+  }
+
+  salvar(configuracao: ConfiguracaoLoja): Promise<void> {
+    this.configuracao = configuracao;
+    return Promise.resolve();
+  }
+}
+
+export class DevolucaoRepositorioEmMemoria implements DevolucaoRepository {
+  readonly itens: Devolucao[] = [];
+
+  porVenda(vendaId: Identificador): Promise<readonly Devolucao[]> {
+    return Promise.resolve(this.itens.filter((atual) => atual.vendaId.equals(vendaId)));
+  }
+
+  salvar(devolucao: Devolucao): Promise<void> {
+    this.itens.push(devolucao);
+    return Promise.resolve();
+  }
+}
+
+export class AuditoriaEmMemoria implements AuditoriaRepository {
+  readonly registros: RegistroAuditoria[] = [];
+
+  registrar(registro: RegistroAuditoria): Promise<void> {
+    this.registros.push(registro);
+    return Promise.resolve();
+  }
+
+  /** Atalho dos testes: os registros de uma ação. */
+  da(acao: RegistroAuditoria["acao"]): readonly RegistroAuditoria[] {
+    return this.registros.filter((registro) => registro.acao === acao);
+  }
+}
+
+export class ImagemRepositorioEmMemoria implements ImagemRepository {
+  readonly itens: ImagemParaGravar[] = [];
+
+  porHash(hash: string): Promise<Identificador | undefined> {
+    return Promise.resolve(this.itens.find((imagem) => imagem.hash === hash)?.id);
+  }
+
+  existe(id: Identificador): Promise<boolean> {
+    return Promise.resolve(this.itens.some((imagem) => imagem.id.equals(id)));
+  }
+
+  salvar(imagem: ImagemParaGravar): Promise<void> {
+    this.itens.push(imagem);
+    return Promise.resolve();
   }
 }
 
@@ -627,6 +702,10 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly fornecedores: FornecedorRepositorioEmMemoria;
   readonly notasDeCompra: NotaDeCompraRepositorioEmMemoria;
   readonly titulos: TituloRepositorioEmMemoria;
+  readonly configuracao: ConfiguracaoLojaRepositorioEmMemoria;
+  readonly devolucoes: DevolucaoRepositorioEmMemoria;
+  readonly auditoria: AuditoriaEmMemoria;
+  readonly imagens: ImagemRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -646,6 +725,10 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const fornecedores = new FornecedorRepositorioEmMemoria();
   const notasDeCompra = new NotaDeCompraRepositorioEmMemoria();
   const titulos = new TituloRepositorioEmMemoria();
+  const configuracao = new ConfiguracaoLojaRepositorioEmMemoria();
+  const devolucoes = new DevolucaoRepositorioEmMemoria();
+  const auditoria = new AuditoriaEmMemoria();
+  const imagens = new ImagemRepositorioEmMemoria();
 
   return {
     produtos,
@@ -662,6 +745,10 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     fornecedores,
     notasDeCompra,
     titulos,
+    configuracao,
+    devolucoes,
+    auditoria,
+    imagens,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -678,6 +765,10 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       fornecedores,
       notasDeCompra,
       titulos,
+      configuracao,
+      devolucoes,
+      auditoria,
+      imagens,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

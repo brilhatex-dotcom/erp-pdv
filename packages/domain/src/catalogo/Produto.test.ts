@@ -806,3 +806,75 @@ describe("Produto — código de balança depois de cadastrado", () => {
     }
   });
 });
+
+describe("Produto — reposição, fornecedor, imagem e botão rápido", () => {
+  const FORNECEDOR = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5a71").unwrap();
+  const IMAGEM = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5a72").unwrap();
+
+  it("nasce sem mínimo, sem fornecedor, sem imagem e fora dos botões", () => {
+    const produto = criar();
+
+    expect(produto.estoqueMinimo).toBeUndefined();
+    expect(produto.fornecedorId).toBeUndefined();
+    expect(produto.imagemId).toBeUndefined();
+    expect(produto.botaoRapido).toBe(false);
+    expect(produto.precisaReposicao(qtd("0", "UN"))).toBe(false);
+  });
+
+  it("guarda os quatro no cadastro", () => {
+    const produto = criar({
+      estoqueMinimo: qtd("12", "UN"),
+      fornecedorId: FORNECEDOR,
+      imagemId: IMAGEM,
+      botaoRapido: true,
+    });
+
+    expect(produto.estoqueMinimo?.formatar()).toBe("12 un");
+    expect(produto.fornecedorId?.equals(FORNECEDOR)).toBe(true);
+    expect(produto.imagemId?.equals(IMAGEM)).toBe(true);
+    expect(produto.botaoRapido).toBe(true);
+  });
+
+  it("🔑 abaixo do mínimo pede reposição; no mínimo, ainda não", () => {
+    const produto = criar({ estoqueMinimo: qtd("12", "UN") });
+
+    expect(produto.precisaReposicao(qtd("11", "UN"))).toBe(true);
+    expect(produto.precisaReposicao(qtd("12", "UN"))).toBe(false);
+  });
+
+  it("recusa mínimo em outra unidade e mínimo negativo", () => {
+    const resultado = Produto.criar(dadosBase({ estoqueMinimo: qtd("-1", "CX") }));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.map((erro) => erro.codigo)).toEqual([
+        "PRODUTO_ESTOQUE_MINIMO_UNIDADE",
+        "PRODUTO_ESTOQUE_MINIMO_NEGATIVO",
+      ]);
+    }
+  });
+
+  it("altera os quatro depois de cadastrado", () => {
+    const produto = criar();
+
+    expect(produto.definirEstoqueMinimo(qtd("5", "UN")).isOk()).toBe(true);
+    produto.definirFornecedor(FORNECEDOR);
+    produto.definirImagem(IMAGEM);
+    produto.definirBotaoRapido(true);
+
+    expect(produto.estoqueMinimo?.formatar()).toBe("5 un");
+    expect(produto.fornecedorId?.equals(FORNECEDOR)).toBe(true);
+    expect(produto.imagemId?.equals(IMAGEM)).toBe(true);
+    expect(produto.botaoRapido).toBe(true);
+
+    expect(produto.definirEstoqueMinimo(undefined).isOk()).toBe(true);
+    expect(produto.estoqueMinimo).toBeUndefined();
+  });
+
+  it("recusa mínimo inválido na alteração e mantém o anterior", () => {
+    const produto = criar({ estoqueMinimo: qtd("5", "UN") });
+
+    expect(produto.definirEstoqueMinimo(qtd("1", "KG")).isErr()).toBe(true);
+    expect(produto.estoqueMinimo?.formatar()).toBe("5 un");
+  });
+});

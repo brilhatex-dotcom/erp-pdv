@@ -10,6 +10,28 @@ const ESCALA = 1000n;
 const LIMITE_MILESIMOS = 1_000_000_000_000n;
 
 /**
+ * Fatores entre unidades da mesma grandeza. Positivo multiplica; negativo
+ * divide — `KG>G` é ×1000, `G>KG` é ÷1000.
+ */
+const FATORES_DE_MEDIDA: Readonly<Partial<Record<string, bigint>>> = {
+  "KG>G": 1000n,
+  "G>KG": -1000n,
+  "L>ML": 1000n,
+  "ML>L": -1000n,
+};
+
+/** Divisão inteira com arredondamento meio-para-cima, afastando-se do zero. */
+function dividirMeioParaCima(numerador: bigint, divisor: bigint): bigint {
+  const quociente = numerador / divisor;
+  const resto = numerador % divisor;
+  const dobroDoResto = (resto < 0n ? -resto : resto) * 2n;
+
+  if (dobroDoResto < divisor) return quociente;
+
+  return numerador < 0n ? quociente - 1n : quociente + 1n;
+}
+
+/**
  * Quantidade vendida ou movimentada, com unidade de medida.
  *
  * Guardada como **inteiro de milésimos**, pelo mesmo motivo de `Dinheiro`: peso
@@ -155,6 +177,41 @@ export class Quantidade implements ValueObject<Quantidade> {
     }
 
     return Quantidade.deMilesimos(this.#milesimos * fator, codigoUnidade);
+  }
+
+  /**
+   * Converte entre unidades da **mesma grandeza**: grama ↔ quilo, mililitro ↔
+   * litro.
+   *
+   * É a conta que o balcão erra: "350" na balança são gramas, e o produto é
+   * vendido por quilo. Fazê-la aqui, com inteiros, garante que 350 g virem
+   * exatamente 0,350 kg — e que o preço por quilo seja aplicado sobre o peso
+   * certo. Grama fracionada (0,4 g) arredonda para o grama mais próximo, meio
+   * para cima: é a precisão de toda balança comercial, e o que a NF-e aceita
+   * em três casas.
+   *
+   * Grandezas diferentes (quilo para unidade) não convertem — não existe
+   * fator que transforme peso em contagem sem o cadastro dizer qual é.
+   */
+  converterMedida(destino: CodigoUnidade): Result<Quantidade, ErroValidacao> {
+    if (destino === this.#unidade.codigo) return ok(this);
+
+    const fator = FATORES_DE_MEDIDA[`${this.#unidade.codigo}>${destino}`];
+
+    if (fator === undefined) {
+      return err(
+        new ErroValidacao(
+          "QUANTIDADE_CONVERSAO_INDISPONIVEL",
+          `Não dá para converter ${this.#unidade.descricao.toLowerCase()} em ${obterUnidade(destino).descricao.toLowerCase()}.`,
+          { origem: this.#unidade.codigo, destino },
+        ),
+      );
+    }
+
+    const milesimos =
+      fator > 0n ? this.#milesimos * fator : dividirMeioParaCima(this.#milesimos, -fator);
+
+    return Quantidade.deMilesimos(milesimos, destino);
   }
 
   negar(): Quantidade {

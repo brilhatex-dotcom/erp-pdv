@@ -9,6 +9,7 @@ import {
   SessaoCaixa,
 } from "@erp/domain";
 
+import { auditar } from "../../auditoria/RegistroAuditoria.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
@@ -64,6 +65,16 @@ export class AbrirCaixa {
       if (sessao.isErr()) return err(sessao.error);
 
       const nova = sessao.unwrap();
+
+      await auditar(repositorios, this.geradorId, {
+        ocorridoEm: nova.abertaEm,
+        acao: "CAIXA_ABERTO",
+        usuarioId: entrada.operadorId,
+        descricao: `Caixa aberto com fundo de troco de ${entrada.fundoTroco.formatar()}`,
+        entidade: "sessao_caixa",
+        entidadeId: nova.id,
+        dados: { fundoTroco: entrada.fundoTroco.centavos.toString() },
+      });
 
       await repositorios.caixas.salvar(nova);
       await repositorios.outbox.enfileirar(nova.coletarEventos());

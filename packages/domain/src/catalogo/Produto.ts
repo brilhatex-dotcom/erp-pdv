@@ -70,6 +70,23 @@ export interface DadosProduto {
    */
   readonly perfilTributarioId?: Identificador | undefined;
   readonly ativo?: boolean | undefined;
+  /**
+   * Abaixo disto, o produto entra na lista de reposição. Na unidade base.
+   * Ausente significa "não acompanhar" — e não zero, que avisaria toda vez que
+   * o último pão saísse.
+   */
+  readonly estoqueMinimo?: Quantidade | undefined;
+  /** De quem a loja costuma comprar. Serve à lista de reposição. */
+  readonly fornecedorId?: Identificador | undefined;
+  readonly imagemId?: Identificador | undefined;
+  /**
+   * Aparece como botão no caixa.
+   *
+   * É o pão francês, a banana, o refrigerante que sai toda hora: o operador
+   * toca no botão em vez de procurar o código. Marcado no produto, e não numa
+   * tela à parte, porque é ali que o dono pensa "este aqui sai muito".
+   */
+  readonly botaoRapido?: boolean | undefined;
 }
 
 /**
@@ -101,6 +118,10 @@ export class Produto extends AggregateRoot {
   readonly #referencias: ReferenciaProduto[];
   readonly #embalagens: Embalagem[];
   #ativo: boolean;
+  #estoqueMinimo: Quantidade | undefined;
+  #fornecedorId: Identificador | undefined;
+  #imagemId: Identificador | undefined;
+  #botaoRapido: boolean;
 
   private constructor(dados: DadosProduto, descricaoPdv: string, custo: Dinheiro) {
     super(dados.id);
@@ -120,6 +141,10 @@ export class Produto extends AggregateRoot {
     this.#referencias = [...(dados.referencias ?? [])];
     this.#embalagens = [...(dados.embalagens ?? [])];
     this.#ativo = dados.ativo ?? true;
+    this.#estoqueMinimo = dados.estoqueMinimo;
+    this.#fornecedorId = dados.fornecedorId;
+    this.#imagemId = dados.imagemId;
+    this.#botaoRapido = dados.botaoRapido ?? false;
   }
 
   // ── Construção ─────────────────────────────────────────────────────────
@@ -202,6 +227,8 @@ export class Produto extends AggregateRoot {
     erros.push(...conferirEmbalagens(dados.embalagens ?? [], unidade));
 
     erros.push(...conferirCodigoBalanca(dados.codigoBalanca, dados.tipo));
+
+    erros.push(...conferirEstoqueMinimo(dados.estoqueMinimo, unidade));
 
     if (erros.length > 0) {
       return err(erros);
@@ -291,6 +318,34 @@ export class Produto extends AggregateRoot {
 
   get ativo(): boolean {
     return this.#ativo;
+  }
+
+  get estoqueMinimo(): Quantidade | undefined {
+    return this.#estoqueMinimo;
+  }
+
+  get fornecedorId(): Identificador | undefined {
+    return this.#fornecedorId;
+  }
+
+  get imagemId(): Identificador | undefined {
+    return this.#imagemId;
+  }
+
+  get botaoRapido(): boolean {
+    return this.#botaoRapido;
+  }
+
+  /**
+   * Está abaixo do mínimo? Só responde quem tem mínimo definido.
+   *
+   * Igual ao mínimo ainda não é reposição: o mínimo é o ponto em que se pede,
+   * e quem chegou nele exatamente está no limite, não abaixo.
+   */
+  precisaReposicao(saldo: Quantidade): boolean {
+    if (this.#estoqueMinimo === undefined) return false;
+
+    return saldo.milesimos < this.#estoqueMinimo.milesimos;
   }
 
   // ── Regras de negócio ──────────────────────────────────────────────────
@@ -573,6 +628,27 @@ export class Produto extends AggregateRoot {
     this.#codigoBarras = codigoBarras;
   }
 
+  definirEstoqueMinimo(minimo: Quantidade | undefined): Result<void, ErroValidacao[]> {
+    const problemas = conferirEstoqueMinimo(minimo, this.#unidadeBase);
+    if (problemas.length > 0) return err(problemas);
+
+    this.#estoqueMinimo = minimo;
+
+    return ok(undefined);
+  }
+
+  definirFornecedor(fornecedorId: Identificador | undefined): void {
+    this.#fornecedorId = fornecedorId;
+  }
+
+  definirImagem(imagemId: Identificador | undefined): void {
+    this.#imagemId = imagemId;
+  }
+
+  definirBotaoRapido(botaoRapido: boolean): void {
+    this.#botaoRapido = botaoRapido;
+  }
+
   definirCodigoBalanca(codigo: string | undefined): Result<void, ErroValidacao[]> {
     const problemas = conferirCodigoBalanca(codigo, this.#tipo);
     if (problemas.length > 0) return err(problemas);
@@ -708,6 +784,40 @@ function conferirCodigoBalanca(
         "PRODUTO_CODIGO_BALANCA_SEM_PESAGEM",
         "Só produto pesável tem código de balança.",
         { tipo },
+      ),
+    );
+  }
+
+  return erros;
+}
+
+/**
+ * O mínimo vive na unidade do estoque. Em outra, o alerta compararia caixas
+ * com unidades — e avisaria reposição com 11 refrigerantes na prateleira.
+ */
+function conferirEstoqueMinimo(
+  minimo: Quantidade | undefined,
+  unidade: UnidadeMedida,
+): ErroValidacao[] {
+  if (minimo === undefined) return [];
+
+  const erros: ErroValidacao[] = [];
+
+  if (minimo.unidade.codigo !== unidade.codigo) {
+    erros.push(
+      new ErroValidacao(
+        "PRODUTO_ESTOQUE_MINIMO_UNIDADE",
+        `O estoque mínimo deve estar em ${unidade.descricao.toLowerCase()}, a unidade do produto.`,
+        { esperada: unidade.codigo, recebida: minimo.unidade.codigo },
+      ),
+    );
+  }
+
+  if (minimo.ehNegativa()) {
+    erros.push(
+      new ErroValidacao(
+        "PRODUTO_ESTOQUE_MINIMO_NEGATIVO",
+        "O estoque mínimo não pode ser negativo.",
       ),
     );
   }

@@ -12,6 +12,8 @@ import {
   type SessaoCaixa,
 } from "@erp/domain";
 
+import { auditar } from "../../auditoria/RegistroAuditoria.js";
+import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
 
@@ -40,10 +42,21 @@ import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
  * falta — e ninguém consegue explicar de onde veio, porque o dinheiro está
  * certo na gaveta. Diferente da divergência real, esta some sozinha: basta a
  * estação sincronizar.
+ *
+ * ### Venda guardada com itens também bloqueia
+ *
+ * A venda guardada pertence a este caixa: fechado o caixa, ela não tem mais
+ * onde ser concluída, e a cliente que voltou para buscá-la encontraria o
+ * carrinho perdido. O operador retoma cada uma e conclui ou cancela — uma
+ * decisão que só ele pode tomar, porque só ele sabe se a cliente vai voltar.
+ * A venda **vazia** esquecida aberta (o primeiro bipe de um atendimento que
+ * não aconteceu) é descartada aqui mesmo: não há decisão a tomar sobre nada.
  */
 
 export interface EntradaFecharCaixa {
   readonly estacaoId: Identificador;
+  /** Quem fecha — vai para a auditoria e para o descarte das vendas vazias. */
+  readonly operadorId: Identificador;
   readonly contadoEmDinheiro: Dinheiro;
   readonly contagemPorForma?: Partial<Record<CodigoFormaPagamento, Dinheiro>> | undefined;
   /**
@@ -64,6 +77,7 @@ export class FecharCaixa {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly relogio: Relogio,
+    private readonly geradorId: GeradorId,
   ) {}
 
   async executar(
@@ -92,18 +106,62 @@ export class FecharCaixa {
         );
       }
 
+      const agora = this.relogio.agora();
+      const abertas = await repositorios.vendas.abertasNaSessao(sessao.id);
+      const comItens = abertas.filter((venda) => !venda.estaVazia);
+
+      if (comItens.length > 0) {
+        return err(
+          new ErroRegraNegocio(
+            "CAIXA_COM_VENDAS_ABERTAS",
+            comItens.length === 1
+              ? "Há 1 venda guardada neste caixa. Retome-a para concluir ou cancelar antes de fechar."
+              : `Há ${String(comItens.length)} vendas guardadas neste caixa. Retome cada uma para concluir ou cancelar antes de fechar.`,
+            { vendas: comItens.map((venda) => venda.numero) },
+          ),
+        );
+      }
+
+      for (const vazia of abertas) {
+        vazia.cancelar({
+          motivo: "Venda sem itens descartada no fechamento do caixa",
+          solicitadoPorId: entrada.operadorId,
+          agora,
+        });
+        await repositorios.vendas.salvar(vazia);
+      }
+
       const conferencia = sessao.fechar(
         entrada.contadoEmDinheiro,
-        this.relogio.agora(),
+        agora,
         entrada.contagemPorForma,
       );
 
       if (conferencia.isErr()) return err(conferencia.error);
 
+      const resultado = conferencia.unwrap();
+      const diferenca = resultado.divergenciaEmDinheiro;
+
+      await auditar(repositorios, this.geradorId, {
+        ocorridoEm: agora,
+        acao: "CAIXA_FECHADO",
+        usuarioId: entrada.operadorId,
+        descricao: diferenca.ehZero()
+          ? `Caixa fechado sem diferença (contado ${resultado.contadoEmDinheiro.formatar()})`
+          : `Caixa fechado com ${diferenca.ehPositivo() ? "sobra" : "falta"} de ${diferenca.absoluto().formatar()} (esperado ${resultado.esperadoEmDinheiro.formatar()}, contado ${resultado.contadoEmDinheiro.formatar()})`,
+        entidade: "sessao_caixa",
+        entidadeId: sessao.id,
+        dados: {
+          esperado: resultado.esperadoEmDinheiro.centavos.toString(),
+          contado: resultado.contadoEmDinheiro.centavos.toString(),
+          diferenca: diferenca.centavos.toString(),
+        },
+      });
+
       await repositorios.caixas.salvar(sessao);
       await repositorios.outbox.enfileirar(sessao.coletarEventos());
 
-      return ok({ sessao, conferencia: conferencia.unwrap() });
+      return ok({ sessao, conferencia: resultado });
     });
   }
 }

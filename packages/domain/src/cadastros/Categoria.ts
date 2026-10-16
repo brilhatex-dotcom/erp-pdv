@@ -6,11 +6,26 @@ import type { Identificador } from "../shared/Identificador.js";
 import { err, ok, type Result } from "../shared/Result.js";
 
 const TAMANHO_MAXIMO_NOME = 40;
+/**
+ * Um emoji pode ocupar vários pontos de código — bandeira, tom de pele,
+ * família. Oito unidades cobrem todos os de comida; o limite existe para que o
+ * campo não vire texto livre.
+ */
+const TAMANHO_MAXIMO_ICONE = 8;
 
 export interface DadosCategoria {
   readonly id: Identificador;
   readonly nome: string;
   readonly ativa?: boolean | undefined;
+  /**
+   * Figura curta (um emoji) que aparece no botão da categoria no caixa.
+   *
+   * Existe para o caso mais comum: a loja não tem foto nenhuma. "🍞 Pães" se
+   * reconhece de longe, e o operador que lê mal encontra a categoria pela
+   * figura. A foto, quando há, vence.
+   */
+  readonly icone?: string | undefined;
+  readonly imagemId?: Identificador | undefined;
 }
 
 /**
@@ -31,12 +46,22 @@ export class Categoria extends AggregateRoot {
   #nome: string;
   #nomeBusca: string;
   #ativa: boolean;
+  #icone: string | undefined;
+  #imagemId: Identificador | undefined;
 
-  private constructor(id: Identificador, nome: string, ativa: boolean) {
+  private constructor(
+    id: Identificador,
+    nome: string,
+    ativa: boolean,
+    icone: string | undefined,
+    imagemId: Identificador | undefined,
+  ) {
     super(id);
     this.#nome = nome;
     this.#nomeBusca = normalizarParaBusca(nome);
     this.#ativa = ativa;
+    this.#icone = icone;
+    this.#imagemId = imagemId;
   }
 
   static criar(dados: DadosCategoria): Result<Categoria, ErroValidacao> {
@@ -45,12 +70,17 @@ export class Categoria extends AggregateRoot {
     const problema = validarNome(nome);
     if (problema !== undefined) return err(problema);
 
-    return ok(new Categoria(dados.id, nome, dados.ativa ?? true));
+    const icone = limparIcone(dados.icone);
+    if (icone.isErr()) return err(icone.error);
+
+    return ok(
+      new Categoria(dados.id, nome, dados.ativa ?? true, icone.unwrap(), dados.imagemId),
+    );
   }
 
   /** Reconstrói uma categoria já persistida. Não revalida — ver `Produto`. */
   static reconstituir(dados: DadosCategoria & { readonly ativa: boolean }): Categoria {
-    return new Categoria(dados.id, dados.nome, dados.ativa);
+    return new Categoria(dados.id, dados.nome, dados.ativa, dados.icone, dados.imagemId);
   }
 
   get nome(): string {
@@ -64,6 +94,27 @@ export class Categoria extends AggregateRoot {
 
   get ativa(): boolean {
     return this.#ativa;
+  }
+
+  get icone(): string | undefined {
+    return this.#icone;
+  }
+
+  get imagemId(): Identificador | undefined {
+    return this.#imagemId;
+  }
+
+  definirIcone(icone: string | undefined): Result<void, ErroValidacao> {
+    const limpo = limparIcone(icone);
+    if (limpo.isErr()) return err(limpo.error);
+
+    this.#icone = limpo.unwrap();
+
+    return ok(undefined);
+  }
+
+  definirImagem(imagemId: Identificador | undefined): void {
+    this.#imagemId = imagemId;
   }
 
   renomear(nome: string): Result<void, ErroValidacao> {
@@ -108,4 +159,23 @@ function validarNome(nome: string): ErroValidacao | undefined {
   }
 
   return undefined;
+}
+
+function limparIcone(
+  icone: string | undefined,
+): Result<string | undefined, ErroValidacao> {
+  const limpo = icone?.trim();
+  if (limpo === undefined || limpo === "") return ok(undefined);
+
+  if (limpo.length > TAMANHO_MAXIMO_ICONE) {
+    return err(
+      new ErroValidacao(
+        "CATEGORIA_ICONE_LONGO",
+        "Use só uma figura (um emoji) como ícone da categoria.",
+        { tamanho: limpo.length },
+      ),
+    );
+  }
+
+  return ok(limpo);
 }

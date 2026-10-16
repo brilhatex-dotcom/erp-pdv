@@ -51,6 +51,12 @@ export function criarClienteDeTeste(): PrismaClient {
 export async function limparBanco(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "registros_auditoria",
+      "devolucao_itens",
+      "devolucoes",
+      "execucoes_backup",
+      "configuracao_backup",
+      "configuracao_loja",
       "baixas_titulo",
       "titulos",
       "itens_nota_compra",
@@ -78,4 +84,33 @@ export async function limparBanco(prisma: PrismaClient): Promise<void> {
       "empresas"
     RESTART IDENTITY CASCADE
   `);
+}
+
+/** Papel mínimo dos usuários de teste. Só existe para satisfazer a chave estrangeira. */
+const PAPEL_DE_TESTE = "018f3a2b-7c1d-7e4f-8a9b-00000000fffe";
+
+/**
+ * Garante que o operador existe como **usuário de verdade**.
+ *
+ * As sessões de caixa têm chave estrangeira para `usuarios` desde a migração
+ * `balcao_completo`: o banco recusa caixa aberto por alguém que não existe.
+ * Os testes que só queriam um identificador qualquer de operador passam por
+ * aqui — e deixam de afirmar, sem querer, que o banco aceita o que não deveria.
+ */
+export async function garantirUsuario(
+  prisma: PrismaClient,
+  id: string,
+  matricula = "999",
+): Promise<void> {
+  await prisma.papel.upsert({
+    where: { id: PAPEL_DE_TESTE },
+    create: { id: PAPEL_DE_TESTE, codigo: "TESTE", nome: "Papel de teste" },
+    update: {},
+  });
+
+  await prisma.usuario.upsert({
+    where: { id },
+    create: { id, matricula, nome: "Operador de teste", papelId: PAPEL_DE_TESTE },
+    update: {},
+  });
 }

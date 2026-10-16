@@ -16,6 +16,7 @@ import {
   gerarTitulosDaVenda,
   type PedidoDeCrediario,
 } from "../financeiro/gerarTitulosDaVenda.js";
+import { resumoParaCaixa } from "./apoio.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
@@ -65,6 +66,14 @@ export interface SaidaFinalizarVenda {
  * rede externa nem é opcional: é consequência obrigatória da venda a prazo, e
  * venda gravada sem o fiado correspondente é mercadoria entregue sem registro
  * da dívida. Mesmo motivo de estoque e caixa estarem aqui (ADR-0025).
+ *
+ * ### Concluir duas vezes devolve a mesma venda
+ *
+ * A resposta da conclusão pode se perder na rede depois de o servidor gravar,
+ * e a estação, sem saber, pede de novo. Recusar com "venda já finalizada"
+ * faria a tela mostrar erro numa venda que deu certo — e o operador, para
+ * resolver, refaria a venda: o cliente pagaria duas vezes. Por isso a segunda
+ * chamada responde exatamente o que a primeira respondeu, sem tocar em nada.
  */
 export class FinalizarVenda {
   constructor(
@@ -85,6 +94,14 @@ export class FinalizarVenda {
             vendaId: entrada.vendaId.valor,
           }),
         );
+      }
+
+      if (venda.status === "FINALIZADA") {
+        return ok({
+          venda,
+          troco: venda.troco,
+          titulos: await repositorios.titulos.porDocumento(venda.id),
+        });
       }
 
       const sessao = await repositorios.caixas.porId(venda.sessaoCaixaId);
@@ -118,15 +135,7 @@ export class FinalizarVenda {
       /* v8 ignore next -- inalcançável: item de venda garante quantidade positiva */
       if (baixa.isErr()) return err(baixa.error);
 
-      const registro = sessao.registrarVenda({
-        vendaId: venda.id,
-        total: venda.total,
-        pagamentos: venda.pagamentos.map((pagamento) => ({
-          forma: pagamento.forma.codigo,
-          valor: pagamento.valor,
-        })),
-        troco: venda.troco,
-      });
+      const registro = sessao.registrarVenda(resumoParaCaixa(venda));
 
       /* v8 ignore next -- inalcançável: o caixa foi verificado como aberto acima */
       if (registro.isErr()) return err(registro.error);

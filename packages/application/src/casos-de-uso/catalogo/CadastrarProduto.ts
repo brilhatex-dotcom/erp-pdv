@@ -22,6 +22,7 @@ import {
   interpretarCentavos,
   interpretarCodigoBarras,
   interpretarEmbalagens,
+  interpretarEstoqueMinimo,
   interpretarReferencias,
   type ReferenciaBruta,
 } from "./interpretarProduto.js";
@@ -42,6 +43,11 @@ export interface EntradaCadastrarProduto {
   readonly categoriaId?: Identificador | undefined;
   readonly referencias?: readonly ReferenciaBruta[] | undefined;
   readonly embalagens?: readonly EmbalagemBruta[] | undefined;
+  /** Milésimos na unidade base. Ausente: não acompanhar reposição. */
+  readonly estoqueMinimo?: bigint | undefined;
+  readonly fornecedorId?: Identificador | undefined;
+  readonly imagemId?: Identificador | undefined;
+  readonly botaoRapido?: boolean | undefined;
 }
 
 /**
@@ -78,12 +84,20 @@ export class CadastrarProduto {
     const embalagens = interpretarEmbalagens(entrada.embalagens, problemas);
     const precoVenda = interpretarCentavos(entrada.precoVenda, problemas);
     const custo = interpretarCentavos(entrada.custo, problemas);
+    const estoqueMinimo = interpretarEstoqueMinimo(
+      entrada.estoqueMinimo,
+      entrada.unidadeBase,
+      problemas,
+    );
 
     if (problemas.length > 0 || precoVenda === undefined) {
       return err(agregarErros(problemas));
     }
 
     return this.unitOfWork.transacao(async (repositorios) => {
+      const vinculo = await conferirVinculos(repositorios, entrada);
+      if (vinculo !== undefined) return err(vinculo);
+
       const conflito = await conferirCodigosLivres(repositorios, {
         sku: entrada.sku,
         codigoBarras: codigoBarras?.valor,
@@ -109,6 +123,10 @@ export class CadastrarProduto {
         categoriaId: entrada.categoriaId,
         referencias,
         embalagens,
+        estoqueMinimo,
+        fornecedorId: entrada.fornecedorId,
+        imagemId: entrada.imagemId,
+        botaoRapido: entrada.botaoRapido,
       });
 
       if (produto.isErr()) return err(agregarErros(produto.error));
@@ -186,6 +204,42 @@ export async function conferirCodigosLivres(
  * Sem isto, a chave estrangeira recusaria a gravação e o operador veria um erro
  * de banco — exatamente o que CLAUDE.md §9 proíbe mostrar a ele.
  */
+/**
+ * Fornecedor e imagem apontados pelo formulário existem?
+ *
+ * A chave estrangeira recusaria do mesmo jeito, mas com um erro de banco que
+ * vira "algo deu errado" na tela. Aqui, vira uma frase que diz o que fazer.
+ */
+export async function conferirVinculos(
+  repositorios: Pick<Repositorios, "fornecedores" | "imagens">,
+  vinculos: {
+    readonly fornecedorId?: Identificador | undefined;
+    readonly imagemId?: Identificador | undefined;
+  },
+): Promise<ErroValidacao | undefined> {
+  if (
+    vinculos.fornecedorId !== undefined &&
+    (await repositorios.fornecedores.porId(vinculos.fornecedorId)) === undefined
+  ) {
+    return new ErroValidacao(
+      "FORNECEDOR_NAO_ENCONTRADO",
+      "O fornecedor escolhido não existe mais. Atualize a tela e escolha outro.",
+    );
+  }
+
+  if (
+    vinculos.imagemId !== undefined &&
+    !(await repositorios.imagens.existe(vinculos.imagemId))
+  ) {
+    return new ErroValidacao(
+      "IMAGEM_NAO_ENCONTRADA",
+      "A imagem não foi encontrada. Envie a foto de novo.",
+    );
+  }
+
+  return undefined;
+}
+
 export async function conferirCategoria(
   repositorios: Pick<Repositorios, "categorias">,
   categoriaId: Identificador | undefined,

@@ -238,6 +238,44 @@ describe("venda offline", () => {
   });
 });
 
+describe("regras de pagamento offline — as mesmas do servidor", () => {
+  it("🔑 cartão não passa do que falta: só dinheiro tem troco", () => {
+    const venda = montar();
+    venda.iniciar("estacao-1", "operador-1");
+    venda.adicionarItem("7891000100103");
+
+    const resultado = venda.registrarPagamento("CARTAO_DEBITO", "2500");
+
+    expect(resultado).toEqual({
+      tipo: "ERRO",
+      mensagem:
+        "Fora do dinheiro, o valor não pode passar do que falta (R$ 19,90). Só dinheiro tem troco.",
+    });
+  });
+
+  it("dinheiro pode passar do que falta", () => {
+    const venda = montar();
+    venda.iniciar("estacao-1", "operador-1");
+    venda.adicionarItem("7891000100103");
+
+    expect(venda.registrarPagamento("DINHEIRO", "2500")).toEqual({
+      tipo: "OK",
+      faltaPagar: "0",
+    });
+  });
+
+  it("recusa pagamento quando nada mais falta", () => {
+    const venda = montar();
+    venda.iniciar("estacao-1", "operador-1");
+    venda.adicionarItem("7891000100103");
+    venda.registrarPagamento("PIX", "1990");
+
+    const resultado = venda.registrarPagamento("DINHEIRO", "100");
+
+    expect(resultado.tipo).toBe("ERRO");
+  });
+});
+
 describe("etiqueta de balança offline", () => {
   it("🔑 registra o peso lido na etiqueta", () => {
     // Açougue e hortifrúti são dois dos nove segmentos-alvo. Um PDV que não

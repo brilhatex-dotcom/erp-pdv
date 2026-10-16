@@ -438,3 +438,31 @@ describe("Dinheiro.mediaPonderada", () => {
     }
   });
 });
+
+describe("Dinheiro — percentuais em pontos-base", () => {
+  const reais = (valor: string): Dinheiro => Dinheiro.deReais(valor).unwrap();
+
+  it("aplica 10% com arredondamento comercial", () => {
+    expect(reais("24,80").aplicarPercentual(1000).formatar()).toBe("R$ 2,48");
+    // 5% de 0,30 = 0,015 → 0,02.
+    expect(reais("0,30").aplicarPercentual(500).formatar()).toBe("R$ 0,02");
+  });
+
+  it("mede quanto representa de um todo", () => {
+    expect(reais("2,48").proporcaoEmBps(reais("24,80"))).toBe(1000);
+  });
+
+  it("🔑 arredonda para cima: 5,004% não passa por um teto de 5%", () => {
+    // R$ 5,01 de R$ 100,00 é 5,01% exato; R$ 1,00 de R$ 19,99 é 5,0025...%.
+    expect(reais("5,01").proporcaoEmBps(reais("100,00"))).toBe(501);
+    expect(reais("1,00").proporcaoEmBps(reais("19,99"))).toBe(501);
+  });
+
+  it("base zero não tem proporção", () => {
+    expect(reais("1,00").proporcaoEmBps(Dinheiro.zero())).toBe(0);
+  });
+
+  it("negativo trunca em direção ao zero, que para ele já é o teto", () => {
+    expect(reais("-1,00").proporcaoEmBps(reais("3,00"))).toBe(-3333);
+  });
+});

@@ -129,14 +129,26 @@ export class CodigoBarras implements ValueObject<CodigoBarras> {
  */
 export function temDigitoVerificadorValido(digitos: string): boolean {
   const ultimaPosicao = digitos.length - 1;
+  const verificador = calcularDigitoVerificador(digitos.slice(0, ultimaPosicao));
+
+  return verificador === digitos.charCodeAt(ultimaPosicao) - 48;
+}
+
+/**
+ * Calcula o dígito que completa um código GS1 sem verificador.
+ *
+ * É a mesma conta da conferência, no sentido contrário: serve para montar a
+ * etiqueta de exemplo que a tela de configuração da balança mostra — o lojista
+ * confere o layout imprimindo uma etiqueta de teste e comparando.
+ */
+export function calcularDigitoVerificador(semVerificador: string): number {
   let soma = 0;
 
-  for (let posicao = ultimaPosicao - 1; posicao >= 0; posicao -= 1) {
-    const valor = digitos.charCodeAt(posicao) - 48;
-    const distancia = ultimaPosicao - posicao;
+  for (let posicao = semVerificador.length - 1; posicao >= 0; posicao -= 1) {
+    const valor = semVerificador.charCodeAt(posicao) - 48;
+    const distancia = semVerificador.length - posicao;
     soma += valor * (distancia % 2 === 1 ? 3 : 1);
   }
 
-  const verificador = (10 - (soma % 10)) % 10;
-  return verificador === digitos.charCodeAt(ultimaPosicao) - 48;
+  return (10 - (soma % 10)) % 10;
 }

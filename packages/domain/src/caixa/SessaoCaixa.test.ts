@@ -46,6 +46,7 @@ function venda(sobrescritas: Partial<ResumoVenda> = {}): ResumoVenda {
     total: reais("50,00"),
     pagamentos: [{ forma: "DINHEIRO", valor: reais("50,00") }],
     troco: Dinheiro.zero(),
+    desconto: Dinheiro.zero(),
     ...sobrescritas,
   };
 }
@@ -562,6 +563,10 @@ describe("SessaoCaixa — reconstituição", () => {
       trocoDevolvido: reais("5,00"),
       totalVendido: reais("450,00"),
       quantidadeVendas: 12,
+      descontosConcedidos: Dinheiro.zero(),
+      cancelamentos: { quantidade: 0, total: Dinheiro.zero() },
+      devolucoes: { quantidade: 0, total: Dinheiro.zero() },
+      devolvidoEmDinheiro: Dinheiro.zero(),
       movimentos: [],
       recebidos: new Map([
         ["DINHEIRO", reais("200,00")],
@@ -602,6 +607,10 @@ describe("SessaoCaixa — reconstituição", () => {
       trocoDevolvido: Dinheiro.zero(),
       totalVendido: Dinheiro.zero(),
       quantidadeVendas: 0,
+      descontosConcedidos: Dinheiro.zero(),
+      cancelamentos: { quantidade: 0, total: Dinheiro.zero() },
+      devolucoes: { quantidade: 0, total: Dinheiro.zero() },
+      devolvidoEmDinheiro: Dinheiro.zero(),
       movimentos: [
         MovimentoCaixa.criar({
           id: proximoId(),
@@ -632,6 +641,10 @@ describe("SessaoCaixa — reconstituição", () => {
       trocoDevolvido: Dinheiro.zero(),
       totalVendido: reais("450,00"),
       quantidadeVendas: 12,
+      descontosConcedidos: Dinheiro.zero(),
+      cancelamentos: { quantidade: 0, total: Dinheiro.zero() },
+      devolucoes: { quantidade: 0, total: Dinheiro.zero() },
+      devolvidoEmDinheiro: Dinheiro.zero(),
       movimentos: [],
       recebidos: new Map(),
     });
@@ -642,5 +655,149 @@ describe("SessaoCaixa — reconstituição", () => {
 
   it("não registra evento algum", () => {
     expect(reconstituida().eventos).toHaveLength(0);
+  });
+});
+
+describe("SessaoCaixa — descontos e cancelamentos do turno", () => {
+  it("acumula os descontos das vendas", () => {
+    const caixa = abrir();
+    caixa.registrarVenda(venda({ desconto: reais("2,50") }));
+    caixa.registrarVenda(venda({ desconto: reais("1,00") }));
+
+    expect(caixa.descontosConcedidos.formatar()).toBe("R$ 3,50");
+  });
+
+  it("🔑 cancelamento sai do vendido e entra na contagem de cancelados", () => {
+    const caixa = abrir();
+    caixa.registrarVenda(venda({ desconto: reais("2,00") }));
+    caixa.registrarVenda(venda({ total: reais("30,00"), desconto: reais("1,00") }));
+
+    caixa.registrarCancelamento(
+      venda({ total: reais("30,00"), desconto: reais("1,00") }),
+    );
+
+    expect(caixa.quantidadeVendas).toBe(1);
+    expect(caixa.descontosConcedidos.formatar()).toBe("R$ 2,00");
+    expect(caixa.cancelamentos.quantidade).toBe(1);
+    expect(caixa.cancelamentos.total.formatar()).toBe("R$ 30,00");
+  });
+});
+
+describe("SessaoCaixa — devoluções", () => {
+  it("🔑 devolução em dinheiro sai do esperado na gaveta", () => {
+    const caixa = abrir();
+    caixa.registrarVenda(venda());
+
+    expect(
+      caixa.registrarDevolucao({ valor: reais("20,00"), emDinheiro: true }).isOk(),
+    ).toBe(true);
+
+    // 100 de fundo + 50 da venda − 20 devolvidos.
+    expect(caixa.esperadoEmDinheiro.formatar()).toBe("R$ 130,00");
+    expect(caixa.devolvidoEmDinheiro.formatar()).toBe("R$ 20,00");
+    expect(caixa.devolucoes).toEqual({ quantidade: 1, total: reais("20,00") });
+  });
+
+  it("devolução por Pix ou cartão conta, mas não mexe na gaveta", () => {
+    const caixa = abrir();
+    caixa.registrarDevolucao({ valor: reais("15,00"), emDinheiro: false });
+
+    expect(caixa.esperadoEmDinheiro.formatar()).toBe("R$ 100,00");
+    expect(caixa.devolucoes.quantidade).toBe(1);
+    expect(caixa.devolvidoEmDinheiro.ehZero()).toBe(true);
+  });
+
+  it("não devolve em dinheiro mais do que há na gaveta", () => {
+    const resultado = abrir().registrarDevolucao({
+      valor: reais("150,00"),
+      emDinheiro: true,
+    });
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("CAIXA_DEVOLUCAO_MAIOR_QUE_SALDO");
+      expect(resultado.error.mensagem).toContain("R$ 100,00");
+    }
+  });
+
+  it("recusa valor zero", () => {
+    const resultado = abrir().registrarDevolucao({
+      valor: Dinheiro.zero(),
+      emDinheiro: false,
+    });
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("CAIXA_DEVOLUCAO_VALOR_INVALIDO");
+    }
+  });
+
+  it("recusa em caixa fechado", () => {
+    const caixa = abrir();
+    caixa.fechar(reais("100,00"), AGORA);
+
+    expect(
+      caixa.registrarDevolucao({ valor: reais("1,00"), emDinheiro: false }).isErr(),
+    ).toBe(true);
+  });
+});
+
+describe("SessaoCaixa — fechamento com o turno completo", () => {
+  it("🔑 apresenta descontos, cancelamentos e devoluções separados", () => {
+    const caixa = abrir();
+    caixa.registrarVenda(
+      venda({
+        total: reais("50,00"),
+        desconto: reais("5,00"),
+        pagamentos: [
+          { forma: "DINHEIRO", valor: reais("20,00") },
+          { forma: "PIX", valor: reais("30,00") },
+        ],
+      }),
+    );
+    caixa.registrarVenda(venda({ total: reais("12,00"), desconto: Dinheiro.zero() }));
+    caixa.registrarCancelamento(
+      venda({ total: reais("12,00"), desconto: Dinheiro.zero() }),
+    );
+    caixa.registrarDevolucao({ valor: reais("10,00"), emDinheiro: true });
+
+    const conferencia = caixa.fechar(reais("110,00"), AGORA).unwrap();
+
+    expect(conferencia.descontos.formatar()).toBe("R$ 5,00");
+    expect(conferencia.cancelamentos).toEqual({ quantidade: 1, total: reais("12,00") });
+    expect(conferencia.devolucoes).toEqual({ quantidade: 1, total: reais("10,00") });
+    expect(conferencia.devolvidoEmDinheiro.formatar()).toBe("R$ 10,00");
+    // 100 de fundo + 20 em dinheiro − 10 devolvidos. O Pix não entra na gaveta.
+    expect(conferencia.esperadoEmDinheiro.formatar()).toBe("R$ 110,00");
+    expect(conferencia.divergenciaEmDinheiro.ehZero()).toBe(true);
+    expect(
+      conferencia.porForma.find((linha) => linha.forma.codigo === "PIX")?.esperado,
+    ).toEqual(reais("30,00"));
+  });
+
+  it("volta da reconstituição com os acumuladores do turno", () => {
+    const sessao = SessaoCaixa.reconstituir({
+      id: SESSAO,
+      estacaoId: ESTACAO,
+      operadorId: OPERADOR,
+      fundoTroco: reais("100,00"),
+      abertaEm: AGORA,
+      status: "ABERTA",
+      fechadaEm: undefined,
+      trocoDevolvido: Dinheiro.zero(),
+      totalVendido: reais("80,00"),
+      quantidadeVendas: 3,
+      descontosConcedidos: reais("4,00"),
+      cancelamentos: { quantidade: 2, total: reais("25,00") },
+      devolucoes: { quantidade: 1, total: reais("7,00") },
+      devolvidoEmDinheiro: reais("7,00"),
+      movimentos: [],
+      recebidos: new Map([["DINHEIRO", reais("80,00")]]),
+    });
+
+    expect(sessao.descontosConcedidos.formatar()).toBe("R$ 4,00");
+    expect(sessao.cancelamentos.quantidade).toBe(2);
+    expect(sessao.devolucoes.total.formatar()).toBe("R$ 7,00");
+    expect(sessao.esperadoEmDinheiro.formatar()).toBe("R$ 173,00");
   });
 });

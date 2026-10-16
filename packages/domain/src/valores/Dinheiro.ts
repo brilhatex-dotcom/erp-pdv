@@ -119,6 +119,37 @@ export class Dinheiro implements ValueObject<Dinheiro> {
     return new Dinheiro(dividirArredondando(this.#centavos * fator, escala));
   }
 
+  /**
+   * Aplica um percentual em pontos-base: `aplicarPercentual(1000)` é 10%.
+   *
+   * Meio-para-cima, como todo arredondamento monetário daqui: 5% de R$ 0,30
+   * são R$ 0,02 (R$ 0,015 arredondado), não R$ 0,01.
+   */
+  aplicarPercentual(bps: number): Dinheiro {
+    return this.escalar(BigInt(Math.trunc(bps)), 10_000n);
+  }
+
+  /**
+   * Quanto este valor representa de `todo`, em pontos-base, **arredondado para
+   * cima**.
+   *
+   * Para cima, e não para o mais próximo, porque o uso é a política de alçada:
+   * um desconto de 5,004% medido como 5% passaria pelo teto de 5% do operador.
+   * Quem decide quem mexe no dinheiro precisa errar para o lado de pedir
+   * autorização. `todo` zero devolve 0 — não há base para medir.
+   */
+  proporcaoEmBps(todo: Dinheiro): number {
+    if (todo.#centavos <= 0n) return 0;
+
+    const numerador = this.#centavos * 10_000n;
+    const inteiro = numerador / todo.#centavos;
+    // A divisão de `bigint` trunca em direção ao zero: para negativo isso já é
+    // o teto, e só o positivo com resto precisa subir.
+    const sobe = numerador > 0n && numerador % todo.#centavos !== 0n;
+
+    return Number(sobe ? inteiro + 1n : inteiro);
+  }
+
   negar(): Dinheiro {
     return new Dinheiro(-this.#centavos);
   }

@@ -104,26 +104,31 @@ export function rotasDeVendas(servidor: FastifyInstance, container: Container): 
     const quantidade = interpretarQuantidade(entrada.data.quantidade);
     if (quantidade === "INVALIDA") return recusar(resposta, "Quantidade inválida.");
 
+    const operadorId = operadorAutenticado(requisicao);
+    /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
+    if (operadorId === undefined) return resposta.status(401).send();
+
     const resultado = await container.adicionarItem.executar({
       vendaId,
+      operadorId,
       codigo: entrada.data.codigo,
       quantidade,
     });
 
     if (resultado.isErr()) return responderErro(resposta, resultado.error);
 
+    const saida = resultado.unwrap();
+
     // Devolve o **item e a venda inteira**. O PDV precisa do total e do que
     // falta pagar a cada bipada, e uma segunda requisição para buscá-los
     // custaria uma ida ao servidor no caminho mais percorrido do sistema
     // (RNF-03). Recalcular no navegador não é opção: o desconto rateado é
-    // regra de negócio.
-    const atual = await container.leitura.vendas.porId(vendaId);
-    /* v8 ignore next -- inalcançável: a venda acabou de ser gravada */
-    if (atual === undefined) return resposta.status(404).send();
-
+    // regra de negócio. `somado` diz à tela se a leitura virou linha nova ou
+    // engordou uma que já estava lá — é o que ela destaca.
     return resposta.status(201).send({
-      item: apresentarItem(resultado.unwrap()),
-      venda: apresentarVenda(atual),
+      item: apresentarItem(saida.item),
+      somado: saida.somado,
+      venda: apresentarVenda(saida.venda),
     });
   });
 
@@ -165,8 +170,13 @@ export function rotasDeVendas(servidor: FastifyInstance, container: Container): 
     /* v8 ignore next -- inalcançável: o schema já recusou valor não positivo */
     if (valor.isErr()) return recusar(resposta, "Valor inválido.");
 
+    const operadorId = operadorAutenticado(requisicao);
+    /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
+    if (operadorId === undefined) return resposta.status(401).send();
+
     const resultado = await container.registrarPagamento.executar({
       vendaId,
+      operadorId,
       forma: entrada.data.forma,
       valor: valor.unwrap(),
       parcelas: entrada.data.parcelas,

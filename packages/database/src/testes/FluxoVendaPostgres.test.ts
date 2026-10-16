@@ -1,5 +1,6 @@
 import {
   AdicionarItemPorCodigo,
+  AutorizarOperacao,
   FinalizarVenda,
   type GeradorId,
   IniciarVenda,
@@ -10,7 +11,6 @@ import {
   CodigoBarras,
   Dinheiro,
   Identificador,
-  LAYOUT_BALANCA_PADRAO,
   MovimentoEstoque,
   Produto,
   Quantidade,
@@ -21,8 +21,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CaixaRepositorioPrisma } from "../repositorios/CaixaRepositorioPrisma.js";
 import { EstoqueRepositorioPrisma } from "../repositorios/EstoqueRepositorioPrisma.js";
 import { ProdutoRepositorioPrisma } from "../repositorios/ProdutoRepositorioPrisma.js";
+import { HasherArgon2 } from "../HasherArgon2.js";
 import { UnitOfWorkPrisma } from "../UnitOfWorkPrisma.js";
-import { criarClienteDeTeste, limparBanco, prepararBanco } from "./banco.js";
+import {
+  criarClienteDeTeste,
+  garantirUsuario,
+  limparBanco,
+  prepararBanco,
+} from "./banco.js";
 
 const ESTACAO = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f7001").unwrap();
 const OPERADOR = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f7002").unwrap();
@@ -53,8 +59,20 @@ function geradorSequencial(): GeradorId {
 }
 
 const iniciarVenda = new IniciarVenda(unitOfWork, relogio, geradorSequencial());
-const adicionarItem = new AdicionarItemPorCodigo(unitOfWork, LAYOUT_BALANCA_PADRAO);
-const registrarPagamento = new RegistrarPagamento(unitOfWork);
+const autorizar = new AutorizarOperacao(relogio, new HasherArgon2());
+const adicionarItem = new AdicionarItemPorCodigo(
+  unitOfWork,
+  geradorSequencial(),
+  relogio,
+  autorizar,
+);
+const registrarPagamento = new RegistrarPagamento(
+  unitOfWork,
+  geradorSequencial(),
+  relogio,
+  autorizar,
+  { permiteSimulacao: false },
+);
 const finalizarVenda = new FinalizarVenda(unitOfWork, relogio, geradorSequencial());
 
 function refrigerante(): Produto {
@@ -93,6 +111,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await limparBanco(prisma);
+  await garantirUsuario(prisma, OPERADOR.valor);
 
   const produtos = new ProdutoRepositorioPrisma(prisma);
   await produtos.salvar(refrigerante());
@@ -119,12 +138,21 @@ describe("Fluxo de venda contra PostgreSQL", () => {
       await iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
-    await adicionarItem.executar({ vendaId: venda.id, codigo: "7891000315507" });
-    await adicionarItem.executar({ vendaId: venda.id, codigo: "7891000315507" });
+    await adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "7891000315507",
+    });
+    await adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "7891000315507",
+    });
 
     const pago = (
       await registrarPagamento.executar({
         vendaId: venda.id,
+        operadorId: OPERADOR,
         forma: "DINHEIRO",
         valor: reais("20,00"),
       })
@@ -144,7 +172,9 @@ describe("Fluxo de venda contra PostgreSQL", () => {
     });
 
     expect(gravada.status).toBe("FINALIZADA");
-    expect(gravada.itens).toHaveLength(2);
+    // As duas bipadas do mesmo produto somaram na mesma linha.
+    expect(gravada.itens).toHaveLength(1);
+    expect(gravada.itens[0]?.quantidade).toBe(2000n);
     expect(gravada.pagamentos).toHaveLength(1);
     expect(gravada.troco).toBe(20n);
 
@@ -152,7 +182,7 @@ describe("Fluxo de venda contra PostgreSQL", () => {
     const movimentos = await prisma.movimentoEstoque.findMany({
       where: { produtoId: REFRI_ID.valor },
     });
-    expect(movimentos).toHaveLength(2);
+    expect(movimentos).toHaveLength(1);
     expect(movimentos.every((m) => m.tipo === "SAIDA")).toBe(true);
 
     const saldo = await prisma.saldoEstoque.findUniqueOrThrow({
@@ -179,7 +209,11 @@ describe("Fluxo de venda contra PostgreSQL", () => {
       await iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
 
-    await adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
 
     // Sem pagamento suficiente, `finalizar` recusa.
     const resultado = await finalizarVenda.executar({ vendaId: venda.id });
@@ -202,8 +236,12 @@ describe("Fluxo de venda contra PostgreSQL", () => {
 
     // 2 · 012345 · 01250 · 9 → picanha, 1,250 kg
     const item = (
-      await adicionarItem.executar({ vendaId: venda.id, codigo: "2012345012509" })
-    ).unwrap();
+      await adicionarItem.executar({
+        vendaId: venda.id,
+        operadorId: OPERADOR,
+        codigo: "2012345012509",
+      })
+    ).unwrap().item;
 
     expect(item.descricao).toBe("Picanha Bovina");
     expect(item.quantidade.formatar()).toBe("1,25 kg");
@@ -228,9 +266,14 @@ describe("Garantias que só o banco oferece", () => {
     const venda = (
       await iniciarVenda.executar({ estacaoId: ESTACAO, operadorId: OPERADOR })
     ).unwrap();
-    await adicionarItem.executar({ vendaId: venda.id, codigo: "REF001" });
+    await adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "REF001",
+    });
     await registrarPagamento.executar({
       vendaId: venda.id,
+      operadorId: OPERADOR,
       forma: "PIX",
       valor: reais("9,90"),
     });

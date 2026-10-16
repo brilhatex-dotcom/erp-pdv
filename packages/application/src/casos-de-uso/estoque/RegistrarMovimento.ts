@@ -13,6 +13,7 @@ import {
   type TipoMovimento,
 } from "@erp/domain";
 
+import { auditar } from "../../auditoria/RegistroAuditoria.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
@@ -32,9 +33,26 @@ import { movimentar } from "./movimentar.js";
  */
 const SO_PELO_SISTEMA: ReadonlySet<TipoMovimento> = new Set<TipoMovimento>([
   "SAIDA",
+  // O estorno nasce do cancelamento da venda, junto com o estorno do caixa.
+  // Lançado à mão, devolveria ao estoque uma venda que continua valendo.
+  "ESTORNO_VENDA",
   "TRANSFERENCIA_ENTRADA",
   "TRANSFERENCIA_SAIDA",
 ]);
+
+const ACAO_AUDITADA: Partial<
+  Record<TipoMovimento, "ESTOQUE_AJUSTADO" | "ESTOQUE_PERDA">
+> = {
+  AJUSTE_POSITIVO: "ESTOQUE_AJUSTADO",
+  AJUSTE_NEGATIVO: "ESTOQUE_AJUSTADO",
+  PERDA: "ESTOQUE_PERDA",
+};
+
+const DESCRICAO_TIPO: Partial<Record<TipoMovimento, string>> = {
+  AJUSTE_POSITIVO: "Ajuste para mais",
+  AJUSTE_NEGATIVO: "Ajuste para menos",
+  PERDA: "Perda",
+};
 
 export interface EntradaMovimento {
   readonly produtoId: Identificador;
@@ -119,7 +137,7 @@ export class RegistrarMovimento {
       // ao fornecedor o resto do lote. Bloquear aqui deixaria saldo preso num
       // produto que ninguém mais consegue mexer.
 
-      return movimentar(repositorios, this.geradorId, produto, {
+      const movimento = await movimentar(repositorios, this.geradorId, produto, {
         tipo: entrada.tipo,
         quantidade: informada.unwrap(),
         custoUnitario: custo?.unwrap(),
@@ -129,6 +147,33 @@ export class RegistrarMovimento {
         origem: entrada.origem ?? { tipo: "MANUAL" },
         ocorridoEm: agora,
       });
+
+      if (movimento.isErr()) return movimento;
+
+      // Ajuste e perda são as duas portas por onde mercadoria some sem passar
+      // pelo caixa. Ficam na auditoria com o motivo, ao lado do resto do que
+      // mexe com dinheiro — e não só no extrato do produto, que ninguém abre
+      // sem já saber qual produto procurar.
+      const acao = ACAO_AUDITADA[entrada.tipo];
+
+      if (acao !== undefined) {
+        const lancado = movimento.unwrap();
+
+        await auditar(repositorios, this.geradorId, {
+          ocorridoEm: agora,
+          acao,
+          usuarioId: entrada.usuarioId,
+          descricao: `${DESCRICAO_TIPO[entrada.tipo] ?? entrada.tipo} de ${lancado.quantidade.formatar()} em ${produto.descricao}: ${lancado.observacao ?? ""}`,
+          entidade: "produto",
+          entidadeId: produto.id,
+          dados: {
+            tipo: entrada.tipo,
+            quantidade: lancado.quantidade.milesimos.toString(),
+          },
+        });
+      }
+
+      return movimento;
     });
   }
 }

@@ -23,6 +23,18 @@ export interface CredencialSupervisor {
   readonly pin: string;
 }
 
+/**
+ * Quem liberou a operação, quando houve liberação.
+ *
+ * Volta para o caso de uso que pediu, porque é ele que grava o fato: a
+ * sangria, o desconto, o cancelamento. O evento de autorização na outbox diz
+ * que alguém liberou; o registro da operação precisa dizer **quem**, ao lado
+ * do valor — é o par que se confere quando a gaveta não bate.
+ */
+export interface Autorizacao {
+  readonly autorizadoPorId: Identificador | undefined;
+}
+
 export interface EntradaAutorizar {
   readonly solicitanteId: Identificador;
   readonly acao: AcaoSolicitada;
@@ -58,7 +70,7 @@ export class AutorizarOperacao {
   async executar(
     repositorios: Repositorios,
     entrada: EntradaAutorizar,
-  ): Promise<Result<void, DomainError>> {
+  ): Promise<Result<Autorizacao, DomainError>> {
     const agora = this.relogio.agora();
     const solicitante = await repositorios.usuarios.porId(entrada.solicitanteId);
 
@@ -68,7 +80,7 @@ export class AutorizarOperacao {
 
     const decisao = avaliar(solicitante, entrada.acao);
 
-    if (decisao.tipo === "PERMITIDO") return ok(undefined);
+    if (decisao.tipo === "PERMITIDO") return ok({ autorizadoPorId: undefined });
 
     if (decisao.tipo === "NEGADO") {
       return err(new ErroNaoAutorizado("OPERACAO_NEGADA", decisao.motivo));
@@ -112,7 +124,7 @@ export class AutorizarOperacao {
       ),
     ]);
 
-    return ok(undefined);
+    return ok({ autorizadoPorId: autorizador.id });
   }
 
   /**

@@ -1,5 +1,10 @@
 import { sessoesDeCaixa } from "@erp/database";
-import { type ConferenciaCaixa, Dinheiro, Identificador } from "@erp/domain";
+import {
+  type ConferenciaCaixa,
+  Dinheiro,
+  Identificador,
+  type TotalDeOcorrencias,
+} from "@erp/domain";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
@@ -156,8 +161,13 @@ export function rotasDeCaixa(servidor: FastifyInstance, container: Container): v
       const entrada = corpoFechamento.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Informe o valor contado.");
 
+      const sessao = requisicao.autenticado;
+      /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
+      if (sessao === undefined) return resposta.status(401).send();
+
       const resultado = await container.fecharCaixa.executar({
         estacaoId: Identificador.criar(entrada.data.estacaoId).unwrap(),
+        operadorId: sessao.usuarioId,
         contadoEmDinheiro: Dinheiro.deCentavos(
           BigInt(entrada.data.contadoEmDinheiro),
         ).unwrap(),
@@ -314,12 +324,23 @@ function apresentarConferencia(conferencia: ConferenciaCaixa): Record<string, un
     totalVendido: conferencia.totalVendido.centavos.toString(),
     totalAReceber: conferencia.totalAReceber.centavos.toString(),
     quantidadeVendas: conferencia.quantidadeVendas,
+    descontos: conferencia.descontos.centavos.toString(),
+    cancelamentos: apresentarOcorrencias(conferencia.cancelamentos),
+    devolucoes: apresentarOcorrencias(conferencia.devolucoes),
+    devolvidoEmDinheiro: conferencia.devolvidoEmDinheiro.centavos.toString(),
     porForma: conferencia.porForma.map((linha) => ({
       forma: linha.forma.codigo,
       esperado: linha.esperado.centavos.toString(),
       contado: linha.contado?.centavos.toString(),
       divergencia: linha.divergencia?.centavos.toString(),
     })),
+  };
+}
+
+function apresentarOcorrencias(ocorrencias: TotalDeOcorrencias): Record<string, unknown> {
+  return {
+    quantidade: ocorrencias.quantidade,
+    total: ocorrencias.total.centavos.toString(),
   };
 }
 

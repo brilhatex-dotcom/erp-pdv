@@ -32,6 +32,7 @@ import { ProdutoRepositorioPrisma } from "../repositorios/ProdutoRepositorioPris
 import { VendaRepositorioPrisma } from "../repositorios/VendaRepositorioPrisma.js";
 import {
   criarClienteDeTeste,
+  garantirUsuario,
   limparBanco,
   prepararBanco,
   urlBancoDeTeste,
@@ -123,6 +124,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await limparBanco(prisma);
+  await garantirUsuario(prisma, OPERADOR.valor);
 });
 
 describe("Conversões entre domínio e banco", () => {
@@ -343,6 +345,7 @@ describe("Caixa — ida e volta pelo banco", () => {
           { forma: "CREDIARIO", valor: reais("80,00") },
         ],
         troco: Dinheiro.zero(),
+        desconto: Dinheiro.zero(),
       })
       .unwrap();
 

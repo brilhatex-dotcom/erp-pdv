@@ -3,6 +3,8 @@ import {
   type DomainError,
   err,
   ErroConflito,
+  ErroValidacao,
+  type Identificador,
   ok,
   type Result,
 } from "@erp/domain";
@@ -12,6 +14,9 @@ import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
 
 export interface EntradaCadastrarCategoria {
   readonly nome: string;
+  /** Emoji do botão no caixa — "🍞". */
+  readonly icone?: string | undefined;
+  readonly imagemId?: Identificador | undefined;
 }
 
 /**
@@ -32,9 +37,18 @@ export class CadastrarCategoria {
     entrada: EntradaCadastrarCategoria,
   ): Promise<Result<Categoria, DomainError>> {
     return this.unitOfWork.transacao(async (repositorios) => {
+      if (
+        entrada.imagemId !== undefined &&
+        !(await repositorios.imagens.existe(entrada.imagemId))
+      ) {
+        return err(imagemAusente());
+      }
+
       const categoria = Categoria.criar({
         id: this.geradorId.proximo(),
         nome: entrada.nome,
+        icone: entrada.icone,
+        imagemId: entrada.imagemId,
       });
 
       if (categoria.isErr()) return err(categoria.error);
@@ -57,4 +71,12 @@ export class CadastrarCategoria {
       return ok(nova);
     });
   }
+}
+
+/** A foto escolhida sumiu entre o envio e a gravação. */
+export function imagemAusente(): ErroValidacao {
+  return new ErroValidacao(
+    "IMAGEM_NAO_ENCONTRADA",
+    "A imagem não foi encontrada. Envie a foto de novo.",
+  );
 }

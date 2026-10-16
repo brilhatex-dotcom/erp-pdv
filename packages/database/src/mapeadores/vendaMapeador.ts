@@ -1,4 +1,14 @@
-import { type CodigoFormaPagamento, Pagamento, Venda, VendaItem } from "@erp/domain";
+import {
+  type CancelamentoVenda,
+  type CodigoFormaPagamento,
+  type ConfirmacaoPagamento,
+  ehCodigoFormaPagamento,
+  ehConfirmacaoPagamento,
+  Pagamento,
+  type SuspensaoVenda,
+  Venda,
+  VendaItem,
+} from "@erp/domain";
 
 import type {
   Pagamento as PagamentoLinha,
@@ -37,6 +47,8 @@ export function paraDominio(linha: VendaCompleta): Venda {
     abertaEm: linha.abertaEm,
     status: linha.status,
     finalizadaEm: linha.finalizadaEm ?? undefined,
+    suspensao: suspensaoDaLinha(linha),
+    cancelamento: cancelamentoDaLinha(linha),
     descontoVenda: paraDinheiro(linha.descontoVenda),
     itens: [...linha.itens]
       .sort((a, b) => a.numero - b.numero)
@@ -48,6 +60,8 @@ export function paraDominio(linha: VendaCompleta): Venda {
             descricao: item.descricao,
             quantidade: paraQuantidade(item.quantidade, item.unidade),
             precoUnitario: paraDinheiro(item.precoUnitario),
+            custoUnitario:
+              item.custoUnitario === null ? undefined : paraDinheiro(item.custoUnitario),
           },
           paraDinheiro(item.desconto),
           paraDinheiro(item.descontoRateado),
@@ -56,17 +70,60 @@ export function paraDominio(linha: VendaCompleta): Venda {
     pagamentos: [...linha.pagamentos]
       .sort((a, b) => a.ordem - b.ordem)
       .map((pagamento) =>
-        // Já validado quando foi gravado; o banco ainda exige valor > 0.
-        Pagamento.criar(
-          pagamento.forma as CodigoFormaPagamento,
-          paraDinheiro(pagamento.valor),
-          {
-            autorizacao: pagamento.autorizacao ?? undefined,
-            parcelas: pagamento.parcelas,
-          },
-        ).unwrap(),
+        // Reconstituído, e não criado: a regra que recusa número de cartão no
+        // campo de autorização é nova, e não pode tornar ilegível uma venda
+        // gravada antes dela.
+        Pagamento.reconstituir({
+          forma: paraForma(pagamento.forma),
+          valor: paraDinheiro(pagamento.valor),
+          autorizacao: pagamento.autorizacao ?? undefined,
+          parcelas: pagamento.parcelas,
+          confirmacao: paraConfirmacao(pagamento.confirmacao),
+          chave: pagamento.chave ?? undefined,
+        }),
       ),
   });
+}
+
+function suspensaoDaLinha(linha: VendaLinha): SuspensaoVenda | undefined {
+  if (linha.suspensaEm === null) return undefined;
+
+  return { em: linha.suspensaEm, rotulo: linha.rotuloSuspensao ?? undefined };
+}
+
+/**
+ * O registro do cancelamento, quando houve.
+ *
+ * Venda cancelada antes desta versão não tem as colunas preenchidas — o caso
+ * de uso de cancelar não existia. Ela volta sem registro, e não com um
+ * inventado: "quem cancelou" desconhecido é verdade; um nome qualquer seria
+ * mentira com cara de auditoria.
+ */
+function cancelamentoDaLinha(linha: VendaLinha): CancelamentoVenda | undefined {
+  if (linha.canceladaEm === null || linha.canceladaPorId === null) return undefined;
+
+  return {
+    em: linha.canceladaEm,
+    motivo: linha.motivoCancelamento ?? "",
+    solicitadoPorId: paraId(linha.canceladaPorId),
+    autorizadoPorId: paraIdOpcional(linha.cancelamentoAutorizadoPorId),
+  };
+}
+
+function paraForma(codigo: string): CodigoFormaPagamento {
+  if (!ehCodigoFormaPagamento(codigo)) {
+    throw new Error(`Forma de pagamento desconhecida no banco: ${codigo}`);
+  }
+
+  return codigo;
+}
+
+function paraConfirmacao(valor: string): ConfirmacaoPagamento {
+  if (!ehConfirmacaoPagamento(valor)) {
+    throw new Error(`Confirmação de pagamento desconhecida no banco: ${valor}`);
+  }
+
+  return valor;
 }
 
 /** Agregado → colunas da venda, sem os filhos. */
@@ -83,6 +140,12 @@ export function paraLinha(venda: Venda): VendaLinha {
     troco: venda.troco.centavos,
     abertaEm: venda.abertaEm,
     finalizadaEm: ouNulo(venda.finalizadaEm),
+    suspensaEm: ouNulo(venda.suspensao?.em),
+    rotuloSuspensao: ouNulo(venda.suspensao?.rotulo),
+    canceladaEm: ouNulo(venda.cancelamento?.em),
+    motivoCancelamento: ouNulo(venda.cancelamento?.motivo),
+    canceladaPorId: ouNulo(venda.cancelamento?.solicitadoPorId.valor),
+    cancelamentoAutorizadoPorId: ouNulo(venda.cancelamento?.autorizadoPorId?.valor),
   };
 }
 
@@ -98,6 +161,7 @@ export function itensParaLinhas(venda: Venda): ItemLinha[] {
     precoUnitario: item.precoUnitario.centavos,
     desconto: item.desconto.centavos,
     descontoRateado: item.descontoRateado.centavos,
+    custoUnitario: ouNulo(item.custoUnitario?.centavos),
   }));
 }
 
@@ -110,5 +174,7 @@ export function pagamentosParaLinhas(venda: Venda): PagamentoLinha[] {
     valor: pagamento.valor.centavos,
     autorizacao: ouNulo(pagamento.autorizacao),
     parcelas: pagamento.parcelas,
+    confirmacao: pagamento.confirmacao,
+    chave: ouNulo(pagamento.chave),
   }));
 }

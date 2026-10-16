@@ -656,7 +656,16 @@ describe("Venda — cancelamento", () => {
     venda.finalizar(AGORA);
     venda.coletarEventos();
 
-    expect(venda.cancelar("Cliente desistiu", GERENTE, AGORA).isOk()).toBe(true);
+    expect(
+      venda
+        .cancelar({
+          motivo: "Cliente desistiu",
+          solicitadoPorId: OPERADOR,
+          autorizadoPorId: GERENTE,
+          agora: AGORA,
+        })
+        .isOk(),
+    ).toBe(true);
     expect(venda.status).toBe("CANCELADA");
     expect(venda.eventos[0]?.tipo).toBe("VendaCancelada");
   });
@@ -665,12 +674,26 @@ describe("Venda — cancelamento", () => {
     // Venda aberta nunca saiu do caixa: não movimentou estoque nem dinheiro.
     const venda = vendaComItens();
 
-    expect(venda.cancelar("Desistência", GERENTE, AGORA).isOk()).toBe(true);
+    expect(
+      venda
+        .cancelar({
+          motivo: "Desistência",
+          solicitadoPorId: OPERADOR,
+          autorizadoPorId: GERENTE,
+          agora: AGORA,
+        })
+        .isOk(),
+    ).toBe(true);
     expect(venda.eventos).toHaveLength(0);
   });
 
   it("exige motivo", () => {
-    const resultado = vendaComItens().cancelar("   ", GERENTE, AGORA);
+    const resultado = vendaComItens().cancelar({
+      motivo: "   ",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+      agora: AGORA,
+    });
 
     expect(resultado.isErr()).toBe(true);
     if (resultado.isErr()) {
@@ -680,9 +703,19 @@ describe("Venda — cancelamento", () => {
 
   it("recusa cancelar duas vezes", () => {
     const venda = vendaComItens();
-    venda.cancelar("Desistência", GERENTE, AGORA);
+    venda.cancelar({
+      motivo: "Desistência",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+      agora: AGORA,
+    });
 
-    const resultado = venda.cancelar("De novo", GERENTE, AGORA);
+    const resultado = venda.cancelar({
+      motivo: "De novo",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+      agora: AGORA,
+    });
 
     expect(resultado.isErr()).toBe(true);
     if (resultado.isErr()) {
@@ -692,7 +725,12 @@ describe("Venda — cancelamento", () => {
 
   it("recusa alterar venda cancelada", () => {
     const venda = vendaComItens();
-    venda.cancelar("Desistência", GERENTE, AGORA);
+    venda.cancelar({
+      motivo: "Desistência",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+      agora: AGORA,
+    });
 
     const resultado = venda.adicionarItem(item());
 
@@ -850,5 +888,408 @@ describe("Venda — reconstituição", () => {
       .unwrap();
 
     expect(novo.numero).toBe(1);
+  });
+});
+
+describe("Venda — exemplos de conferência do pedido", () => {
+  it("produto a R$ 20,00 o quilo, 350 gramas: R$ 7,00", () => {
+    const venda = abrir();
+    // 350 g digitados como 0,350 kg: a unidade do produto é o quilo.
+    venda.registrarLeitura(
+      item({ quantidade: kg("0,350"), precoUnitario: reais("20,00") }),
+    );
+
+    expect(venda.total.formatar()).toBe("R$ 7,00");
+  });
+
+  it("350 gramas em gramas e em quilos são o mesmo peso", () => {
+    const emGramas = Quantidade.de("350", "G").unwrap();
+    const emQuilos = Quantidade.de("0,350", "KG").unwrap();
+
+    expect(emGramas.milesimos / 1000n).toBe(emQuilos.milesimos);
+  });
+
+  it("compra de R$ 12,50 paga com R$ 20,00 em dinheiro: troco de R$ 7,50", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item({ precoUnitario: reais("12,50") }));
+    venda.registrarPagamento("DINHEIRO", reais("20,00"));
+
+    expect(venda.faltaPagar.ehZero()).toBe(true);
+    expect(venda.troco.formatar()).toBe("R$ 7,50");
+    expect(venda.finalizar(AGORA).isOk()).toBe(true);
+  });
+
+  it("compra de R$ 50,00 com R$ 20,00 em dinheiro e R$ 30,00 em Pix: nada falta, sem troco", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item({ precoUnitario: reais("50,00") }));
+
+    venda.registrarPagamento("DINHEIRO", reais("20,00"));
+    expect(venda.faltaPagar.formatar()).toBe("R$ 30,00");
+
+    venda.registrarPagamento("PIX", reais("30,00"));
+
+    expect(venda.faltaPagar.ehZero()).toBe(true);
+    expect(venda.troco.ehZero()).toBe(true);
+    // Só os 20 em dinheiro entram na gaveta; o Pix confere contra o extrato.
+    expect(venda.valorEmGaveta.formatar()).toBe("R$ 20,00");
+  });
+});
+
+describe("Venda — leitura do balcão", () => {
+  it("a primeira leitura acrescenta o item", () => {
+    const venda = abrir();
+    const leitura = venda.registrarLeitura(item()).unwrap();
+
+    expect(leitura.somado).toBe(false);
+    expect(leitura.item.numero).toBe(1);
+    expect(venda.quantidadeItens).toBe(1);
+  });
+
+  it("🔑 reler o mesmo produto soma na mesma linha", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item());
+    venda.registrarLeitura(
+      item({ produtoId: PRODUTO_B, descricao: "Pão", precoUnitario: reais("5,00") }),
+    );
+
+    const leitura = venda.registrarLeitura(item()).unwrap();
+
+    expect(leitura.somado).toBe(true);
+    expect(leitura.item.numero).toBe(1);
+    expect(leitura.item.quantidade.formatar()).toBe("2 un");
+    expect(venda.quantidadeItens).toBe(2);
+    expect(venda.total.formatar()).toBe("R$ 24,80");
+  });
+
+  it("soma a quantidade digitada (3 × código)", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item());
+
+    venda.registrarLeitura(item({ quantidade: un("3") }));
+
+    expect(venda.itens[0]?.quantidade.formatar()).toBe("4 un");
+  });
+
+  it("cada pesagem fica numa linha própria", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item({ quantidade: kg("0,350") }));
+    venda.registrarLeitura(item({ quantidade: kg("0,350") }));
+
+    expect(venda.quantidadeItens).toBe(2);
+  });
+
+  it("somar zera o desconto da venda, calculado sobre outro total", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item());
+    venda.aplicarDescontoVenda(reais("1,00"));
+
+    venda.registrarLeitura(item());
+
+    expect(venda.descontoVenda.ehZero()).toBe(true);
+  });
+
+  it("recusa quantidade zero mesmo quando somaria", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item());
+
+    const resultado = venda.registrarLeitura(item({ quantidade: un("0") }));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr())
+      expect(resultado.error.codigo).toBe("ITEM_QUANTIDADE_INVALIDA");
+  });
+
+  it("recusa leitura em venda finalizada", () => {
+    const venda = abrir();
+    venda.registrarLeitura(item());
+    venda.registrarPagamento("DINHEIRO", reais("9,90"));
+    venda.finalizar(AGORA);
+
+    expect(venda.registrarLeitura(item()).isErr()).toBe(true);
+  });
+
+  it("propaga a recusa do item novo", () => {
+    const resultado = abrir().registrarLeitura(item({ descricao: " " }));
+
+    expect(resultado.isErr()).toBe(true);
+  });
+});
+
+describe("Venda — guardar e retomar", () => {
+  it("guarda com rótulo e retoma", () => {
+    const venda = vendaComItens();
+
+    expect(venda.suspender(AGORA, "  Dona Maria  ").isOk()).toBe(true);
+    expect(venda.estaSuspensa).toBe(true);
+    expect(venda.suspensao).toEqual({ em: AGORA, rotulo: "Dona Maria" });
+
+    expect(venda.retomar().isOk()).toBe(true);
+    expect(venda.estaSuspensa).toBe(false);
+    expect(venda.suspensao).toBeUndefined();
+  });
+
+  it("rótulo vazio fica ausente", () => {
+    const venda = vendaComItens();
+    venda.suspender(AGORA, "   ");
+
+    expect(venda.suspensao?.rotulo).toBeUndefined();
+  });
+
+  it("não guarda venda vazia", () => {
+    const resultado = abrir().suspender(AGORA);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("VENDA_SEM_ITENS");
+  });
+
+  it("recusa rótulo longo", () => {
+    const resultado = vendaComItens().suspender(AGORA, "x".repeat(41));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("VENDA_ROTULO_LONGO");
+  });
+
+  it("🔑 venda guardada não aceita alteração até ser retomada", () => {
+    const venda = vendaComItens();
+    venda.suspender(AGORA);
+
+    const resultado = venda.adicionarItem(item());
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("VENDA_SUSPENSA");
+      expect(resultado.error.mensagem).toContain("Retome");
+    }
+  });
+
+  it("não guarda duas vezes", () => {
+    const venda = vendaComItens();
+    venda.suspender(AGORA);
+
+    expect(venda.suspender(AGORA).isErr()).toBe(true);
+  });
+
+  it("retomar o que não estava guardado é inofensivo", () => {
+    expect(vendaComItens().retomar().isOk()).toBe(true);
+  });
+
+  it.each([
+    ["finalizada", "Esta venda já foi finalizada."],
+    ["cancelada", "Esta venda foi cancelada."],
+  ])("não retoma venda %s", (situacao, mensagem) => {
+    const venda = vendaComItens();
+
+    if (situacao === "finalizada") {
+      venda.registrarPagamento("DINHEIRO", reais("24,80"));
+      venda.finalizar(AGORA);
+    } else {
+      venda.cancelar({ motivo: "Desistiu", solicitadoPorId: OPERADOR, agora: AGORA });
+    }
+
+    const resultado = venda.retomar();
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.mensagem).toBe(mensagem);
+  });
+
+  it("venda guardada pode ser cancelada — a cliente que não voltou", () => {
+    const venda = vendaComItens();
+    venda.suspender(AGORA, "Mesa 3");
+
+    expect(
+      venda
+        .cancelar({ motivo: "Não voltou", solicitadoPorId: OPERADOR, agora: AGORA })
+        .isOk(),
+    ).toBe(true);
+    expect(venda.estaSuspensa).toBe(false);
+  });
+
+  it("volta guardada da reconstituição", () => {
+    const venda = Venda.reconstituir({
+      id: VENDA_ID,
+      numero: 7,
+      sessaoCaixaId: CAIXA,
+      operadorId: OPERADOR,
+      estacaoId: ESTACAO,
+      abertaEm: AGORA,
+      status: "ABERTA",
+      finalizadaEm: undefined,
+      descontoVenda: Dinheiro.zero(),
+      itens: [],
+      pagamentos: [],
+      suspensao: { em: AGORA, rotulo: "Seu João" },
+    });
+
+    expect(venda.estaSuspensa).toBe(true);
+    expect(venda.suspensao?.rotulo).toBe("Seu João");
+  });
+});
+
+describe("Venda — registro do cancelamento", () => {
+  it("guarda motivo, quem pediu e quem autorizou", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("DINHEIRO", reais("24,80"));
+    venda.finalizar(AGORA);
+
+    venda.cancelar({
+      motivo: "  Cobrado em dobro  ",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+      agora: AGORA,
+    });
+
+    expect(venda.cancelamento).toEqual({
+      em: AGORA,
+      motivo: "Cobrado em dobro",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+    });
+    expect(venda.foiCanceladaAposFinalizar).toBe(true);
+
+    const evento = venda.eventos.find((atual) => atual.tipo === "VendaCancelada");
+    expect(evento).toMatchObject({
+      motivo: "Cobrado em dobro",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+    });
+  });
+
+  it("descartar venda aberta não conta como cancelamento após finalizar", () => {
+    const venda = vendaComItens();
+    venda.cancelar({ motivo: "Desistiu", solicitadoPorId: OPERADOR, agora: AGORA });
+
+    expect(venda.foiCanceladaAposFinalizar).toBe(false);
+    expect(venda.cancelamento?.autorizadoPorId).toBeUndefined();
+  });
+
+  it("recusa motivo longo", () => {
+    const resultado = vendaComItens().cancelar({
+      motivo: "x".repeat(201),
+      solicitadoPorId: OPERADOR,
+      agora: AGORA,
+    });
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("VENDA_MOTIVO_LONGO");
+  });
+
+  it("volta cancelada da reconstituição com o registro", () => {
+    const cancelamento = {
+      em: AGORA,
+      motivo: "Erro de preço",
+      solicitadoPorId: OPERADOR,
+      autorizadoPorId: GERENTE,
+    };
+
+    const venda = Venda.reconstituir({
+      id: VENDA_ID,
+      numero: 7,
+      sessaoCaixaId: CAIXA,
+      operadorId: OPERADOR,
+      estacaoId: ESTACAO,
+      abertaEm: AGORA,
+      status: "CANCELADA",
+      finalizadaEm: AGORA,
+      descontoVenda: Dinheiro.zero(),
+      itens: [],
+      pagamentos: [],
+      cancelamento,
+    });
+
+    expect(venda.cancelamento).toEqual(cancelamento);
+    expect(venda.foiCanceladaAposFinalizar).toBe(true);
+  });
+});
+
+describe("Venda — regras de pagamento", () => {
+  it("🔑 cartão e Pix não passam do que falta: só dinheiro tem troco", () => {
+    const venda = vendaComItens();
+
+    const resultado = venda.registrarPagamento("CARTAO_DEBITO", reais("30,00"));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) {
+      expect(resultado.error.codigo).toBe("PAGAMENTO_ACIMA_DO_RESTANTE");
+      expect(resultado.error.mensagem).toContain("R$ 24,80");
+    }
+    expect(venda.pagamentos).toHaveLength(0);
+  });
+
+  it("dinheiro pode passar do que falta e vira troco", () => {
+    const venda = vendaComItens();
+
+    expect(venda.registrarPagamento("DINHEIRO", reais("50,00")).isOk()).toBe(true);
+    expect(venda.troco.formatar()).toBe("R$ 25,20");
+  });
+
+  it("recusa pagamento quando nada mais falta", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("PIX", reais("24,80"));
+
+    const resultado = venda.registrarPagamento("DINHEIRO", reais("1,00"));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("VENDA_JA_PAGA");
+  });
+
+  it("🔑 o reenvio com a mesma chave devolve o pagamento já registrado", () => {
+    const venda = vendaComItens();
+    const primeiro = venda
+      .registrarPagamento("PIX", reais("10,00"), { chave: "k1" })
+      .unwrap();
+
+    const repetido = venda
+      .registrarPagamento("PIX", reais("10,00"), { chave: "k1" })
+      .unwrap();
+
+    expect(repetido).toBe(primeiro);
+    expect(venda.pagamentos).toHaveLength(1);
+    expect(venda.faltaPagar.formatar()).toBe("R$ 14,80");
+  });
+
+  it("o reenvio funciona mesmo depois de a venda ter sido concluída", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("DINHEIRO", reais("24,80"), { chave: "k1" });
+    venda.finalizar(AGORA);
+
+    expect(
+      venda.registrarPagamento("DINHEIRO", reais("24,80"), { chave: "k1" }).isOk(),
+    ).toBe(true);
+    expect(venda.pagamentos).toHaveLength(1);
+  });
+
+  it("mesma chave com outro valor é recusada", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("PIX", reais("10,00"), { chave: "k1" });
+
+    const resultado = venda.registrarPagamento("PIX", reais("12,00"), { chave: "k1" });
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr())
+      expect(resultado.error.codigo).toBe("PAGAMENTO_CHAVE_REPETIDA");
+  });
+
+  it("chaves diferentes registram pagamentos diferentes", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("PIX", reais("10,00"), { chave: "k1" });
+    venda.registrarPagamento("PIX", reais("10,00"), { chave: "k2" });
+
+    expect(venda.pagamentos).toHaveLength(2);
+  });
+
+  it("guarda a confirmação manual do Pix", () => {
+    const venda = vendaComItens();
+    venda.registrarPagamento("PIX", reais("24,80"), { confirmacao: "MANUAL" });
+
+    expect(venda.pagamentos[0]?.confirmacao).toBe("MANUAL");
+  });
+});
+
+describe("Venda — base do desconto da venda", () => {
+  it("é o subtotal depois dos descontos de item", () => {
+    const venda = vendaComItens();
+    venda.aplicarDescontoItem(1, reais("1,80"));
+
+    expect(venda.baseParaDescontoDaVenda.formatar()).toBe("R$ 23,00");
   });
 });

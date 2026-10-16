@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   ehCodigoDeBalanca,
+  gerarEtiquetaBalanca,
   interpretarCodigoBalanca,
   LAYOUT_BALANCA_PADRAO,
   type LayoutBalanca,
+  validarLayoutBalanca,
 } from "./CodigoBalanca.js";
 
 const LAYOUT_PRECO: LayoutBalanca = {
@@ -182,5 +184,105 @@ describe("interpretarCodigoBalanca — recusas", () => {
     const leitura = interpretarCodigoBalanca("2012345012509", layout).unwrap();
 
     expect(leitura.preco?.centavos).toBe(123450125000n);
+  });
+});
+
+describe("validarLayoutBalanca", () => {
+  const codigos = (layout: LayoutBalanca): string[] =>
+    validarLayoutBalanca(layout).map((erro) => erro.codigo);
+
+  it("aceita o layout mais comum do varejo brasileiro", () => {
+    expect(codigos(LAYOUT_BALANCA_PADRAO)).toEqual([]);
+    expect(codigos(LAYOUT_PRECO)).toEqual([]);
+  });
+
+  it("aceita prefixos 2 e 20 com código de 4 dígitos", () => {
+    expect(
+      codigos({
+        ...LAYOUT_BALANCA_PADRAO,
+        prefixos: ["2", "20"],
+        tamanhoCodigoProduto: 5,
+      }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["sem prefixo", { prefixos: [] as string[] }, "BALANCA_PREFIXOS_INVALIDOS"],
+    ["prefixo com letra", { prefixos: ["A"] }, "BALANCA_PREFIXO_FORMATO"],
+    ["prefixo repetido", { prefixos: ["2", "2"] }, "BALANCA_PREFIXO_REPETIDO"],
+    [
+      "código de 3 dígitos",
+      { tamanhoCodigoProduto: 3 },
+      "BALANCA_TAMANHO_CODIGO_INVALIDO",
+    ],
+    [
+      "código de 7 dígitos",
+      { tamanhoCodigoProduto: 7 },
+      "BALANCA_TAMANHO_CODIGO_INVALIDO",
+    ],
+    ["peso com 4 casas", { casasDecimais: 4 }, "BALANCA_CASAS_INVALIDAS"],
+    ["casas negativas", { casasDecimais: -1 }, "BALANCA_CASAS_INVALIDAS"],
+  ])("recusa %s", (_caso, sobrescrita, codigo) => {
+    expect(codigos({ ...LAYOUT_BALANCA_PADRAO, ...sobrescrita })).toContain(codigo);
+  });
+
+  it("recusa preço com 3 casas: não existe fração de centavo", () => {
+    expect(codigos({ ...LAYOUT_PRECO, casasDecimais: 3 })).toContain(
+      "BALANCA_CASAS_INVALIDAS",
+    );
+  });
+
+  it("🔑 recusa combinação que deixa o valor sem espaço", () => {
+    // "22" + 6 dígitos de código sobra 4 para o valor: ok. "22" + 6 com mais
+    // um prefixo de 2 dígitos e código de 6 também; mas 6 + prefixo 2 com
+    // código de 4 deixa 6 — e prefixo 2 com código 6 deixa 4, tudo válido.
+    // O que não cabe é código curto com prefixo curto: valor de 7 dígitos.
+    expect(
+      codigos({ ...LAYOUT_BALANCA_PADRAO, prefixos: ["2"], tamanhoCodigoProduto: 4 }),
+    ).toContain("BALANCA_LAYOUT_SEM_ESPACO");
+  });
+});
+
+describe("gerarEtiquetaBalanca", () => {
+  it("🔑 monta a etiqueta que a balança imprimiria, e ela volta igual na leitura", () => {
+    const etiqueta = gerarEtiquetaBalanca(LAYOUT_BALANCA_PADRAO, "123", 350n).unwrap();
+
+    expect(etiqueta).toHaveLength(13);
+    expect(etiqueta.startsWith("2000123")).toBe(true);
+
+    const leitura = interpretarCodigoBalanca(etiqueta, LAYOUT_BALANCA_PADRAO).unwrap();
+
+    expect(leitura.codigoProduto).toBe("000123");
+    expect(leitura.peso?.formatar()).toBe("0,35 kg");
+  });
+
+  it("monta etiqueta de preço: R$ 7,00 embutidos", () => {
+    const etiqueta = gerarEtiquetaBalanca(LAYOUT_PRECO, "45", 700n).unwrap();
+
+    expect(
+      interpretarCodigoBalanca(etiqueta, LAYOUT_PRECO).unwrap().preco?.formatar(),
+    ).toBe("R$ 7,00");
+  });
+
+  it.each([
+    ["código vazio", "", 1n, "BALANCA_CODIGO_NAO_CABE"],
+    ["código longo", "1234567", 1n, "BALANCA_CODIGO_NAO_CABE"],
+    ["valor que não cabe", "1", 123456n, "BALANCA_VALOR_NAO_CABE"],
+    ["valor negativo", "1", -1n, "BALANCA_VALOR_NAO_CABE"],
+  ])("recusa %s", (_caso, codigo, valor, esperado) => {
+    const resultado = gerarEtiquetaBalanca(LAYOUT_BALANCA_PADRAO, codigo, valor);
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe(esperado);
+  });
+
+  it("recusa layout sem prefixo", () => {
+    const resultado = gerarEtiquetaBalanca(
+      { ...LAYOUT_BALANCA_PADRAO, prefixos: [], tamanhoCodigoProduto: 13 },
+      "1",
+      1n,
+    );
+
+    expect(resultado.isErr()).toBe(true);
   });
 });

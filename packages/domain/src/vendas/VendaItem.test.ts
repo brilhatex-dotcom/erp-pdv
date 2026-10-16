@@ -218,3 +218,84 @@ describe("VendaItem — reconstituição", () => {
     expect(item.descricao).toBe("");
   });
 });
+
+describe("VendaItem — custo congelado", () => {
+  const OUTRO = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f5a99").unwrap();
+
+  it("guarda o custo da unidade e calcula o custo da quantidade", () => {
+    const item = criar({ custoUnitario: reais("6,00") });
+
+    expect(item.custoUnitario?.formatar()).toBe("R$ 6,00");
+    expect(item.custoTotal?.formatar()).toBe("R$ 12,00");
+  });
+
+  it("custo do peso arredonda como o preço: 0,375 kg a R$ 11,50 = R$ 4,31", () => {
+    const item = criar({
+      quantidade: Quantidade.de("0,375", "KG").unwrap(),
+      custoUnitario: reais("11,50"),
+    });
+
+    // 11,50 × 0,375 = 4,3125 → meio-para-cima nos centavos.
+    expect(item.custoTotal?.formatar()).toBe("R$ 4,31");
+  });
+
+  it("sem custo informado, a margem fica desconhecida — e não zero", () => {
+    const item = criar();
+
+    expect(item.custoUnitario).toBeUndefined();
+    expect(item.custoTotal).toBeUndefined();
+  });
+
+  it("recusa custo negativo", () => {
+    const resultado = VendaItem.criar(1, dados({ custoUnitario: reais("-1,00") }));
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("ITEM_CUSTO_NEGATIVO");
+  });
+
+  it("o custo sobrevive à reconstituição", () => {
+    const item = VendaItem.reconstituir(
+      3,
+      dados({ custoUnitario: reais("4,00") }),
+      Dinheiro.zero(),
+      Dinheiro.zero(),
+    );
+
+    expect(item.custoUnitario?.formatar()).toBe("R$ 4,00");
+  });
+
+  describe("quando uma nova leitura soma a este item", () => {
+    it("soma o mesmo produto vendido por unidade, ao mesmo preço", () => {
+      expect(criar().aceitaSomar(dados({ quantidade: un("1") }))).toBe(true);
+    });
+
+    it("não soma produto diferente", () => {
+      expect(criar().aceitaSomar(dados({ produtoId: OUTRO }))).toBe(false);
+    });
+
+    it("🔑 não soma pesagens: cada etiqueta é uma embalagem", () => {
+      const item = criar({ quantidade: Quantidade.de("0,350", "KG").unwrap() });
+
+      expect(
+        item.aceitaSomar(dados({ quantidade: Quantidade.de("0,200", "KG").unwrap() })),
+      ).toBe(false);
+    });
+
+    it("não soma com preço diferente — promoção não volta no tempo", () => {
+      expect(criar().aceitaSomar(dados({ precoUnitario: reais("8,90") }))).toBe(false);
+    });
+
+    it("não soma a item que já tem desconto próprio", () => {
+      const item = criar();
+      item.aplicarDesconto(reais("1,00"));
+
+      expect(item.aceitaSomar(dados({ quantidade: un("1") }))).toBe(false);
+    });
+
+    it("não soma outra unidade do mesmo produto", () => {
+      expect(
+        criar().aceitaSomar(dados({ quantidade: Quantidade.de("1", "CX").unwrap() })),
+      ).toBe(false);
+    });
+  });
+});

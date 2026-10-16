@@ -99,6 +99,7 @@ function comVenda(estacaoId = ESTACAO, abertaEm = ABERTURA): SessaoCaixa {
     total: reais("250,00"),
     troco: reais("50,00"),
     pagamentos: [{ forma: "DINHEIRO", valor: reais("300,00") }],
+    desconto: Dinheiro.zero(),
   });
 
   return sessao;
@@ -240,6 +241,7 @@ describe("sessoesDeCaixa", () => {
       total: reais("250,00"),
       troco: reais("0,00"),
       pagamentos: [{ forma: "CARTAO_DEBITO", valor: reais("250,00") }],
+      desconto: Dinheiro.zero(),
     });
 
     sessao.fechar(reais("100,00"), FECHAMENTO);
@@ -253,18 +255,22 @@ describe("sessoesDeCaixa", () => {
   });
 
   it("operador que não está mais cadastrado não deixa a linha sem nome", async () => {
-    // Não há FK em `operador_id` (ver ESTADO.md §2.4). Enquanto não houver,
-    // uma sessão pode apontar para alguém que sumiu — e a tela não pode
-    // quebrar por causa disso.
-    const orfa = SessaoCaixa.abrir({
-      id: proximoId(),
-      estacaoId: ESTACAO,
-      operadorId: proximoId(),
-      fundoTroco: reais("100,00"),
-      abertaEm: ABERTURA,
-    }).unwrap();
-
-    await gravar(orfa);
+    // A chave estrangeira de `operador_id` nasceu `NOT VALID` (migração
+    // `balcao_completo`): vale para sessão nova, mas uma linha gravada antes
+    // dela pode apontar para quem não existe. A tela não pode quebrar por
+    // causa disso. A linha antiga é recriada com a conferência de chave
+    // desligada — exatamente o estado em que ela chegou ao banco.
+    await prisma.$transaction([
+      prisma.$executeRawUnsafe("SET LOCAL session_replication_role = replica"),
+      prisma.$executeRawUnsafe(
+        `INSERT INTO sessoes_caixa (id, estacao_id, operador_id, fundo_troco, aberta_em)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 10000, $4)`,
+        proximoId().valor,
+        ESTACAO.valor,
+        proximoId().valor,
+        ABERTURA,
+      ),
+    ]);
 
     const [linha] = await sessoesDeCaixa(prisma, DIA);
 

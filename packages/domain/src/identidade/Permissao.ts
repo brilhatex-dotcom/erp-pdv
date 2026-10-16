@@ -19,6 +19,15 @@ export const PERMISSOES = [
   "venda:desconto_acima_limite",
   "venda:consultar_propria",
   "venda:consultar_todas",
+  // Remover item ou diminuir quantidade **na venda em andamento**. Separada de
+  // `venda:criar` para que o dono possa exigir supervisor nisso sem impedir o
+  // operador de vender — a escolha é dele, não do sistema.
+  "venda:remover_item",
+  // Devolução com reembolso. Não é cancelamento: acontece depois, muitas vezes
+  // em outro dia e com outro operador, e mexe na gaveta de hoje.
+  "venda:devolver",
+  // Liberar a venda de produto sem saldo quando a loja escolheu "autorizar".
+  "venda:sem_estoque",
 
   // Catálogo
   "produto:criar",
@@ -74,7 +83,16 @@ export const PERMISSOES = [
   "usuario:editar_permissoes",
   "config:empresa",
   "config:fiscal",
+  // Agenda, pasta e **restauração** do backup. Restaurar substitui o banco
+  // inteiro: é a operação mais destrutiva do produto.
   "config:backup",
+  // Fazer um backup agora. Separada de `config:backup` porque copiar os dados
+  // não destrói nada — o gerente que vai trocar o computador de lugar precisa
+  // poder fazê-lo sem chamar o administrador.
+  "backup:executar",
+  // Ler o registro de quem cancelou, deu desconto, ajustou estoque e mudou
+  // preço. É informação sobre os colegas, e por isso não fica com o balcão.
+  "auditoria:consultar",
 ] as const;
 
 export type Permissao = (typeof PERMISSOES)[number];

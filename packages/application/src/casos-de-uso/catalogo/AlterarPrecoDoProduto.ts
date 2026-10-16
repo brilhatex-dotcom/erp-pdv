@@ -10,15 +10,19 @@ import {
 } from "@erp/domain";
 
 import { agregarErros } from "../../erros/agregarErros.js";
+import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
 
+import { auditarPreco } from "./AlterarProduto.js";
 import { interpretarCentavos } from "./interpretarProduto.js";
 
 export interface EntradaAlterarPreco {
   readonly id: Identificador;
   /** Centavos. */
   readonly precoVenda: bigint;
+  /** Quem corrigiu — vai para a auditoria. */
+  readonly usuarioId: Identificador;
 }
 
 /**
@@ -36,6 +40,7 @@ export class AlterarPrecoDoProduto {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly relogio: Relogio,
+    private readonly geradorId: GeradorId,
   ) {}
 
   async executar(entrada: EntradaAlterarPreco): Promise<Result<Produto, DomainError>> {
@@ -55,8 +60,19 @@ export class AlterarPrecoDoProduto {
         );
       }
 
+      const anterior = produto.precoVenda;
+
       const alterado = produto.alterarPreco(preco, agora);
       if (alterado.isErr()) return err(alterado.error);
+
+      if (!anterior.equals(preco)) {
+        await auditarPreco(repositorios, this.geradorId, {
+          produto,
+          anterior,
+          usuarioId: entrada.usuarioId,
+          agora,
+        });
+      }
 
       await repositorios.produtos.salvar(produto);
 

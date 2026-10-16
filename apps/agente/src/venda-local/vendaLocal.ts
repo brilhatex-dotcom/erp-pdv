@@ -167,9 +167,34 @@ export class VendaLocal {
       return { tipo: "ERRO", mensagem: "Valor inválido." };
     }
 
+    // As mesmas duas regras da venda no servidor (`Venda.registrarPagamento`):
+    // offline e online o operador não pode notar diferença, e um pagamento que
+    // o servidor recusaria na importação seria uma venda perdida depois de o
+    // cliente já ter ido embora.
+    const falta = this.#faltaPagar(venda);
+
+    if (falta <= 0n) {
+      return {
+        tipo: "ERRO",
+        mensagem: "O pagamento já cobre o total da venda. Conclua a venda.",
+      };
+    }
+
+    if (forma !== "DINHEIRO" && BigInt(valorEmCentavos) > falta) {
+      return {
+        tipo: "ERRO",
+        mensagem: `Fora do dinheiro, o valor não pode passar do que falta (${formatarCentavos(falta)}). Só dinheiro tem troco.`,
+      };
+    }
+
     venda.pagamentos.push({ forma, valor: valorEmCentavos });
 
-    return { tipo: "OK", faltaPagar: this.#faltaPagar(venda).toString() };
+    // Zero quando entrou a mais, como no servidor: a tela conclui a venda ao
+    // ver "0", e um "-510" deixaria a venda com troco parada na tela de
+    // pagamento — com o cliente esperando o troco.
+    const restante = this.#faltaPagar(venda);
+
+    return { tipo: "OK", faltaPagar: (restante > 0n ? restante : 0n).toString() };
   }
 
   /**
@@ -333,4 +358,9 @@ function centavosDe(texto: string): bigint | undefined {
   if (!/^\d+$/.test(texto)) return undefined;
 
   return BigInt(texto);
+}
+
+/** `2480n` → "R$ 24,80", como a mensagem do servidor. */
+function formatarCentavos(centavos: bigint): string {
+  return Dinheiro.deCentavos(centavos).unwrapOr(Dinheiro.zero()).formatar();
 }

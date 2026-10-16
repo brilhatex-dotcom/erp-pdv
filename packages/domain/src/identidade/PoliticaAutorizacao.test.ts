@@ -330,3 +330,109 @@ describe("Autorização — quem pode liberar", () => {
     expect(podeAutorizar(comPapel("ESTOQUISTA"), decisao, descontoAlto)).toBe(false);
   });
 });
+
+describe("Autorização — alçadas sem valor", () => {
+  /** Papel de operador sem a permissão de tirar item, como a loja pode configurar. */
+  function operadorSemRemover(): Usuario {
+    const modelo = papelPadrao("OPERADOR_CAIXA", PAPEL_ID);
+
+    return Usuario.criar({
+      id: proximoId(),
+      matricula: Matricula.criar("7").unwrap(),
+      nome: "Operador restrito",
+      papel: Papel.criar({
+        ...modelo,
+        codigo: "OPERADOR_RESTRITO",
+        permissoes: modelo.permissoes.filter((atual) => atual !== "venda:remover_item"),
+        padrao: false,
+      }).unwrap(),
+      hashPin: CredencialHash.criar("$argon2id$x", "argon2id").unwrap(),
+    }).unwrap();
+  }
+
+  it("🔑 o operador de fábrica corrige a própria bipada sozinho", () => {
+    expect(avaliar(comPapel("OPERADOR_CAIXA"), { tipo: "REMOVER_ITEM" }).tipo).toBe(
+      "PERMITIDO",
+    );
+  });
+
+  it("sem a permissão, tirar item pede supervisor — e não nega", () => {
+    const decisao = avaliar(operadorSemRemover(), { tipo: "REMOVER_ITEM" });
+
+    expect(decisao).toMatchObject({
+      tipo: "REQUER_SUPERVISOR",
+      permissaoNecessaria: "venda:remover_item",
+    });
+  });
+
+  it("o supervisor libera a remoção com a própria alçada", () => {
+    const decisao = avaliar(operadorSemRemover(), { tipo: "REMOVER_ITEM" });
+    if (decisao.tipo !== "REQUER_SUPERVISOR") throw new Error("decisão inesperada");
+
+    expect(podeAutorizar(comPapel("SUPERVISOR"), decisao, { tipo: "REMOVER_ITEM" })).toBe(
+      true,
+    );
+  });
+
+  it("vender sem estoque pede supervisor ao operador", () => {
+    expect(
+      avaliar(comPapel("OPERADOR_CAIXA"), { tipo: "VENDA_SEM_ESTOQUE" }),
+    ).toMatchObject({
+      tipo: "REQUER_SUPERVISOR",
+      permissaoNecessaria: "venda:sem_estoque",
+    });
+    expect(avaliar(comPapel("SUPERVISOR"), { tipo: "VENDA_SEM_ESTOQUE" }).tipo).toBe(
+      "PERMITIDO",
+    );
+  });
+
+  it("fiado dentro do limite não pede nada", () => {
+    expect(
+      avaliar(comPapel("OPERADOR_CAIXA"), {
+        tipo: "FIADO_ACIMA_DO_LIMITE",
+        excedente: Dinheiro.zero(),
+      }).tipo,
+    ).toBe("PERMITIDO");
+  });
+
+  it("🔑 fiado acima do limite pede o gerente — quem define o limite", () => {
+    const acao: AcaoSolicitada = {
+      tipo: "FIADO_ACIMA_DO_LIMITE",
+      excedente: reais("35,00"),
+    };
+    const decisao = avaliar(comPapel("OPERADOR_CAIXA"), acao);
+
+    expect(decisao).toMatchObject({
+      tipo: "REQUER_SUPERVISOR",
+      permissaoNecessaria: "cliente:definir_limite",
+    });
+    if (decisao.tipo !== "REQUER_SUPERVISOR") throw new Error("decisão inesperada");
+    expect(decisao.motivo).toContain("R$ 35,00");
+
+    // O supervisor não define limite de crédito; o gerente define.
+    expect(podeAutorizar(comPapel("SUPERVISOR"), decisao, acao)).toBe(false);
+    expect(podeAutorizar(comPapel("GERENTE"), decisao, acao)).toBe(true);
+  });
+
+  it("quem não vende não pede nenhuma das três", () => {
+    expect(avaliar(comPapel("CONTADOR"), { tipo: "REMOVER_ITEM" }).tipo).toBe("NEGADO");
+  });
+});
+
+describe("Autorização — permissões novas nos papéis de fábrica", () => {
+  it.each([
+    ["OPERADOR_CAIXA", "venda:remover_item", "PERMITIDO"],
+    ["OPERADOR_CAIXA", "venda:devolver", "NEGADO"],
+    ["SUPERVISOR", "venda:devolver", "PERMITIDO"],
+    ["SUPERVISOR", "backup:executar", "NEGADO"],
+    ["GERENTE", "backup:executar", "PERMITIDO"],
+    ["GERENTE", "auditoria:consultar", "PERMITIDO"],
+    ["GERENTE", "config:backup", "NEGADO"],
+    ["ADMIN", "config:backup", "PERMITIDO"],
+    ["ADMIN", "auditoria:consultar", "PERMITIDO"],
+  ] as const)("%s · %s → %s", (papel, permissao, esperado) => {
+    expect(avaliar(comPapel(papel), { tipo: "PERMISSAO", permissao }).tipo).toBe(
+      esperado,
+    );
+  });
+});

@@ -24,7 +24,13 @@ export type AcaoSolicitada =
   | {
       readonly tipo: "CANCELAR_VENDA";
       readonly minutosDesdeFinalizacao: number;
-    };
+    }
+  /** Tirar item ou diminuir quantidade na venda em andamento. */
+  | { readonly tipo: "REMOVER_ITEM" }
+  /** Vender produto sem saldo, na loja que escolheu exigir autorização. */
+  | { readonly tipo: "VENDA_SEM_ESTOQUE" }
+  /** Fiado que passa do crédito disponível do cliente. */
+  | { readonly tipo: "FIADO_ACIMA_DO_LIMITE"; readonly excedente: Dinheiro };
 
 /**
  * Resposta da política.
@@ -59,6 +65,13 @@ const PERMISSAO_BASE: Record<Exclude<AcaoSolicitada["tipo"], "PERMISSAO">, Permi
   SANGRIA: "caixa:sangria",
   ESTORNO_EM_DINHEIRO: "caixa:sangria",
   CANCELAR_VENDA: "venda:cancelar",
+  // As três abaixo partem de quem **vende**: é o operador que bipou errado,
+  // que chegou ao produto sem saldo, que tem o cliente do fiado na frente. A
+  // permissão dele é a de vender; o que ele pode não ter é a alçada para
+  // seguir sozinho — e aí o supervisor libera com o PIN, sem trocar a sessão.
+  REMOVER_ITEM: "venda:criar",
+  VENDA_SEM_ESTOQUE: "venda:criar",
+  FIADO_ACIMA_DO_LIMITE: "venda:criar",
 };
 
 /**
@@ -128,7 +141,45 @@ export function avaliar(usuario: Usuario, acao: AcaoSolicitada): Decisao {
         acao.minutosDesdeFinalizacao,
         limites.minutosParaCancelarVenda,
       );
+
+    case "REMOVER_ITEM":
+      return avaliarAlcada(
+        usuario,
+        "venda:remover_item",
+        "Para tirar item da venda, chame o supervisor.",
+      );
+
+    case "VENDA_SEM_ESTOQUE":
+      return avaliarAlcada(
+        usuario,
+        "venda:sem_estoque",
+        "Este produto está sem estoque. A venda precisa de autorização do supervisor.",
+      );
+
+    case "FIADO_ACIMA_DO_LIMITE":
+      if (!acao.excedente.ehPositivo()) return PERMITIDO;
+
+      // Quem define o limite é quem pode passar dele: a decisão é sobre o
+      // risco de não receber, e esse risco é de quem responde pelo dinheiro.
+      return avaliarAlcada(
+        usuario,
+        "cliente:definir_limite",
+        `O fiado passa ${acao.excedente.formatar()} do limite do cliente. Chame o gerente.`,
+      );
   }
+}
+
+/**
+ * Alçada que não tem valor: ou o papel concede, ou é preciso supervisor.
+ *
+ * É a forma das operações em que "quanto" não se aplica — tirar um item não é
+ * mais grave por custar R$ 5 ou R$ 50, e a loja decide só se o operador pode
+ * fazer sozinho.
+ */
+function avaliarAlcada(usuario: Usuario, alcada: Permissao, motivo: string): Decisao {
+  if (usuario.temPermissao(alcada)) return PERMITIDO;
+
+  return { tipo: "REQUER_SUPERVISOR", permissaoNecessaria: alcada, motivo };
 }
 
 function avaliarPercentual(

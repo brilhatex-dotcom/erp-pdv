@@ -13,6 +13,15 @@ import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
 
 export interface EntradaIniciarVenda {
+  /**
+   * Gerado pela estação antes do envio (UUIDv7, ADR-0008).
+   *
+   * É o que torna o primeiro bipe seguro de repetir: se a resposta se perder,
+   * a estação manda o mesmo id, e recebe a mesma venda em vez de abrir uma
+   * segunda — que ficaria esquecida no caixa, aberta e com número ocupado.
+   * Ausente, o servidor gera.
+   */
+  readonly id?: Identificador | undefined;
   readonly estacaoId: Identificador;
   readonly operadorId: Identificador;
   readonly clienteId?: Identificador | undefined;
@@ -34,6 +43,26 @@ export class IniciarVenda {
 
   async executar(entrada: EntradaIniciarVenda): Promise<Result<Venda, DomainError>> {
     return this.unitOfWork.transacao(async (repositorios) => {
+      if (entrada.id !== undefined) {
+        const existente = await repositorios.vendas.porId(entrada.id);
+
+        if (existente !== undefined) {
+          // Mesmo id de outra estação não é repetição: é colisão, ou alguém
+          // tentando continuar a venda de outro caixa. Nos dois casos, não.
+          if (!existente.estacaoId.equals(entrada.estacaoId)) {
+            return err(
+              new ErroRegraNegocio(
+                "VENDA_DE_OUTRA_ESTACAO",
+                "Esta venda pertence a outro caixa.",
+                { vendaId: entrada.id.valor },
+              ),
+            );
+          }
+
+          return ok(existente);
+        }
+      }
+
       const sessao = await repositorios.caixas.abertaNaEstacao(entrada.estacaoId);
 
       if (sessao === undefined) {
@@ -49,7 +78,7 @@ export class IniciarVenda {
       const numero = await repositorios.vendas.proximoNumero(entrada.estacaoId);
 
       const venda = Venda.iniciar({
-        id: this.geradorId.proximo(),
+        id: entrada.id ?? this.geradorId.proximo(),
         numero,
         sessaoCaixaId: sessao.id,
         operadorId: entrada.operadorId,

@@ -13,6 +13,8 @@ import { MovimentoCaixa } from "./MovimentoCaixa.js";
 
 export type StatusCaixa = "ABERTA" | "FECHADA";
 
+const NENHUMA_OCORRENCIA = { quantidade: 0, total: Dinheiro.zero() } as const;
+
 export type ErroCaixa = ErroValidacao | ErroRegraNegocio;
 
 /** Pagamento de uma venda, no formato que o caixa precisa acumular. */
@@ -33,6 +35,14 @@ export interface ResumoVenda {
   readonly total: Dinheiro;
   readonly pagamentos: readonly PagamentoResumido[];
   readonly troco: Dinheiro;
+  /** Desconto total concedido na venda — item e venda somados. */
+  readonly desconto: Dinheiro;
+}
+
+/** Contagem e valor de um tipo de ocorrência do turno. */
+export interface TotalDeOcorrencias {
+  readonly quantidade: number;
+  readonly total: Dinheiro;
 }
 
 /** Conferência de uma forma de pagamento no fechamento. */
@@ -60,6 +70,13 @@ export interface ConferenciaCaixa {
   readonly totalAReceber: Dinheiro;
   readonly totalVendido: Dinheiro;
   readonly quantidadeVendas: number;
+  /** Descontos concedidos nas vendas que ficaram de pé. */
+  readonly descontos: Dinheiro;
+  readonly cancelamentos: TotalDeOcorrencias;
+  /** Todas as devoluções do turno, em qualquer forma de reembolso. */
+  readonly devolucoes: TotalDeOcorrencias;
+  /** A parte das devoluções que saiu da gaveta em espécie. */
+  readonly devolvidoEmDinheiro: Dinheiro;
 }
 
 /** Estado completo de uma sessão vinda do banco. */
@@ -72,6 +89,10 @@ export interface DadosReconstituicaoCaixa extends DadosSessaoCaixa {
   readonly movimentos: readonly MovimentoCaixa[];
   /** Totais por forma de pagamento. */
   readonly recebidos: ReadonlyMap<CodigoFormaPagamento, Dinheiro>;
+  readonly descontosConcedidos: Dinheiro;
+  readonly cancelamentos: TotalDeOcorrencias;
+  readonly devolucoes: TotalDeOcorrencias;
+  readonly devolvidoEmDinheiro: Dinheiro;
 }
 
 export interface DadosSessaoCaixa {
@@ -107,6 +128,10 @@ export class SessaoCaixa extends AggregateRoot {
   #trocoDevolvido = Dinheiro.zero();
   #totalVendido = Dinheiro.zero();
   #quantidadeVendas = 0;
+  #descontosConcedidos = Dinheiro.zero();
+  #cancelamentos: TotalDeOcorrencias = NENHUMA_OCORRENCIA;
+  #devolucoes: TotalDeOcorrencias = NENHUMA_OCORRENCIA;
+  #devolvidoEmDinheiro = Dinheiro.zero();
   #status: StatusCaixa = "ABERTA";
   #fechadaEm: Date | undefined;
   #conferencia: ConferenciaCaixa | undefined;
@@ -159,6 +184,10 @@ export class SessaoCaixa extends AggregateRoot {
     sessao.#trocoDevolvido = dados.trocoDevolvido;
     sessao.#totalVendido = dados.totalVendido;
     sessao.#quantidadeVendas = dados.quantidadeVendas;
+    sessao.#descontosConcedidos = dados.descontosConcedidos;
+    sessao.#cancelamentos = dados.cancelamentos;
+    sessao.#devolucoes = dados.devolucoes;
+    sessao.#devolvidoEmDinheiro = dados.devolvidoEmDinheiro;
     sessao.#movimentos.push(...dados.movimentos);
 
     for (const [forma, valor] of dados.recebidos) {
@@ -214,6 +243,22 @@ export class SessaoCaixa extends AggregateRoot {
     return this.#trocoDevolvido;
   }
 
+  get descontosConcedidos(): Dinheiro {
+    return this.#descontosConcedidos;
+  }
+
+  get cancelamentos(): TotalDeOcorrencias {
+    return this.#cancelamentos;
+  }
+
+  get devolucoes(): TotalDeOcorrencias {
+    return this.#devolucoes;
+  }
+
+  get devolvidoEmDinheiro(): Dinheiro {
+    return this.#devolvidoEmDinheiro;
+  }
+
   /** Conferência produzida no fechamento. */
   get conferencia(): ConferenciaCaixa | undefined {
     return this.#conferencia;
@@ -236,15 +281,17 @@ export class SessaoCaixa extends AggregateRoot {
    * Dinheiro que deveria estar na gaveta agora.
    *
    * Conta apenas o que é físico: fundo de troco, dinheiro recebido menos o
-   * troco devolvido, mais suprimentos, menos sangrias. Cartão, PIX e crediário
-   * ficam de fora — não passam pela gaveta.
+   * troco devolvido, mais suprimentos, menos sangrias e menos o que voltou ao
+   * cliente em espécie numa devolução. Cartão, PIX e crediário ficam de fora —
+   * não passam pela gaveta.
    */
   get esperadoEmDinheiro(): Dinheiro {
     return this.#fundoTroco
       .somar(this.recebidoEm("DINHEIRO"))
       .subtrair(this.#trocoDevolvido)
       .somar(this.suprimentos)
-      .subtrair(this.sangrias);
+      .subtrair(this.sangrias)
+      .subtrair(this.#devolvidoEmDinheiro);
   }
 
   /** Vendido no crediário: a receber, fora da conferência de caixa. */
@@ -271,6 +318,7 @@ export class SessaoCaixa extends AggregateRoot {
     this.#trocoDevolvido = this.#trocoDevolvido.somar(resumo.troco);
     this.#totalVendido = this.#totalVendido.somar(resumo.total);
     this.#quantidadeVendas += 1;
+    this.#descontosConcedidos = this.#descontosConcedidos.somar(resumo.desconto);
 
     return ok(undefined);
   }
@@ -292,6 +340,55 @@ export class SessaoCaixa extends AggregateRoot {
     this.#trocoDevolvido = this.#trocoDevolvido.subtrair(resumo.troco);
     this.#totalVendido = this.#totalVendido.subtrair(resumo.total);
     this.#quantidadeVendas -= 1;
+    this.#descontosConcedidos = this.#descontosConcedidos.subtrair(resumo.desconto);
+    this.#cancelamentos = acrescentar(this.#cancelamentos, resumo.total);
+
+    return ok(undefined);
+  }
+
+  /**
+   * Registra uma devolução feita neste turno.
+   *
+   * Toda devolução entra na contagem do fechamento; só a reembolsada **em
+   * dinheiro** mexe no esperado da gaveta — e por isso só ela é conferida
+   * contra o que há na gaveta agora, como a sangria: devolver em espécie mais
+   * do que a gaveta tem é fisicamente impossível, e aceitar faria o fechamento
+   * acusar uma falta criada pelo próprio registro.
+   */
+  registrarDevolucao(devolucao: {
+    readonly valor: Dinheiro;
+    readonly emDinheiro: boolean;
+  }): Result<void, ErroCaixa> {
+    const bloqueio = this.#exigirAberta();
+    if (bloqueio !== undefined) return err(bloqueio);
+
+    if (!devolucao.valor.ehPositivo()) {
+      return err(
+        new ErroValidacao(
+          "CAIXA_DEVOLUCAO_VALOR_INVALIDO",
+          "O valor da devolução deve ser maior que zero.",
+        ),
+      );
+    }
+
+    if (devolucao.emDinheiro && devolucao.valor.maiorQue(this.esperadoEmDinheiro)) {
+      return err(
+        new ErroRegraNegocio(
+          "CAIXA_DEVOLUCAO_MAIOR_QUE_SALDO",
+          `Não há esse valor na gaveta para devolver. Disponível: ${this.esperadoEmDinheiro.formatar()}.`,
+          {
+            disponivel: this.esperadoEmDinheiro.centavos.toString(),
+            solicitado: devolucao.valor.centavos.toString(),
+          },
+        ),
+      );
+    }
+
+    this.#devolucoes = acrescentar(this.#devolucoes, devolucao.valor);
+
+    if (devolucao.emDinheiro) {
+      this.#devolvidoEmDinheiro = this.#devolvidoEmDinheiro.somar(devolucao.valor);
+    }
 
     return ok(undefined);
   }
@@ -396,6 +493,10 @@ export class SessaoCaixa extends AggregateRoot {
       totalAReceber: this.totalAReceber,
       totalVendido: this.#totalVendido,
       quantidadeVendas: this.#quantidadeVendas,
+      descontos: this.#descontosConcedidos,
+      cancelamentos: this.#cancelamentos,
+      devolucoes: this.#devolucoes,
+      devolvidoEmDinheiro: this.#devolvidoEmDinheiro,
     };
 
     this.#status = "FECHADA";
@@ -468,4 +569,8 @@ export class SessaoCaixa extends AggregateRoot {
 
     return resultado;
   }
+}
+
+function acrescentar(atual: TotalDeOcorrencias, valor: Dinheiro): TotalDeOcorrencias {
+  return { quantidade: atual.quantidade + 1, total: atual.total.somar(valor) };
 }

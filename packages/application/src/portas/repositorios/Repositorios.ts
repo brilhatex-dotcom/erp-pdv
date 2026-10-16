@@ -1,4 +1,10 @@
 import type { FiltroBusca } from "./FiltroBusca.js";
+import type {
+  AuditoriaRepository,
+  ConfiguracaoLojaRepository,
+  DevolucaoRepository,
+  ImagemRepository,
+} from "./RepositoriosBalcao.js";
 import type { TituloRepository } from "./RepositoriosFinanceiro.js";
 import type {
   CategoriaRepository,
@@ -75,6 +81,14 @@ export interface VendaRepository {
   salvar(venda: Venda): Promise<void>;
   /** Próximo número livre na série da estação. */
   proximoNumero(estacaoId: Identificador): Promise<number>;
+  /**
+   * Vendas ainda abertas — guardadas ou esquecidas — de uma sessão de caixa.
+   *
+   * É o que o fechamento confere antes de fechar: venda aberta num caixa
+   * fechado não tem mais onde ser concluída, e o cliente que voltou para
+   * buscá-la encontraria o carrinho perdido.
+   */
+  abertasNaSessao(sessaoCaixaId: Identificador): Promise<readonly Venda[]>;
 }
 
 export interface EstoqueRepository {
@@ -138,4 +152,8 @@ export interface Repositorios {
   readonly fornecedores: FornecedorRepository;
   readonly notasDeCompra: NotaDeCompraRepository;
   readonly titulos: TituloRepository;
+  readonly configuracao: ConfiguracaoLojaRepository;
+  readonly devolucoes: DevolucaoRepository;
+  readonly auditoria: AuditoriaRepository;
+  readonly imagens: ImagemRepository;
 }

@@ -97,3 +97,62 @@ describe("Categoria", () => {
     expect(categoria.ativa).toBe(false);
   });
 });
+
+describe("Categoria — ícone e imagem", () => {
+  const IMAGEM = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-c00000000002").unwrap();
+
+  it("guarda o emoji que aparece no botão do caixa", () => {
+    const categoria = Categoria.criar({ id: ID, nome: "Pães", icone: " 🍞 " }).unwrap();
+
+    expect(categoria.icone).toBe("🍞");
+  });
+
+  it("ícone vazio fica ausente", () => {
+    expect(
+      Categoria.criar({ id: ID, nome: "Pães", icone: "  " }).unwrap().icone,
+    ).toBeUndefined();
+  });
+
+  it("recusa texto no lugar do ícone", () => {
+    const resultado = Categoria.criar({ id: ID, nome: "Pães", icone: "pão francês" });
+
+    expect(resultado.isErr()).toBe(true);
+    if (resultado.isErr()) expect(resultado.error.codigo).toBe("CATEGORIA_ICONE_LONGO");
+  });
+
+  it("recusa ícone longo também na alteração, e mantém o anterior", () => {
+    const categoria = Categoria.criar({ id: ID, nome: "Frutas", icone: "🍎" }).unwrap();
+
+    expect(categoria.definirIcone("frutas da estação").isErr()).toBe(true);
+    expect(categoria.icone).toBe("🍎");
+
+    expect(categoria.definirIcone("🍌").isOk()).toBe(true);
+    expect(categoria.icone).toBe("🍌");
+  });
+
+  it("guarda e troca a imagem", () => {
+    const categoria = Categoria.criar({
+      id: ID,
+      nome: "Frutas",
+      imagemId: IMAGEM,
+    }).unwrap();
+
+    expect(categoria.imagemId?.equals(IMAGEM)).toBe(true);
+
+    categoria.definirImagem(undefined);
+    expect(categoria.imagemId).toBeUndefined();
+  });
+
+  it("reconstitui com ícone e imagem", () => {
+    const categoria = Categoria.reconstituir({
+      id: ID,
+      nome: "Verduras",
+      ativa: true,
+      icone: "🥬",
+      imagemId: IMAGEM,
+    });
+
+    expect(categoria.icone).toBe("🥬");
+    expect(categoria.imagemId?.equals(IMAGEM)).toBe(true);
+  });
+});

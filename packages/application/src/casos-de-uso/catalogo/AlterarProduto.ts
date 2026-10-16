@@ -10,20 +10,28 @@ import {
   type Identificador,
   ok,
   type Produto,
+  type Quantidade,
   type ReferenciaProduto,
   type Result,
 } from "@erp/domain";
 
+import { auditar } from "../../auditoria/RegistroAuditoria.js";
 import { agregarErros } from "../../erros/agregarErros.js";
+import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
 
-import { conferirCategoria, conferirCodigosLivres } from "./CadastrarProduto.js";
+import {
+  conferirCategoria,
+  conferirCodigosLivres,
+  conferirVinculos,
+} from "./CadastrarProduto.js";
 import {
   type EmbalagemBruta,
   interpretarCentavos,
   interpretarCodigoBarras,
   interpretarEmbalagens,
+  interpretarEstoqueMinimo,
   interpretarReferencias,
   type ReferenciaBruta,
 } from "./interpretarProduto.js";
@@ -50,6 +58,13 @@ export interface EntradaAlterarProduto {
   readonly referencias?: readonly ReferenciaBruta[] | undefined;
   readonly embalagens?: readonly EmbalagemBruta[] | undefined;
   readonly ativo: boolean;
+  /** Milésimos na unidade base. Ausente tira o produto da lista de reposição. */
+  readonly estoqueMinimo?: bigint | undefined;
+  readonly fornecedorId?: Identificador | undefined;
+  readonly imagemId?: Identificador | undefined;
+  readonly botaoRapido?: boolean | undefined;
+  /** Quem salva — a mudança de preço vai para a auditoria com o nome. */
+  readonly usuarioId: Identificador;
   /**
    * Quem está salvando tem `produto:alterar_preco`?
    *
@@ -74,6 +89,7 @@ export class AlterarProduto {
   constructor(
     private readonly unitOfWork: UnitOfWork,
     private readonly relogio: Relogio,
+    private readonly geradorId: GeradorId,
   ) {}
 
   async executar(entrada: EntradaAlterarProduto): Promise<Result<Produto, DomainError>> {
@@ -99,6 +115,18 @@ export class AlterarProduto {
           new ErroNaoEncontrado("PRODUTO_NAO_ENCONTRADO", "Produto não encontrado."),
         );
       }
+
+      const precoAnterior = produto.precoVenda;
+
+      const estoqueMinimo = interpretarEstoqueMinimo(
+        entrada.estoqueMinimo,
+        produto.unidadeBase.codigo,
+        problemas,
+      );
+      if (problemas.length > 0) return err(agregarErros(problemas));
+
+      const vinculo = await conferirVinculos(repositorios, entrada);
+      if (vinculo !== undefined) return err(vinculo);
 
       if (!entrada.podeAlterarPreco && !precoVenda.equals(produto.precoVenda)) {
         return err(
@@ -135,10 +163,20 @@ export class AlterarProduto {
         embalagens,
         precoVenda,
         custo,
+        estoqueMinimo,
         agora,
       });
 
       if (falhas.length > 0) return err(agregarErros(falhas));
+
+      if (!precoAnterior.equals(produto.precoVenda)) {
+        await auditarPreco(repositorios, this.geradorId, {
+          produto,
+          anterior: precoAnterior,
+          usuarioId: entrada.usuarioId,
+          agora,
+        });
+      }
 
       await repositorios.produtos.salvar(produto);
 
@@ -159,6 +197,10 @@ interface Mudancas {
   readonly referencias: readonly ReferenciaProduto[];
   readonly embalagens: readonly Embalagem[];
   readonly ativo: boolean;
+  readonly estoqueMinimo: Quantidade | undefined;
+  readonly fornecedorId?: Identificador | undefined;
+  readonly imagemId?: Identificador | undefined;
+  readonly botaoRapido?: boolean | undefined;
   readonly agora: Date;
 }
 
@@ -195,11 +237,48 @@ function aplicar(produto: Produto, mudancas: Mudancas): ErroValidacao[] {
   const embalagens = produto.substituirEmbalagens(mudancas.embalagens);
   if (embalagens.isErr()) falhas.push(...embalagens.error);
 
+  const minimo = produto.definirEstoqueMinimo(mudancas.estoqueMinimo);
+  if (minimo.isErr()) falhas.push(...minimo.error);
+
   produto.definirCodigoBarras(mudancas.codigoBarras);
   produto.definirCategoria(mudancas.categoriaId);
+  produto.definirFornecedor(mudancas.fornecedorId);
+  produto.definirImagem(mudancas.imagemId);
+  produto.definirBotaoRapido(mudancas.botaoRapido ?? false);
 
   if (mudancas.ativo) produto.ativar(mudancas.agora);
   else produto.desativar(mudancas.agora);
 
   return falhas;
+}
+
+/**
+ * Registra a troca de preço, de onde quer que ela venha.
+ *
+ * Exportada porque a correção rápida do supervisor (`AlterarPrecoDoProduto`)
+ * e o formulário completo mudam o mesmo preço — e dois textos de auditoria
+ * diferentes para a mesma mudança tornariam a busca por ela incompleta.
+ */
+export async function auditarPreco(
+  repositorios: Parameters<typeof auditar>[0],
+  geradorId: GeradorId,
+  dados: {
+    readonly produto: Produto;
+    readonly anterior: Dinheiro;
+    readonly usuarioId: Identificador;
+    readonly agora: Date;
+  },
+): Promise<void> {
+  await auditar(repositorios, geradorId, {
+    ocorridoEm: dados.agora,
+    acao: "PRECO_ALTERADO",
+    usuarioId: dados.usuarioId,
+    descricao: `Preço de ${dados.produto.descricao}: de ${dados.anterior.formatar()} para ${dados.produto.precoVenda.formatar()}`,
+    entidade: "produto",
+    entidadeId: dados.produto.id,
+    dados: {
+      de: dados.anterior.centavos.toString(),
+      para: dados.produto.precoVenda.centavos.toString(),
+    },
+  });
 }

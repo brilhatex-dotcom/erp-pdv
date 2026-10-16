@@ -9,6 +9,7 @@
 export type TipoMovimento =
   | "ENTRADA" // compra de fornecedor
   | "DEVOLUCAO_CLIENTE" // cliente devolveu mercadoria
+  | "ESTORNO_VENDA" // venda cancelada: a mercadoria nunca chegou a sair
   | "AJUSTE_POSITIVO" // inventário encontrou a mais
   | "TRANSFERENCIA_ENTRADA" // veio de outra loja
   | "SAIDA" // venda
@@ -21,6 +22,7 @@ export type TipoMovimento =
 const EFEITOS: Readonly<Record<TipoMovimento, 1n | -1n>> = {
   ENTRADA: 1n,
   DEVOLUCAO_CLIENTE: 1n,
+  ESTORNO_VENDA: 1n,
   AJUSTE_POSITIVO: 1n,
   TRANSFERENCIA_ENTRADA: 1n,
   SAIDA: -1n,
