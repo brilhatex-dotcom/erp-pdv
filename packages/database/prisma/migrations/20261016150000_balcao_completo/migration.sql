@@ -63,6 +63,7 @@ CREATE TABLE "configuracao_loja" (
     "balanca_tamanho_codigo" INTEGER NOT NULL DEFAULT 6,
     "balanca_conteudo" VARCHAR(5) NOT NULL DEFAULT 'PESO',
     "balanca_casas_decimais" INTEGER NOT NULL DEFAULT 3,
+    "logo_id" UUID,
     "unica" BOOLEAN NOT NULL DEFAULT true,
     "criado_em" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "atualizado_em" TIMESTAMPTZ(3) NOT NULL,
@@ -220,6 +221,9 @@ ALTER TABLE "vendas" ADD CONSTRAINT "vendas_cancelamento_autorizado_por_id_fkey"
 
 -- AddForeignKey
 ALTER TABLE "categorias" ADD CONSTRAINT "categorias_imagem_id_fkey" FOREIGN KEY ("imagem_id") REFERENCES "imagens"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "configuracao_loja" ADD CONSTRAINT "configuracao_loja_logo_id_fkey" FOREIGN KEY ("logo_id") REFERENCES "imagens"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "devolucoes" ADD CONSTRAINT "devolucoes_venda_id_fkey" FOREIGN KEY ("venda_id") REFERENCES "vendas"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

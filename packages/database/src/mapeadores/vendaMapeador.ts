@@ -100,12 +100,16 @@ function suspensaoDaLinha(linha: VendaLinha): SuspensaoVenda | undefined {
  * mentira com cara de auditoria.
  */
 function cancelamentoDaLinha(linha: VendaLinha): CancelamentoVenda | undefined {
-  if (linha.canceladaEm === null || linha.canceladaPorId === null) return undefined;
+  // As três colunas andam juntas (`ck_vendas_cancelamento_coerente`).
+  const { canceladaEm, canceladaPorId, motivoCancelamento } = linha;
+  if (canceladaEm === null || canceladaPorId === null || motivoCancelamento === null) {
+    return undefined;
+  }
 
   return {
-    em: linha.canceladaEm,
-    motivo: linha.motivoCancelamento ?? "",
-    solicitadoPorId: paraId(linha.canceladaPorId),
+    em: canceladaEm,
+    motivo: motivoCancelamento,
+    solicitadoPorId: paraId(canceladaPorId),
     autorizadoPorId: paraIdOpcional(linha.cancelamentoAutorizadoPorId),
   };
 }
@@ -119,6 +123,7 @@ function paraForma(codigo: string): CodigoFormaPagamento {
 }
 
 function paraConfirmacao(valor: string): ConfirmacaoPagamento {
+  /* v8 ignore next 3 -- defesa: `ck_pagamentos_confirmacao` já recusa */
   if (!ehConfirmacaoPagamento(valor)) {
     throw new Error(`Confirmação de pagamento desconhecida no banco: ${valor}`);
   }

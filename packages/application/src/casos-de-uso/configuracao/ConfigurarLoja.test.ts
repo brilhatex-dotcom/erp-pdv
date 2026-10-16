@@ -93,4 +93,39 @@ describe("Configuração da loja", () => {
       "recursos: nenhum",
     );
   });
+
+  it("🔑 o logotipo precisa ser uma imagem que existe; `null` o tira", async () => {
+    const semImagem = await balcao.definirConfiguracao.executar({
+      usuarioId: GERENTE,
+      alteracao: { logoId: balcao.geradorId.proximo() },
+    });
+    expect(semImagem.isErr() && semImagem.error.codigo).toBe("IMAGEM_NAO_ENCONTRADA");
+
+    const logo = balcao.geradorId.proximo();
+    await balcao.imagens.salvar({
+      id: logo,
+      tipo: "image/png",
+      conteudo: new Uint8Array([1]),
+      hash: "logo",
+    });
+
+    const comLogo = (
+      await balcao.definirConfiguracao.executar({
+        usuarioId: GERENTE,
+        alteracao: { logoId: logo },
+      })
+    ).unwrap();
+    expect(comLogo.logoId?.equals(logo)).toBe(true);
+    expect(balcao.auditoria.da("CONFIGURACAO_ALTERADA").at(-1)?.descricao).toContain(
+      "logotipo: sim",
+    );
+
+    const semLogo = (
+      await balcao.definirConfiguracao.executar({
+        usuarioId: GERENTE,
+        alteracao: { logoId: null },
+      })
+    ).unwrap();
+    expect(semLogo.logoId).toBeUndefined();
+  });
 });

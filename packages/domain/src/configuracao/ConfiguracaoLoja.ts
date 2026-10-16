@@ -103,10 +103,19 @@ export interface DadosConfiguracaoLoja {
   readonly larguraCupom: LarguraCupom;
   readonly impressaoComprovante: ImpressaoComprovante;
   readonly layoutBalanca: LayoutBalanca;
+  /** Imagem do logotipo, mostrada no PDV e no comprovante impresso pelo navegador. */
+  readonly logoId?: Identificador | undefined;
 }
 
-/** O que a tela de configuração pode mudar. O `id` não muda. */
-export type AlteracaoConfiguracaoLoja = Partial<Omit<DadosConfiguracaoLoja, "id">>;
+/**
+ * O que a tela de configuração pode mudar. O `id` não muda.
+ *
+ * Campo ausente é "manter". O logotipo aceita também `null`, que é "tirar":
+ * sem essa distinção, não haveria como voltar à loja sem logotipo.
+ */
+export type AlteracaoConfiguracaoLoja = Partial<
+  Omit<DadosConfiguracaoLoja, "id" | "logoId">
+> & { readonly logoId?: Identificador | null | undefined };
 
 interface Predefinicao {
   readonly recursos: readonly Recurso[];
@@ -155,6 +164,7 @@ export class ConfiguracaoLoja extends AggregateRoot {
   #larguraCupom: LarguraCupom;
   #impressaoComprovante: ImpressaoComprovante;
   #layoutBalanca: LayoutBalanca;
+  #logoId: Identificador | undefined;
 
   private constructor(dados: DadosConfiguracaoLoja) {
     super(dados.id);
@@ -164,6 +174,7 @@ export class ConfiguracaoLoja extends AggregateRoot {
     this.#larguraCupom = dados.larguraCupom;
     this.#impressaoComprovante = dados.impressaoComprovante;
     this.#layoutBalanca = dados.layoutBalanca;
+    this.#logoId = dados.logoId;
   }
 
   /**
@@ -224,6 +235,10 @@ export class ConfiguracaoLoja extends AggregateRoot {
     return this.#layoutBalanca;
   }
 
+  get logoId(): Identificador | undefined {
+    return this.#logoId;
+  }
+
   temRecurso(recurso: Recurso): boolean {
     return this.#recursos.has(recurso);
   }
@@ -245,6 +260,7 @@ export class ConfiguracaoLoja extends AggregateRoot {
       larguraCupom: alteracao.larguraCupom ?? this.#larguraCupom,
       impressaoComprovante: alteracao.impressaoComprovante ?? this.#impressaoComprovante,
       layoutBalanca: alteracao.layoutBalanca ?? this.#layoutBalanca,
+      logoId: alteracao.logoId === null ? undefined : (alteracao.logoId ?? this.#logoId),
     };
 
     const erros = validar(proxima);
@@ -256,6 +272,7 @@ export class ConfiguracaoLoja extends AggregateRoot {
     this.#larguraCupom = proxima.larguraCupom;
     this.#impressaoComprovante = proxima.impressaoComprovante;
     this.#layoutBalanca = proxima.layoutBalanca;
+    this.#logoId = proxima.logoId;
 
     return ok(undefined);
   }

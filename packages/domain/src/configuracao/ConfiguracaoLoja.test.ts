@@ -217,3 +217,30 @@ describe("ConfiguracaoLoja — valores aceitos", () => {
     expect(obtido).toBe(esperado);
   });
 });
+
+describe("ConfiguracaoLoja — logotipo", () => {
+  const LOGO = Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f7777").unwrap();
+
+  it("nasce sem logotipo, recebe um e o mantém quando a alteração não fala dele", () => {
+    const configuracao = ConfiguracaoLoja.padrao(
+      Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f7778").unwrap(),
+    );
+    expect(configuracao.logoId).toBeUndefined();
+
+    configuracao.alterar({ logoId: LOGO }).unwrap();
+    configuracao.alterar({ larguraCupom: 58 }).unwrap();
+
+    expect(configuracao.logoId?.equals(LOGO)).toBe(true);
+  });
+
+  it("🔑 `null` tira o logotipo — ausente só mantém", () => {
+    const configuracao = ConfiguracaoLoja.padrao(
+      Identificador.criar("018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f7778").unwrap(),
+    );
+    configuracao.alterar({ logoId: LOGO }).unwrap();
+
+    configuracao.alterar({ logoId: null }).unwrap();
+
+    expect(configuracao.logoId).toBeUndefined();
+  });
+});

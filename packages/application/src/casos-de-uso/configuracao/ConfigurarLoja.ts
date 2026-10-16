@@ -10,6 +10,7 @@ import {
 
 import { auditar } from "../../auditoria/RegistroAuditoria.js";
 import { agregarErros } from "../../erros/agregarErros.js";
+import { imagemAusente } from "../cadastros/CadastrarCategoria.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
@@ -76,6 +77,16 @@ export class DefinirConfiguracaoLoja {
     entrada: EntradaDefinirConfiguracao,
   ): Promise<Result<ConfiguracaoLoja, DomainError>> {
     return this.unitOfWork.transacao(async (repositorios) => {
+      const logoId = entrada.alteracao.logoId;
+
+      if (
+        logoId !== undefined &&
+        logoId !== null &&
+        !(await repositorios.imagens.existe(logoId))
+      ) {
+        return err(imagemAusente());
+      }
+
       const existente = await repositorios.configuracao.atual();
 
       const configuracao =
@@ -122,5 +133,6 @@ function resumir(configuracao: ConfiguracaoLoja): string {
     `cupom ${String(configuracao.larguraCupom)} mm`,
     `impressão ${configuracao.impressaoComprovante.toLowerCase().replace("_", " ")}`,
     `balança ${layout.prefixos.join("/")}+${String(layout.tamanhoCodigoProduto)} ${layout.conteudo.toLowerCase()}`,
+    `logotipo: ${configuracao.logoId === undefined ? "não" : "sim"}`,
   ].join("; ");
 }

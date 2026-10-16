@@ -884,6 +884,8 @@ model ConfiguracaoLoja {
   balancaTamanhoCodigo Int      @default(6) @map("balanca_tamanho_codigo")
   balancaConteudo      String   @default("PESO") @map("balanca_conteudo") @db.VarChar(5)
   balancaCasasDecimais Int      @default(3) @map("balanca_casas_decimais")
+  logoId               String?  @map("logo_id") @db.Uuid
+  logo                 Imagem?  @relation(fields: [logoId], references: [id], onDelete: SetNull)
   /// Sempre `true`. Existe só para o índice único garantir a linha única.
   unica                Boolean  @unique @default(true)
   criadoEm             DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
@@ -983,8 +985,9 @@ model Imagem {
   hash     String   @unique @db.VarChar(64)
   criadoEm DateTime @default(now()) @map("criado_em") @db.Timestamptz(3)
 
-  produtos   Produto[]
-  categorias Categoria[]
+  produtos      Produto[]
+  categorias    Categoria[]
+  configuracoes ConfiguracaoLoja[]
 
   @@map("imagens")
 }

@@ -56,3 +56,13 @@ export {
   type SessaoDeCaixa,
   sessoesDeCaixa,
 } from "./consultas/sessoesDeCaixa.js";
+export {
+  type FiltroAuditoria,
+  type FiltroVendasRecentes,
+  maisVendidos,
+  type ProdutoMaisVendido,
+  type RegistroNaLista,
+  registrosDeAuditoria,
+  type VendaComNomes,
+  vendasRecentes,
+} from "./consultas/balcao.js";

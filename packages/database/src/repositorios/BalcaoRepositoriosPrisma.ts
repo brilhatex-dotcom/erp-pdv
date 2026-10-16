@@ -68,6 +68,7 @@ export class ConfiguracaoLojaRepositorioPrisma implements ConfiguracaoLojaReposi
       balancaTamanhoCodigo: layout.tamanhoCodigoProduto,
       balancaConteudo: layout.conteudo,
       balancaCasasDecimais: layout.casasDecimais,
+      logoId: configuracao.logoId?.valor ?? null,
     };
 
     await this.prisma.configuracaoLoja.upsert({
@@ -89,9 +90,11 @@ function paraConfiguracao(linha: {
   readonly balancaTamanhoCodigo: number;
   readonly balancaConteudo: string;
   readonly balancaCasasDecimais: number;
+  readonly logoId: string | null;
 }): ConfiguracaoLoja {
   const { segmento, vendaSemEstoque, larguraCupom, impressaoComprovante } = linha;
 
+  /* v8 ignore start -- defesa: os CHECKs da migração já recusam valor desconhecido */
   if (
     !ehSegmento(segmento) ||
     !ehRegraVendaSemEstoque(vendaSemEstoque) ||
@@ -101,6 +104,7 @@ function paraConfiguracao(linha: {
   ) {
     throw new Error(`Configuração da loja com valor desconhecido no banco: ${linha.id}`);
   }
+  /* v8 ignore stop */
 
   return ConfiguracaoLoja.reconstituir({
     id: paraId(linha.id),
@@ -115,6 +119,7 @@ function paraConfiguracao(linha: {
       conteudo: linha.balancaConteudo,
       casasDecimais: linha.balancaCasasDecimais,
     },
+    logoId: paraIdOpcional(linha.logoId),
   });
 }
 
@@ -215,6 +220,7 @@ function paraDevolucao(linha: {
 }
 
 function paraFormaReembolso(valor: string): FormaReembolso {
+  /* v8 ignore next 3 -- defesa: `ck_devolucoes_forma_reembolso` já recusa */
   if (!ehFormaReembolso(valor)) {
     throw new Error(`Forma de reembolso desconhecida no banco: ${valor}`);
   }
@@ -223,6 +229,7 @@ function paraFormaReembolso(valor: string): FormaReembolso {
 }
 
 function paraDestino(valor: string): DestinoDevolucao {
+  /* v8 ignore next 3 -- defesa: `ck_devolucao_itens_destino` já recusa */
   if (!ehDestinoDevolucao(valor)) {
     throw new Error(`Destino de devolução desconhecido no banco: ${valor}`);
   }

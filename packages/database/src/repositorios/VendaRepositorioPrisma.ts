@@ -63,9 +63,12 @@ export class VendaRepositorioPrisma implements VendaRepository {
    *
    * Itens e pagamentos são regravados por completo: uma venda tem dezenas de
    * itens, não milhares, e o cálculo de diferença é onde este tipo de código
-   * costuma perder uma linha. Depois de finalizada a venda não muda mais, então
-   * a regravação acontece apenas enquanto o operador ainda está montando o
-   * carrinho.
+   * costuma perder uma linha.
+   *
+   * Venda concluída que é cancelada **não** regrava os filhos: o cancelamento
+   * muda o cabeçalho (status, quem, por quê), e os itens e pagamentos são o
+   * fato que aconteceu no balcão — apagá-los e recriá-los seria reescrever
+   * um fato, mesmo que com o mesmo conteúdo.
    */
   async salvar(venda: Venda): Promise<void> {
     const linha = paraLinha(venda);
@@ -75,6 +78,8 @@ export class VendaRepositorioPrisma implements VendaRepository {
       create: linha,
       update: linha,
     });
+
+    if (venda.foiCanceladaAposFinalizar) return;
 
     await this.prisma.vendaItem.deleteMany({ where: { vendaId: linha.id } });
     const itens = itensParaLinhas(venda);

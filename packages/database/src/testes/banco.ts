@@ -81,7 +81,8 @@ export async function limparBanco(prisma: PrismaClient): Promise<void> {
       "categorias",
       "clientes",
       "fornecedores",
-      "empresas"
+      "empresas",
+      "imagens"
     RESTART IDENTITY CASCADE
   `);
 }
