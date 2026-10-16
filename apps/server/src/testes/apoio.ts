@@ -98,7 +98,9 @@ export async function limparBanco(container: Container): Promise<void> {
       "referencias_produto", "produtos",
       "sessoes_acesso", "estacoes_permitidas", "usuarios",
       "permissoes_papel", "papeis",
-      "categorias", "clientes", "fornecedores", "empresas"
+      "categorias", "clientes", "fornecedores", "empresas",
+      "registros_auditoria", "devolucao_itens", "devolucoes",
+      "execucoes_backup", "configuracao_backup", "configuracao_loja", "imagens"
     RESTART IDENTITY CASCADE
   `);
 }

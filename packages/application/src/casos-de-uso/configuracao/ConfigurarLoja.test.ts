@@ -10,9 +10,7 @@ beforeEach(() => {
 
 describe("Configuração da loja", () => {
   it("🔑 antes de alguém configurar, o caixa funciona com a de fábrica — sem gravá-la", async () => {
-    const { configuracao, gravada } = (
-      await balcao.obterConfiguracao.executar()
-    ).unwrap();
+    const { configuracao, gravada } = await balcao.obterConfiguracao.executar();
 
     expect(gravada).toBe(false);
     expect(configuracao.segmento).toBe("MISTO");
@@ -32,7 +30,7 @@ describe("Configuração da loja", () => {
     expect(configuracao.impressaoComprovante).toBe("SOB_PEDIDO");
     expect(configuracao.temRecurso("FIADO")).toBe(true);
 
-    const { gravada } = (await balcao.obterConfiguracao.executar()).unwrap();
+    const { gravada } = await balcao.obterConfiguracao.executar();
     expect(gravada).toBe(true);
 
     const [registro] = balcao.auditoria.da("CONFIGURACAO_ALTERADA");

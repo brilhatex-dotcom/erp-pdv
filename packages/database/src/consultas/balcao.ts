@@ -1,4 +1,5 @@
 import type { Venda } from "@erp/domain";
+import { normalizarParaBusca } from "@erp/utils";
 
 import type { PrismaClient } from "../gerado/index.js";
 import { paraDominio } from "../mapeadores/vendaMapeador.js";
@@ -26,6 +27,8 @@ export interface FiltroVendasRecentes {
   /** O número impresso no cupom. A série é por estação, então pode repetir. */
   readonly numero?: number | undefined;
   readonly estacaoId?: string | undefined;
+  /** Só as vendas deste operador — para quem não pode ver as dos colegas. */
+  readonly operadorId?: string | undefined;
   readonly limite?: number | undefined;
 }
 
@@ -49,6 +52,7 @@ export async function vendasRecentes(
       finalizadaEm: { not: null },
       ...(filtro.numero === undefined ? {} : { numero: filtro.numero }),
       ...(filtro.estacaoId === undefined ? {} : { estacaoId: filtro.estacaoId }),
+      ...(filtro.operadorId === undefined ? {} : { operadorId: filtro.operadorId }),
     },
     include: { itens: true, pagamentos: true },
     // `idx_vendas_finalizada` cobre a ordenação; o número, quando há, reduz a
@@ -193,4 +197,130 @@ export async function registrosDeAuditoria(
     entidade: linha.entidade ?? undefined,
     entidadeId: linha.entidadeId ?? undefined,
   }));
+}
+
+// ── Produtos no balcão ──────────────────────────────────────────────────
+
+export interface ProdutoDoBalcao {
+  readonly id: string;
+  readonly sku: string;
+  /** A descrição curta, a mesma do cupom. */
+  readonly descricao: string;
+  readonly descricaoCompleta: string;
+  readonly tipo: string;
+  readonly unidade: string;
+  /** Centavos em texto. */
+  readonly precoVenda: string;
+  readonly codigoBarras?: string | undefined;
+  readonly categoriaId?: string | undefined;
+  readonly imagemId?: string | undefined;
+  readonly botaoRapido: boolean;
+  /** Milésimos em texto. Ausente quando o produto nunca teve movimento. */
+  readonly saldo?: string | undefined;
+}
+
+export interface FiltroProdutosDoBalcao {
+  /** Nome, código interno, código de barras ou referência. */
+  readonly termo?: string | undefined;
+  readonly categoriaId?: string | undefined;
+  /** Produtos exatos — os botões, na ordem pedida. */
+  readonly ids?: readonly string[] | undefined;
+  readonly apenasBotaoRapido?: boolean | undefined;
+  readonly limite: number;
+}
+
+/**
+ * Os produtos que o operador procura na tela: pelo nome, pela categoria, nos
+ * botões rápidos.
+ *
+ * Projeção, e não agregado: a lista do balcão precisa de oito colunas e do
+ * saldo, e montar o `Produto` inteiro (referências, embalagens) para cada linha
+ * de uma busca por "pão" gastaria o tempo que o operador não tem. Só ativos —
+ * produto desativado não se vende.
+ *
+ * A busca por termo tem a mesma semântica da busca da retaguarda: descrição
+ * sem acento, código interno, código de barras ou referência.
+ */
+export async function produtosDoBalcao(
+  prisma: PrismaClient,
+  filtro: FiltroProdutosDoBalcao,
+): Promise<readonly ProdutoDoBalcao[]> {
+  const termo = (filtro.termo ?? "").trim();
+  const referencia = normalizarParaBusca(termo).replace(/[\s\-./]/g, "");
+
+  const linhas = await prisma.produto.findMany({
+    where: {
+      ativo: true,
+      ...(filtro.categoriaId === undefined ? {} : { categoriaId: filtro.categoriaId }),
+      ...(filtro.ids === undefined ? {} : { id: { in: [...filtro.ids] } }),
+      ...(filtro.apenasBotaoRapido === true ? { botaoRapido: true } : {}),
+      ...(termo === ""
+        ? {}
+        : {
+            OR: [
+              { descricaoBusca: { contains: normalizarParaBusca(termo) } },
+              { sku: termo },
+              { sku: termo.toUpperCase() },
+              { codigoBarras: termo },
+              { referencias: { some: { normalizado: referencia } } },
+            ],
+          }),
+    },
+    select: {
+      id: true,
+      sku: true,
+      descricao: true,
+      descricaoPdv: true,
+      tipo: true,
+      unidadeBase: true,
+      precoVenda: true,
+      codigoBarras: true,
+      categoriaId: true,
+      imagemId: true,
+      botaoRapido: true,
+      saldo: { select: { milesimos: true } },
+    },
+    orderBy: { descricao: "asc" },
+    take: filtro.limite,
+  });
+
+  const produtos = linhas.map((linha) => ({
+    id: linha.id,
+    sku: linha.sku,
+    descricao: linha.descricaoPdv,
+    descricaoCompleta: linha.descricao,
+    tipo: linha.tipo,
+    unidade: linha.unidadeBase,
+    precoVenda: linha.precoVenda.toString(),
+    codigoBarras: linha.codigoBarras ?? undefined,
+    categoriaId: linha.categoriaId ?? undefined,
+    imagemId: linha.imagemId ?? undefined,
+    botaoRapido: linha.botaoRapido,
+    saldo: linha.saldo?.milesimos.toString(),
+  }));
+
+  if (filtro.ids === undefined) return produtos;
+
+  // Na ordem pedida: é a do ranking de mais vendidos, e a ordem alfabética
+  // embaralharia os botões a cada dia.
+  const posicao = new Map(filtro.ids.map((atual, indice) => [atual, indice]));
+
+  return produtos.sort(
+    (um, outro) => (posicao.get(um.id) ?? 0) - (posicao.get(outro.id) ?? 0),
+  );
+}
+
+// ── Imagens ─────────────────────────────────────────────────────────────
+
+/** A imagem para servir ao navegador, com o tipo conferido na gravação. */
+export async function imagemParaServir(
+  prisma: PrismaClient,
+  id: string,
+): Promise<{ readonly tipo: string; readonly conteudo: Uint8Array } | undefined> {
+  const linha = await prisma.imagem.findUnique({
+    where: { id },
+    select: { tipo: true, conteudo: true },
+  });
+
+  return linha === null ? undefined : { tipo: linha.tipo, conteudo: linha.conteudo };
 }

@@ -11,8 +11,8 @@ import { z } from "zod";
 
 import type { Container } from "../composicao/container.js";
 import { exigirAutenticacao, exigirPermissao } from "../http/autenticacao.js";
+import { interpretarQuantidade } from "../http/entrada.js";
 import { responderErro } from "../http/erros.js";
-import { interpretarQuantidade } from "./vendas.js";
 
 /**
  * Recebimento das vendas que a estação registrou offline.

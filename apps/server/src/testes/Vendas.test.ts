@@ -209,7 +209,18 @@ describe("fluxo de venda", () => {
     });
 
     expect(resposta.statusCode).toBe(201);
-    expect(resposta.json<{ parcelas: number }>().parcelas).toBe(3);
+    // O pagamento volta com a posição na lista — é ela que identifica qual
+    // tirar —, e a venda inteira vem junto.
+    const corpo = resposta.json<{
+      pagamento: { indice: number; parcelas: number; autorizacao: string };
+      venda: { pagamentos: unknown[] };
+    }>();
+    expect(corpo.pagamento).toMatchObject({
+      indice: 0,
+      parcelas: 3,
+      autorizacao: "AUT123456",
+    });
+    expect(corpo.venda.pagamentos).toHaveLength(1);
   });
 
   it("recusa venda sem caixa aberto, com mensagem acionável", async () => {

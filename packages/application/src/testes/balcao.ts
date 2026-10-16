@@ -248,7 +248,7 @@ export function montarBalcao(opcoes: OpcoesBalcao = {}) {
     cancelarVenda: new CancelarVenda(unitOfWork, geradorId, relogio, autorizar),
     registrarDevolucao: new RegistrarDevolucao(unitOfWork, geradorId, relogio, autorizar),
     fecharCaixa: new FecharCaixa(unitOfWork, relogio, geradorId),
-    obterConfiguracao: new ObterConfiguracaoLoja(unitOfWork, geradorId),
+    obterConfiguracao: new ObterConfiguracaoLoja(ambiente.configuracao, geradorId),
     definirConfiguracao: new DefinirConfiguracaoLoja(unitOfWork, geradorId, relogio),
   };
 

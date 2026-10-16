@@ -59,8 +59,12 @@ export {
 export {
   type FiltroAuditoria,
   type FiltroVendasRecentes,
+  type FiltroProdutosDoBalcao,
+  imagemParaServir,
   maisVendidos,
+  type ProdutoDoBalcao,
   type ProdutoMaisVendido,
+  produtosDoBalcao,
   type RegistroNaLista,
   registrosDeAuditoria,
   type VendaComNomes,

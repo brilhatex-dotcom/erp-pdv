@@ -209,13 +209,14 @@ export function montarContainer(
   // que precisa dela, e duplicá-la abriria a porta para duas configurarem
   // diferente sem ninguém notar.
   const autorizar = new AutorizarOperacao(relogio, hasher);
+  const leitura = montarRepositorios(prisma);
 
   return {
     ambiente,
     modo,
     prisma,
     unitOfWork,
-    leitura: montarRepositorios(prisma),
+    leitura,
     relogio,
     geradorId,
     hasher,
@@ -273,7 +274,7 @@ export function montarContainer(
     cancelarVenda: new CancelarVenda(unitOfWork, geradorId, relogio, autorizar),
     registrarDevolucao: new RegistrarDevolucao(unitOfWork, geradorId, relogio, autorizar),
 
-    obterConfiguracao: new ObterConfiguracaoLoja(unitOfWork, geradorId),
+    obterConfiguracao: new ObterConfiguracaoLoja(leitura.configuracao, geradorId),
     definirConfiguracao: new DefinirConfiguracaoLoja(unitOfWork, geradorId, relogio),
     guardarImagem: new GuardarImagem(unitOfWork, geradorId, resumoSha256),
 

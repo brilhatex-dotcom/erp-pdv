@@ -12,7 +12,9 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  imagemParaServir,
   maisVendidos,
+  produtosDoBalcao,
   registrosDeAuditoria,
   vendasRecentes,
 } from "../consultas/balcao.js";
@@ -100,7 +102,7 @@ beforeEach(async () => {
   );
 });
 
-async function vendaComBolo(numero = 1, unidades = "2"): Promise<Venda> {
+function vendaComBolo(numero = 1, unidades = "2"): Venda {
   const venda = Venda.iniciar({
     id: proximoId(),
     numero,
@@ -131,7 +133,7 @@ async function recarregar(venda: Venda): Promise<Venda> {
 
 describe("Venda — o que o balcão grava", () => {
   it("🔑 a venda guardada volta guardada, com o rótulo e o custo congelado", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.suspender(AGORA, "Dona Maria").unwrap();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
 
@@ -143,7 +145,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("🔑 o pagamento volta com confirmação, chave, autorização e parcelas", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.registrarPagamento("PIX", reais("5,00"), { chave: "pix-0001" }).unwrap();
     venda
       .registrarPagamento("CARTAO_CREDITO", reais("20,00"), {
@@ -163,7 +165,7 @@ describe("Venda — o que o balcão grava", () => {
 
   it("🔑 o cancelamento volta com motivo, quem pediu e quem liberou", async () => {
     const repositorio = new VendaRepositorioPrisma(prisma);
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.registrarPagamento("PIX", reais("25,00")).unwrap();
     venda.finalizar(AGORA).unwrap();
     await repositorio.salvar(venda);
@@ -191,7 +193,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("guardada sem rótulo volta sem rótulo", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.suspender(AGORA).unwrap();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
 
@@ -202,7 +204,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("🔑 o banco recusa cancelamento sem motivo — nem um script de suporte grava", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
 
     await expect(
@@ -214,7 +216,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("🔑 forma de pagamento que o sistema não conhece é linha corrompida — erro, não palpite", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.registrarPagamento("PIX", reais("5,00")).unwrap();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
     await prisma.$executeRawUnsafe(
@@ -228,7 +230,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("venda cancelada antes desta versão volta sem um responsável inventado", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
     await prisma.venda.update({
       where: { id: venda.id.valor },
@@ -242,7 +244,7 @@ describe("Venda — o que o balcão grava", () => {
   });
 
   it("🔑 o banco recusa venda guardada que não está aberta", async () => {
-    const venda = await vendaComBolo();
+    const venda = vendaComBolo();
     venda.suspender(AGORA).unwrap();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
 
@@ -256,9 +258,9 @@ describe("Venda — o que o balcão grava", () => {
 
   it("lista as abertas da sessão, da mais antiga para a mais nova", async () => {
     const repositorio = new VendaRepositorioPrisma(prisma);
-    const primeira = await vendaComBolo(1);
-    const segunda = await vendaComBolo(2);
-    const concluida = await vendaComBolo(3);
+    const primeira = vendaComBolo(1);
+    const segunda = vendaComBolo(2);
+    const concluida = vendaComBolo(3);
     concluida.registrarPagamento("PIX", reais("25,00")).unwrap();
     concluida.finalizar(AGORA).unwrap();
 
@@ -389,7 +391,7 @@ describe("Configuração da loja", () => {
 
 describe("Devolução", () => {
   async function vendaConcluida(): Promise<Venda> {
-    const venda = await vendaComBolo(1, "3");
+    const venda = vendaComBolo(1, "3");
     venda.registrarPagamento("DINHEIRO", reais("40,00")).unwrap();
     venda.finalizar(AGORA).unwrap();
     await new VendaRepositorioPrisma(prisma).salvar(venda);
@@ -542,6 +544,11 @@ describe("Imagens", () => {
     expect(await repositorio.porHash("d".repeat(64))).toBeUndefined();
     expect(await repositorio.existe(imagem)).toBe(true);
     expect(await repositorio.existe(proximoId())).toBe(false);
+
+    const servida = await imagemParaServir(prisma, imagem.valor);
+    expect(servida?.tipo).toBe("image/jpeg");
+    expect([...(servida?.conteudo ?? [])]).toEqual([0xff, 0xd8, 0xff]);
+    expect(await imagemParaServir(prisma, proximoId().valor)).toBeUndefined();
   });
 
   it("o banco recusa tipo que não é imagem", async () => {
@@ -577,12 +584,12 @@ describe("Consultas do balcão", () => {
       },
     });
 
-    const antiga = await vendaComBolo(1);
+    const antiga = vendaComBolo(1);
     await concluir(antiga, new Date("2026-08-01T10:05:00.000Z"));
-    const nova = await vendaComBolo(2);
+    const nova = vendaComBolo(2);
     nova.identificarCliente(cliente).unwrap();
     await concluir(nova, new Date("2026-08-01T10:10:00.000Z"));
-    await new VendaRepositorioPrisma(prisma).salvar(await vendaComBolo(3));
+    await new VendaRepositorioPrisma(prisma).salvar(vendaComBolo(3));
 
     const recentes = await vendasRecentes(prisma, {});
 
@@ -596,6 +603,8 @@ describe("Consultas do balcão", () => {
     expect(doCupom.map((atual) => atual.venda.numero)).toEqual([1]);
 
     expect(await vendasRecentes(prisma, { numero: 99 })).toEqual([]);
+    expect(await vendasRecentes(prisma, { operadorId: SUPERVISOR.valor })).toEqual([]);
+    expect(await vendasRecentes(prisma, { operadorId: OPERADOR.valor })).toHaveLength(2);
   });
 
   it("🔑 mais vendidos contam vendas, não quilos — e ignoram aberta e produto inativo", async () => {
@@ -619,7 +628,7 @@ describe("Consultas do balcão", () => {
       await produtos.salvar(produto);
     }
 
-    const comTudo = await vendaComBolo(1, "30");
+    const comTudo = vendaComBolo(1, "30");
     for (const idProduto of [refri, inativo]) {
       comTudo
         .adicionarItem({
@@ -632,11 +641,11 @@ describe("Consultas do balcão", () => {
     }
     await concluir(comTudo, AGORA);
 
-    const soBolo = await vendaComBolo(2, "1");
+    const soBolo = vendaComBolo(2, "1");
     await concluir(soBolo, AGORA);
 
     // Aberta não conta: o cliente pode desistir.
-    const aberta = await vendaComBolo(3, "1");
+    const aberta = vendaComBolo(3, "1");
     aberta
       .adicionarItem({
         produtoId: refri,
@@ -711,5 +720,97 @@ describe("Consultas do balcão", () => {
     expect(
       await registrosDeAuditoria(prisma, { ...dia, usuarioId: OPERADOR.valor }),
     ).toHaveLength(1);
+  });
+});
+
+describe("Produtos no balcão", () => {
+  async function cadastrar(
+    sku: string,
+    descricao: string,
+    extra: { categoriaId?: Identificador; botaoRapido?: boolean; ativo?: boolean } = {},
+  ): Promise<Identificador> {
+    const idProduto = proximoId();
+    if (extra.categoriaId !== undefined) {
+      await prisma.categoria.upsert({
+        where: { id: extra.categoriaId.valor },
+        create: { id: extra.categoriaId.valor, nome: "Padaria", nomeBusca: "padaria" },
+        update: {},
+      });
+    }
+    const produto = Produto.criar({
+      id: idProduto,
+      sku,
+      descricao,
+      tipo: "UNITARIO",
+      unidadeBase: "UN",
+      precoVenda: reais("1,00"),
+      categoriaId: extra.categoriaId,
+    }).unwrap();
+    produto.definirBotaoRapido(extra.botaoRapido ?? false);
+    if (extra.ativo === false) produto.desativar(AGORA);
+    await new ProdutoRepositorioPrisma(prisma).salvar(produto);
+    return idProduto;
+  }
+
+  it("🔑 acha pelo nome sem acento, pelo código interno e pelo código de barras", async () => {
+    await cadastrar("PAO001", "Pão Francês");
+    await cadastrar("SON001", "Sonho de Creme");
+
+    const pelaPalavra = await produtosDoBalcao(prisma, { termo: "pao", limite: 10 });
+    expect(pelaPalavra.map((produto) => produto.sku)).toEqual(["PAO001"]);
+
+    const peloCodigo = await produtosDoBalcao(prisma, { termo: "son001", limite: 10 });
+    expect(peloCodigo.map((produto) => produto.sku)).toEqual(["SON001"]);
+
+    const peloEan = await produtosDoBalcao(prisma, {
+      termo: "7891000315507",
+      limite: 10,
+    });
+    expect(peloEan.map((produto) => produto.sku)).toEqual(["BOL001"]);
+    expect(peloEan[0]?.precoVenda).toBe("1250");
+    expect(peloEan[0]?.descricaoCompleta).toBe("Bolo de Fubá");
+  });
+
+  it("filtra por categoria e por botão rápido, e esconde o inativo", async () => {
+    const padaria = proximoId();
+    await cadastrar("PAO001", "Pão Francês", { categoriaId: padaria, botaoRapido: true });
+    await cadastrar("SON001", "Sonho", { categoriaId: padaria });
+    await cadastrar("VEL001", "Vela", { botaoRapido: true, ativo: false });
+
+    const daPadaria = await produtosDoBalcao(prisma, {
+      categoriaId: padaria.valor,
+      limite: 10,
+    });
+    expect(daPadaria.map((produto) => produto.sku)).toEqual(["PAO001", "SON001"]);
+    expect(daPadaria[0]?.categoriaId).toBe(padaria.valor);
+
+    const botoes = await produtosDoBalcao(prisma, {
+      apenasBotaoRapido: true,
+      limite: 10,
+    });
+    expect(botoes.map((produto) => produto.sku)).toEqual(["PAO001"]);
+    expect(botoes[0]?.botaoRapido).toBe(true);
+  });
+
+  it("🔑 pelos ids, na ordem pedida — a do ranking, não a alfabética", async () => {
+    const zebra = await cadastrar("ZEB001", "Zebra");
+    const abacate = await cadastrar("ABA001", "Abacate");
+
+    const achados = await produtosDoBalcao(prisma, {
+      ids: [zebra.valor, PRODUTO.valor, abacate.valor],
+      limite: 10,
+    });
+
+    expect(achados.map((produto) => produto.sku)).toEqual(["ZEB001", "BOL001", "ABA001"]);
+  });
+
+  it("mostra o saldo quando o produto já teve movimento", async () => {
+    await prisma.saldoEstoque.create({
+      data: { produtoId: PRODUTO.valor, milesimos: 12_000n, unidade: "UN" },
+    });
+
+    const [bolo] = await produtosDoBalcao(prisma, { termo: "BOL001", limite: 1 });
+
+    expect(bolo?.saldo).toBe("12000");
   });
 });

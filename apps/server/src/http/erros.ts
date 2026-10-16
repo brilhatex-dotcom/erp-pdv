@@ -88,6 +88,9 @@ const DETALHES_PUBLICOS = new Set([
   // escrita para o operador. Sem isto o cadastro de produto voltaria a mandar
   // corrigir um campo por gravação — que é o que a agregação existe para evitar.
   "erros",
+  // Os números das vendas guardadas que impedem o fechamento do caixa: a tela
+  // as lista para o operador retomar uma a uma.
+  "vendas",
 ]);
 
 function detalhesPublicos(

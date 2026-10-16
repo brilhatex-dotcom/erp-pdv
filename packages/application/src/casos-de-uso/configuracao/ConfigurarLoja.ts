@@ -14,6 +14,7 @@ import { imagemAusente } from "../cadastros/CadastrarCategoria.js";
 import type { GeradorId } from "../../portas/infraestrutura/GeradorId.js";
 import type { Relogio } from "../../portas/infraestrutura/Relogio.js";
 import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
+import type { ConfiguracaoLojaRepository } from "../../portas/repositorios/RepositoriosBalcao.js";
 
 /**
  * Lê a configuração da loja.
@@ -22,31 +23,29 @@ import type { UnitOfWork } from "../../portas/infraestrutura/UnitOfWork.js";
  * recursos — **sem gravá-la**. Ler não pode ter efeito colateral, e o caixa
  * precisa funcionar no primeiro minuto da instalação, antes de alguém abrir a
  * tela de configuração.
+ *
+ * Sem transação e sem `Result`: é uma leitura, e a única falha possível é o
+ * banco fora do ar — que não é regra de negócio, e chega a quem chamou como
+ * qualquer outra falha de leitura.
  */
 export class ObterConfiguracaoLoja {
   constructor(
-    private readonly unitOfWork: UnitOfWork,
+    private readonly configuracoes: ConfiguracaoLojaRepository,
     private readonly geradorId: GeradorId,
   ) {}
 
-  async executar(): Promise<
-    Result<
-      { readonly configuracao: ConfiguracaoLoja; readonly gravada: boolean },
-      DomainError
-    >
-  > {
-    return this.unitOfWork.transacao(async (repositorios) => {
-      const atual = await repositorios.configuracao.atual();
+  async executar(): Promise<{
+    readonly configuracao: ConfiguracaoLoja;
+    readonly gravada: boolean;
+  }> {
+    const atual = await this.configuracoes.atual();
 
-      return ok(
-        atual === undefined
-          ? {
-              configuracao: ConfiguracaoLoja.padrao(this.geradorId.proximo()),
-              gravada: false,
-            }
-          : { configuracao: atual, gravada: true },
-      );
-    });
+    return atual === undefined
+      ? {
+          configuracao: ConfiguracaoLoja.padrao(this.geradorId.proximo()),
+          gravada: false,
+        }
+      : { configuracao: atual, gravada: true };
   }
 }
 

@@ -8,6 +8,7 @@ import {
   exigirAutenticacao,
   exigirPermissao,
 } from "../http/autenticacao.js";
+import { identificadorValidadoOpcional } from "../http/entrada.js";
 import { responderErro } from "../http/erros.js";
 
 /**
@@ -202,12 +203,9 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
       const entrada = corpoCadastro.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Confira os campos do produto.");
 
-      const categoriaId = identificadorOpcional(entrada.data.categoriaId);
-      if (categoriaId === "INVALIDA") return recusar(resposta, "Categoria inválida.");
-
-      const vinculos = interpretarVinculos(entrada.data);
-      if (vinculos === "INVALIDOS")
-        return recusar(resposta, "Fornecedor ou imagem inválidos.");
+      // O Zod já validou os UUIDs; existir de fato é pergunta do caso de uso,
+      // que responde com a mensagem certa para cada um.
+      const categoriaId = identificadorValidadoOpcional(entrada.data.categoriaId);
 
       // Quem não pode ver o custo também não o define: aceitar o número que ele
       // mandou seria confiar num campo que a tela dele nem mostra.
@@ -231,8 +229,8 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
         referencias: entrada.data.referencias,
         embalagens: interpretarEmbalagens(entrada.data.embalagens),
         estoqueMinimo: inteiroOpcional(entrada.data.estoqueMinimo),
-        fornecedorId: vinculos.fornecedorId,
-        imagemId: vinculos.imagemId,
+        fornecedorId: identificadorValidadoOpcional(entrada.data.fornecedorId),
+        imagemId: identificadorValidadoOpcional(entrada.data.imagemId),
         botaoRapido: entrada.data.botaoRapido,
       });
 
@@ -254,12 +252,9 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
       const entrada = corpoAlteracao.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Confira os campos do produto.");
 
-      const categoriaId = identificadorOpcional(entrada.data.categoriaId);
-      if (categoriaId === "INVALIDA") return recusar(resposta, "Categoria inválida.");
-
-      const vinculos = interpretarVinculos(entrada.data);
-      if (vinculos === "INVALIDOS")
-        return recusar(resposta, "Fornecedor ou imagem inválidos.");
+      // O Zod já validou os UUIDs; existir de fato é pergunta do caso de uso,
+      // que responde com a mensagem certa para cada um.
+      const categoriaId = identificadorValidadoOpcional(entrada.data.categoriaId);
 
       const usuarioId = requisicao.autenticado?.usuarioId;
       /* v8 ignore next -- inalcançável: o preHandler garante o autenticado */
@@ -286,8 +281,8 @@ export function rotasDeProdutos(servidor: FastifyInstance, container: Container)
         embalagens: interpretarEmbalagens(entrada.data.embalagens),
         ativo: entrada.data.ativo,
         estoqueMinimo: inteiroOpcional(entrada.data.estoqueMinimo),
-        fornecedorId: vinculos.fornecedorId,
-        imagemId: vinculos.imagemId,
+        fornecedorId: identificadorValidadoOpcional(entrada.data.fornecedorId),
+        imagemId: identificadorValidadoOpcional(entrada.data.imagemId),
         botaoRapido: entrada.data.botaoRapido,
         usuarioId,
         podeAlterarPreco: await autenticadoTem(
@@ -389,42 +384,9 @@ function identificadorDaRota(requisicao: FastifyRequest): Identificador | undefi
   return identificador.isErr() ? undefined : identificador.unwrap();
 }
 
-function identificadorOpcional(
-  bruta: string | undefined,
-): Identificador | undefined | "INVALIDA" {
-  if (bruta === undefined) return undefined;
-
-  const identificador = Identificador.criar(bruta);
-  return identificador.isErr() ? "INVALIDA" : identificador.unwrap();
-}
-
 /** Inteiro em texto (centavos ou milésimos) para `bigint`, mantendo o ausente. */
 function inteiroOpcional(bruto: string | undefined): bigint | undefined {
   return bruto === undefined ? undefined : BigInt(bruto);
-}
-
-/**
- * Fornecedor e imagem que o formulário escolheu.
- *
- * O Zod já garantiu o formato de UUID; o que pode falhar aqui é a versão, que
- * `Identificador` confere. Se existem de fato é pergunta do caso de uso, que
- * responde com a mensagem certa para cada um.
- */
-function interpretarVinculos(dados: {
-  readonly fornecedorId?: string | undefined;
-  readonly imagemId?: string | undefined;
-}):
-  | {
-      readonly fornecedorId: Identificador | undefined;
-      readonly imagemId: Identificador | undefined;
-    }
-  | "INVALIDOS" {
-  const fornecedorId = identificadorOpcional(dados.fornecedorId);
-  const imagemId = identificadorOpcional(dados.imagemId);
-
-  if (fornecedorId === "INVALIDA" || imagemId === "INVALIDA") return "INVALIDOS";
-
-  return { fornecedorId, imagemId };
 }
 
 /** Fator vem em texto e vira `bigint` aqui, na fronteira — não no domínio. */

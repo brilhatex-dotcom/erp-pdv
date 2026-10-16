@@ -113,9 +113,10 @@ export interface DadosConfiguracaoLoja {
  * Campo ausente é "manter". O logotipo aceita também `null`, que é "tirar":
  * sem essa distinção, não haveria como voltar à loja sem logotipo.
  */
-export type AlteracaoConfiguracaoLoja = Partial<
-  Omit<DadosConfiguracaoLoja, "id" | "logoId">
-> & { readonly logoId?: Identificador | null | undefined };
+export type AlteracaoConfiguracaoLoja = {
+  readonly [Campo in keyof Omit<DadosConfiguracaoLoja, "id" | "logoId">]?:
+    DadosConfiguracaoLoja[Campo] | undefined;
+} & { readonly logoId?: Identificador | null | undefined };
 
 interface Predefinicao {
   readonly recursos: readonly Recurso[];
