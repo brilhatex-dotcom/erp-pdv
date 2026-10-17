@@ -87,6 +87,8 @@ export function lerSegredosDoEnv(conteudo: string): Segredos | undefined {
 export interface DadosDaInstalacao {
   /** Onde o sistema foi instalado. */
   readonly raiz: string;
+  /** Onde ficam as cópias de segurança: na pasta de dados, e não na do programa. */
+  readonly pastaDeCopias: string;
   readonly portaServidor: number;
   readonly portaPostgres: number;
   readonly segredos: Segredos;
@@ -139,6 +141,10 @@ export function conteudoDoEnv(dados: DadosDaInstalacao): string {
     `ORIGENS_PERMITIDAS=http://localhost:${porta},http://${dados.estacao}:${porta}`,
     `PASTA_PDV=${caminhoDeTela(dados.raiz, "pdv")}`,
     `PASTA_RETAGUARDA=${caminhoDeTela(dados.raiz, "retaguarda")}`,
+    // As cópias usam o `pg_dump` embarcado, da mesma versão do servidor de
+    // banco: um `pg_dump` mais velho que o servidor se recusa a copiar.
+    `PASTA_COPIAS=${barraNormal(dados.pastaDeCopias)}`,
+    `PASTA_BINARIOS_POSTGRES=${barraNormal(dados.raiz)}/postgres/bin`,
     "",
   ].join("\n");
 }
@@ -151,7 +157,11 @@ export function conteudoDoEnv(dados: DadosDaInstalacao): string {
  * biblioteca que interpreta `\n`.
  */
 function caminhoDeTela(raiz: string, qual: string): string {
-  return `${raiz.replaceAll("\\", "/")}/telas/${qual}`;
+  return `${barraNormal(raiz)}/telas/${qual}`;
+}
+
+function barraNormal(caminho: string): string {
+  return caminho.replaceAll("\\", "/");
 }
 
 /** Configuração do Agente Local, gravada na estação. */

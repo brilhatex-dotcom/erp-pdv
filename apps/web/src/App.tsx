@@ -9,6 +9,7 @@ import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
 import { Compras } from "./telas/Compras.js";
 import { Configuracao } from "./telas/Configuracao.js";
+import { CopiasDeSeguranca } from "./telas/CopiasDeSeguranca.js";
 import { Empresa } from "./telas/Empresa.js";
 import { Financeiro } from "./telas/Financeiro.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
@@ -111,6 +112,7 @@ const SECOES = [
   // Como a loja vende. Como a empresa, todos leem — só o gerente grava.
   { chave: "CONFIGURACAO", rotulo: "Configuração", permissao: undefined },
   { chave: "AUDITORIA", rotulo: "Auditoria", permissao: "auditoria:consultar" },
+  { chave: "COPIAS", rotulo: "Cópias de segurança", permissao: "backup:executar" },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -194,6 +196,8 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Configuracao />;
     case "AUDITORIA":
       return <Auditoria />;
+    case "COPIAS":
+      return <CopiasDeSeguranca />;
     default:
       return <Produtos />;
   }

@@ -1,4 +1,5 @@
 import type { FiltroBusca } from "./FiltroBusca.js";
+import type { BackupRepository } from "./RepositoriosBackup.js";
 import type {
   AuditoriaRepository,
   ConfiguracaoLojaRepository,
@@ -156,4 +157,5 @@ export interface Repositorios {
   readonly devolucoes: DevolucaoRepository;
   readonly auditoria: AuditoriaRepository;
   readonly imagens: ImagemRepository;
+  readonly backup: BackupRepository;
 }

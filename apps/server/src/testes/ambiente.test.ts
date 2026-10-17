@@ -51,7 +51,23 @@ describe("Configuração do servidor", () => {
   });
 
   it("marca produção quando NODE_ENV pede", () => {
-    expect(carregarAmbiente({ ...MINIMO, NODE_ENV: "production" }).ehProducao).toBe(true);
+    expect(
+      carregarAmbiente({ ...MINIMO, NODE_ENV: "production", PASTA_COPIAS: "/copias" })
+        .ehProducao,
+    ).toBe(true);
+  });
+
+  it("🔑 em produção, não sobe sem a pasta das cópias de segurança", () => {
+    expect(() => carregarAmbiente({ ...MINIMO, NODE_ENV: "production" })).toThrow(
+      /PASTA_COPIAS: é obrigatória em produção/,
+    );
+  });
+
+  it("fora da produção, as cópias podem ficar desligadas, e as ferramentas vêm do PATH", () => {
+    const ambiente = carregarAmbiente(MINIMO);
+
+    expect(ambiente.PASTA_COPIAS).toBe("");
+    expect(ambiente.PASTA_BINARIOS_POSTGRES).toBe("");
   });
 
   it.each([["0"], ["70000"], ["abc"]])("recusa porta inválida %p", (PORTA) => {

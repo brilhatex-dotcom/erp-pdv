@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Container } from "./composicao/container.js";
 import { tratadorDeErro } from "./http/erros.js";
 import { registrarTelas } from "./http/estaticos.js";
+import { baterAgendaDeCopias, recusarDuranteManutencao } from "./http/manutencao.js";
 import { rotasDeAcesso } from "./rotas/acesso.js";
 import { rotasDeAuditoria } from "./rotas/auditoria.js";
 import { rotasDeCadastros } from "./rotas/cadastros.js";
@@ -13,6 +14,7 @@ import { rotasDeCaixa } from "./rotas/caixa.js";
 import { rotasDeCatalogo } from "./rotas/catalogo.js";
 import { rotasDeCompras } from "./rotas/compras.js";
 import { rotasDeConfiguracao } from "./rotas/configuracao.js";
+import { rotasDeCopias } from "./rotas/copias.js";
 import { rotasDeEmpresa } from "./rotas/empresa.js";
 import { rotasDeFinanceiro } from "./rotas/financeiro.js";
 import { rotasDeEstoque } from "./rotas/estoque.js";
@@ -51,6 +53,10 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
 
   servidor.setErrorHandler(tratadorDeErro);
 
+  recusarDuranteManutencao(servidor, container.manutencao);
+  if (container.copias !== undefined)
+    baterAgendaDeCopias(servidor, container.copias.agenda);
+
   await servidor.register(cookie);
 
   await servidor.register(cors, {
@@ -87,6 +93,7 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   rotasDeConfiguracao(servidor, container);
   rotasDeImagens(servidor, container);
   rotasDeAuditoria(servidor, container);
+  rotasDeCopias(servidor, container);
   rotasDeCadastros(servidor, container);
   rotasDeSincronizacao(servidor, container);
   rotasDeUsuarios(servidor, container);

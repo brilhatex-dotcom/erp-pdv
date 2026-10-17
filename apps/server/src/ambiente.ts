@@ -63,6 +63,31 @@ const esquema = z.object({
    */
   PASTA_PDV: z.string().default(""),
   PASTA_RETAGUARDA: z.string().default(""),
+
+  /**
+   * Onde ficam as cópias de segurança do banco.
+   *
+   * Vazia desliga as cópias — o que só se aceita fora da produção (abaixo): o
+   * servidor da loja sem cópia não sobe, porque descobrir isso no dia em que
+   * o disco queima é tarde. O instalador grava a pasta de dados da instalação.
+   */
+  PASTA_COPIAS: z.string().default(""),
+  /**
+   * Onde estão `pg_dump`, `pg_restore` e `psql`. Vazia usa os do PATH, como no
+   * desenvolvimento; o instalador aponta para os que embarcou, da mesma versão
+   * do servidor de banco.
+   */
+  PASTA_BINARIOS_POSTGRES: z.string().default(""),
+});
+
+const esquemaComRegras = esquema.superRefine((dados, contexto) => {
+  if (dados.NODE_ENV === "production" && dados.PASTA_COPIAS === "") {
+    contexto.addIssue({
+      code: "custom",
+      path: ["PASTA_COPIAS"],
+      message: "é obrigatória em produção — sem ela a loja fica sem cópia de segurança",
+    });
+  }
 });
 
 export type Ambiente = Readonly<z.infer<typeof esquema>> & {
@@ -113,7 +138,7 @@ export function carregarArquivoDeAmbiente(
 }
 
 export function carregarAmbiente(fonte: NodeJS.ProcessEnv = process.env): Ambiente {
-  const resultado = esquema.safeParse(fonte);
+  const resultado = esquemaComRegras.safeParse(fonte);
 
   if (!resultado.success) {
     const problemas = resultado.error.issues

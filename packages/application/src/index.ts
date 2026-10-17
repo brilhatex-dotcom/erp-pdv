@@ -92,6 +92,58 @@ export {
   resumoParaCaixa,
 } from "./casos-de-uso/vendas/apoio.js";
 
+// ── Cópias de segurança ─────────────────────────────────────────────────
+export {
+  type ConferenciaDaCopia,
+  ConferirCopiaDeSeguranca,
+  descreverCopia,
+  type EntradaFazerCopia,
+  type EntradaRestaurarCopia,
+  FazerCopiaDeSeguranca,
+  formatarTamanho,
+  PALAVRA_DE_CONFIRMACAO,
+  RestaurarCopiaDeSeguranca,
+  type SaidaRestaurarCopia,
+  TravaDeCopias,
+} from "./casos-de-uso/backup/CopiasDeSeguranca.js";
+export {
+  AgendaDeCopias,
+  ConsultarCopiasDeSeguranca,
+  copiaAutomaticaDevida,
+  DefinirConfiguracaoDeBackup,
+  type EntradaDefinirConfiguracaoDeBackup,
+  type MarcosDaAgenda,
+  proximaCopiaAutomatica,
+  type SituacaoDasCopias,
+} from "./casos-de-uso/backup/AgendaDeCopias.js";
+export {
+  CONFIGURACAO_DE_BACKUP_PADRAO,
+  INTERVALOS_DE_BACKUP,
+} from "./casos-de-uso/backup/configuracao.js";
+export type {
+  ArquivoGerado,
+  CopiaGuardada,
+  FerramentaDeBackup,
+  Manutencao,
+  PastaDeCopias,
+  ProvaDaCopia,
+  ResumoDoBanco,
+} from "./casos-de-uso/backup/portas.js";
+export type {
+  BackupRepository,
+  ConfiguracaoDeBackup,
+  ExecucaoDeBackup,
+  OperacaoDeBackup,
+  OrigemDaCopia,
+  SituacaoDaExecucao,
+} from "./portas/repositorios/RepositoriosBackup.js";
+export {
+  copiasParaApagar,
+  type PoliticaDeRetencao,
+  RETENCAO_PADRAO,
+  semanaIso,
+} from "./casos-de-uso/backup/retencao.js";
+
 // ── Configuração, imagens e auditoria ───────────────────────────────────
 export {
   DefinirConfiguracaoLoja,

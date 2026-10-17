@@ -21,19 +21,29 @@ export function urlBancoDeTeste(): string {
   return process.env["DATABASE_URL_TESTE"] ?? URL_PADRAO;
 }
 
-/** Aplica as migrações no banco de teste. Idempotente. */
-export function prepararBanco(): void {
-  const schema = fileURLToPath(new URL("../../prisma/schema.prisma", import.meta.url));
+/** O mesmo servidor de banco, noutro banco — o de uma suíte que precisa do seu. */
+export function urlComBanco(banco: string, url = urlBancoDeTeste()): string {
+  const endereco = new URL(url);
+  endereco.pathname = `/${banco}`;
+  return endereco.toString();
+}
 
+/** O esquema do Prisma; as migrações ficam na pasta ao lado dele. */
+export const ESQUEMA_PRISMA = fileURLToPath(
+  new URL("../../prisma/schema.prisma", import.meta.url),
+);
+
+/** Aplica as migrações no banco de teste. Idempotente. */
+export function prepararBanco(url = urlBancoDeTeste(), schema = ESQUEMA_PRISMA): void {
   execFileSync("npx", ["prisma", "migrate", "deploy", "--schema", schema], {
-    env: { ...process.env, DATABASE_URL: urlBancoDeTeste() },
+    env: { ...process.env, DATABASE_URL: url },
     stdio: "pipe",
   });
 }
 
-export function criarClienteDeTeste(): PrismaClient {
+export function criarClienteDeTeste(url = urlBancoDeTeste()): PrismaClient {
   return new PrismaClient({
-    datasources: { db: { url: urlBancoDeTeste() } },
+    datasources: { db: { url } },
     // Sem `error`: boa parte destes testes **espera** que a consulta falhe, e
     // registrar cada rejeição prevista esconderia a falha de verdade no meio.
     log: ["warn"],

@@ -1,6 +1,15 @@
 import {
+  AgendaDeCopias,
   Autenticar,
   AutorizarOperacao,
+  ConferirCopiaDeSeguranca,
+  ConsultarCopiasDeSeguranca,
+  DefinirConfiguracaoDeBackup,
+  FazerCopiaDeSeguranca,
+  type FerramentaDeBackup,
+  type PastaDeCopias,
+  RestaurarCopiaDeSeguranca,
+  TravaDeCopias,
   type GeradorId,
   type Hasher,
   IniciarVenda,
@@ -53,15 +62,19 @@ import {
 } from "@erp/application";
 import {
   criarPrismaClient,
+  FerramentaPostgres,
   HasherArgon2,
   montarRepositorios,
+  PastaDeCopiasNoDisco,
   type PrismaClient,
   UnitOfWorkPrisma,
 } from "@erp/database";
 import { BYTES_ALEATORIOS_UUID_V7, type Identificador, montarUuidV7 } from "@erp/domain";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { join } from "node:path";
 
 import type { Ambiente } from "../ambiente.js";
+import { ManutencaoDoServidor } from "./manutencao.js";
 
 /**
  * Container de composição.
@@ -89,6 +102,31 @@ import type { Ambiente } from "../ambiente.js";
  */
 export type ModoOperacao = "REAL" | "TREINAMENTO";
 
+/** As cópias de segurança do banco da loja, com a pasta onde elas moram. */
+export interface CopiasDoServidor {
+  readonly pasta: string;
+  readonly fazer: FazerCopiaDeSeguranca;
+  readonly conferir: ConferirCopiaDeSeguranca;
+  readonly restaurar: RestaurarCopiaDeSeguranca;
+  readonly consultar: ConsultarCopiasDeSeguranca;
+  readonly definirAgenda: DefinirConfiguracaoDeBackup;
+  readonly agenda: AgendaDeCopias;
+}
+
+/** Trocas que o teste faz na composição. */
+export interface OpcoesDoContainer {
+  /**
+   * A ferramenta e a pasta das cópias, no lugar das de verdade.
+   *
+   * É o que deixa o teste das rotas provocar a cópia que falha, sem precisar
+   * corromper um banco de verdade para isso.
+   */
+  readonly copias?: {
+    readonly ferramenta: FerramentaDeBackup;
+    readonly pasta: PastaDeCopias;
+  };
+}
+
 export interface Container {
   readonly ambiente: Ambiente;
   readonly modo: ModoOperacao;
@@ -106,6 +144,16 @@ export interface Container {
   readonly geradorId: GeradorId;
   readonly hasher: Hasher;
 
+  /**
+   * As cópias de segurança — só do banco real, e só com a pasta configurada.
+   *
+   * O banco de treinamento não tem cópia: ele é de mentira por definição, e a
+   * cópia dele ocuparia o disco que a cópia de verdade precisa.
+   */
+  readonly copias: CopiasDoServidor | undefined;
+  /** Ligada enquanto o banco é trocado por uma cópia: a API responde 503. */
+  readonly manutencao: ManutencaoDoServidor;
+
   readonly autenticar: Autenticar;
   readonly renovarSessao: RenovarSessao;
   readonly autorizarOperacao: AutorizarOperacao;
@@ -119,7 +167,7 @@ export interface Container {
   readonly abrirCaixa: AbrirCaixa;
   readonly registrarSangria: RegistrarSangria;
   readonly registrarSuprimento: RegistrarSuprimento;
-  readonly fecharCaixa: FecharCaixa;
+  readonly fecharCaixa: Pick<FecharCaixa, "executar">;
   readonly iniciarVenda: IniciarVenda;
   readonly adicionarItem: AdicionarItemPorCodigo;
   readonly registrarPagamento: RegistrarPagamento;
@@ -195,6 +243,7 @@ export function montarContainer(
   ambiente: Ambiente,
   modo: ModoOperacao = "REAL",
   urlBanco: string = ambiente.DATABASE_URL,
+  opcoes: OpcoesDoContainer = {},
 ): Container {
   const prisma = criarPrismaClient({
     urlBanco,
@@ -210,6 +259,20 @@ export function montarContainer(
   // diferente sem ninguém notar.
   const autorizar = new AutorizarOperacao(relogio, hasher);
   const leitura = montarRepositorios(prisma);
+  const manutencao = new ManutencaoDoServidor();
+  const copias =
+    modo === "REAL" && ambiente.PASTA_COPIAS !== ""
+      ? montarCopias(
+          ambiente,
+          urlBanco,
+          unitOfWork,
+          relogio,
+          geradorId,
+          manutencao,
+          opcoes,
+        )
+      : undefined;
+  const fecharCaixa = new FecharCaixa(unitOfWork, relogio, geradorId);
 
   return {
     ambiente,
@@ -220,6 +283,8 @@ export function montarContainer(
     relogio,
     geradorId,
     hasher,
+    copias,
+    manutencao,
 
     autenticar: new Autenticar(unitOfWork, relogio, geradorId, hasher, gerarRefresh),
     renovarSessao: new RenovarSessao(
@@ -244,7 +309,8 @@ export function montarContainer(
     abrirCaixa: new AbrirCaixa(unitOfWork, relogio, geradorId),
     registrarSangria: new RegistrarSangria(unitOfWork, relogio, geradorId, autorizar),
     registrarSuprimento: new RegistrarSuprimento(unitOfWork, relogio, geradorId),
-    fecharCaixa: new FecharCaixa(unitOfWork, relogio, geradorId),
+    fecharCaixa:
+      copias === undefined ? fecharCaixa : fechamentoComCopia(fecharCaixa, copias.agenda),
     iniciarVenda: new IniciarVenda(unitOfWork, relogio, geradorId),
     adicionarItem: new AdicionarItemPorCodigo(unitOfWork, geradorId, relogio, autorizar),
     registrarPagamento: new RegistrarPagamento(
@@ -303,6 +369,80 @@ export function montarContainer(
 
     async encerrar(): Promise<void> {
       await prisma.$disconnect();
+    },
+  };
+}
+
+function montarCopias(
+  ambiente: Ambiente,
+  urlBanco: string,
+  unitOfWork: UnitOfWork,
+  relogio: Relogio,
+  geradorId: GeradorId,
+  manutencao: ManutencaoDoServidor,
+  opcoes: OpcoesDoContainer,
+): CopiasDoServidor {
+  const pasta = ambiente.PASTA_COPIAS;
+  const ferramenta =
+    opcoes.copias?.ferramenta ??
+    new FerramentaPostgres({
+      urlBanco,
+      pastaBinarios:
+        ambiente.PASTA_BINARIOS_POSTGRES === ""
+          ? undefined
+          : ambiente.PASTA_BINARIOS_POSTGRES,
+      pastaDeTrabalho: join(pasta, ".em-andamento"),
+    });
+  const pastaDeCopias = opcoes.copias?.pasta ?? new PastaDeCopiasNoDisco(pasta);
+  // Uma trava para todas as operações: cópia, conferência e restauração
+  // disputam o mesmo banco e a mesma pasta.
+  const trava = new TravaDeCopias();
+
+  const fazer = new FazerCopiaDeSeguranca(
+    ferramenta,
+    pastaDeCopias,
+    trava,
+    unitOfWork,
+    geradorId,
+    relogio,
+  );
+  const conferir = new ConferirCopiaDeSeguranca(ferramenta, pastaDeCopias, trava);
+
+  return {
+    pasta,
+    fazer,
+    conferir,
+    restaurar: new RestaurarCopiaDeSeguranca(
+      conferir,
+      fazer,
+      ferramenta,
+      manutencao,
+      trava,
+      unitOfWork,
+      geradorId,
+      relogio,
+    ),
+    consultar: new ConsultarCopiasDeSeguranca(pastaDeCopias, trava, unitOfWork),
+    definirAgenda: new DefinirConfiguracaoDeBackup(unitOfWork, geradorId, relogio),
+    agenda: new AgendaDeCopias(fazer, pastaDeCopias, trava, unitOfWork, relogio),
+  };
+}
+
+/**
+ * O fechamento de caixa que pede a cópia do dia ao terminar.
+ *
+ * Pede e não espera: o operador não fica olhando o `pg_dump` para ir embora, e
+ * a cópia que falhar não desfaz um fechamento que deu certo.
+ */
+function fechamentoComCopia(
+  fechar: FecharCaixa,
+  agenda: AgendaDeCopias,
+): Pick<FecharCaixa, "executar"> {
+  return {
+    async executar(entrada) {
+      const resultado = await fechar.executar(entrada);
+      if (resultado.isOk()) void agenda.pedirCopiaDoFechamento();
+      return resultado;
     },
   };
 }

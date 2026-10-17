@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { carregarAmbiente } from "../ambiente.js";
@@ -114,7 +116,7 @@ describe("Modo produção", () => {
     // Em desenvolvimento o servidor roda em HTTP, e o navegador descartaria um
     // cookie `Secure` silenciosamente — quebrando o login sem mensagem alguma.
     const desenvolvimento = ambienteDe();
-    const producao = ambienteDe({ NODE_ENV: "production" });
+    const producao = ambienteDe({ NODE_ENV: "production", PASTA_COPIAS: tmpdir() });
 
     expect(desenvolvimento.ehProducao).toBe(false);
     expect(producao.ehProducao).toBe(true);
@@ -125,7 +127,12 @@ describe("Servidor em produção", () => {
   it("sobe com a configuração de produção", async () => {
     // O nível de log e o `Secure` dos cookies mudam com o ambiente; subir o
     // servidor nesse modo garante que a diferença não quebra a montagem.
-    const { servidor } = await servidorCom({ NODE_ENV: "production" });
+    const { servidor } = await servidorCom({
+      NODE_ENV: "production",
+      PASTA_COPIAS: join(tmpdir(), "erp-copias-producao"),
+      // As ferramentas embarcadas, como o instalador grava.
+      PASTA_BINARIOS_POSTGRES: join(tmpdir(), "postgres", "bin"),
+    });
 
     const resposta = await servidor.inject({ method: "GET", url: "/saude" });
 

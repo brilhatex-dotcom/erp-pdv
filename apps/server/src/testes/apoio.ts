@@ -20,7 +20,11 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 
 import { carregarAmbiente } from "../ambiente.js";
-import { type Container, montarContainer } from "../composicao/container.js";
+import {
+  type Container,
+  montarContainer,
+  type OpcoesDoContainer,
+} from "../composicao/container.js";
 import { montarServidor } from "../servidor.js";
 
 /**
@@ -46,6 +50,7 @@ export function urlBancoDeTeste(): string {
  */
 export async function montarServidorDeTeste(
   sobrescritas: Record<string, string> = {},
+  opcoes: OpcoesDoContainer = {},
 ): Promise<{
   readonly servidor: FastifyInstance;
   readonly container: Container;
@@ -62,7 +67,7 @@ export async function montarServidorDeTeste(
     ...sobrescritas,
   });
 
-  const container = montarContainer(ambiente);
+  const container = montarContainer(ambiente, "REAL", ambiente.DATABASE_URL, opcoes);
 
   return { servidor: await montarServidor(container), container };
 }

@@ -12,6 +12,10 @@
   // O `apps/server` usa `DATABASE_URL_TESTE_API`, e esquecê-la custou uma
   // reprovação de CI: no desenvolvimento o valor padrão aponta para a porta
   // certa e nada acusa; no CI, a porta é outra e a suíte não alcança o banco.
+  //
+  // `PASTA_BINARIOS_POSTGRES` é do mesmo tipo: sem ela, as suítes de cópia de
+  // segurança usariam o `pg_dump` do PATH — no CI, o 16 da imagem, que recusa
+  // o servidor 17.
   "globalEnv": ["NODE_ENV"],
 
   // Repassadas sem entrar no hash: dizem **como** alcançar a rede, não o que
@@ -43,12 +47,22 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "env": ["DATABASE_URL", "DATABASE_URL_TESTE", "DATABASE_URL_TESTE_API"]
+      "env": [
+        "DATABASE_URL",
+        "DATABASE_URL_TESTE",
+        "DATABASE_URL_TESTE_API",
+        "PASTA_BINARIOS_POSTGRES"
+      ]
     },
     "test:cov": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["DATABASE_URL", "DATABASE_URL_TESTE", "DATABASE_URL_TESTE_API"]
+      "env": [
+        "DATABASE_URL",
+        "DATABASE_URL_TESTE",
+        "DATABASE_URL_TESTE_API",
+        "PASTA_BINARIOS_POSTGRES"
+      ]
     }
   }
 }

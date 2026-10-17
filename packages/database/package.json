@@ -32,7 +32,8 @@
     "@erp/domain": "workspace:*",
     "@erp/utils": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
-    "@prisma/client": "^6.19.1"
+    "@prisma/client": "^6.19.1",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@erp/config": "workspace:*",

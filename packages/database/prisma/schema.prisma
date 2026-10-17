@@ -997,11 +997,13 @@ model ConfiguracaoBackup {
   id             String   @id @db.Uuid
   /// NULL usa a pasta padrão da instalação.
   pasta          String?  @db.VarChar(260)
-  /// De quantas em quantas horas. Zero desliga o agendamento.
-  intervaloHoras Int      @default(24) @map("intervalo_horas")
+  /// De quantas em quantas horas. Zero desliga o agendamento — só pelo suporte:
+  /// a tela oferece de 1 a 24.
+  intervaloHoras Int      @default(1) @map("intervalo_horas")
   aoFecharCaixa  Boolean  @default(true) @map("ao_fechar_caixa")
-  /// Quantos arquivos guardar. Os mais antigos saem.
-  manterUltimos  Int      @default(30) @map("manter_ultimos")
+  /// Quantas cópias recentes guardar: a escala mais fina da retenção avô-pai-filho.
+  /// As diárias, semanais e mensais ficam além delas (ARQUITETURA.md §10.3).
+  manterUltimos  Int      @default(24) @map("manter_ultimos")
   unica          Boolean  @unique @default(true)
   atualizadoEm   DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(3)
 
@@ -1016,7 +1018,8 @@ model ExecucaoBackup {
   id          String    @id @db.Uuid
   /// BACKUP ou RESTAURACAO.
   operacao    String    @db.VarChar(12)
-  /// MANUAL, AGENDADO ou FECHAMENTO.
+  /// MANUAL, AGENDADO, FECHAMENTO ou RESTAURACAO (a cópia feita logo antes de
+  /// restaurar). A restauração em si é sempre MANUAL.
   origem      String    @db.VarChar(12)
   /// EM_ANDAMENTO, CONCLUIDO ou FALHOU.
   situacao    String    @db.VarChar(14)

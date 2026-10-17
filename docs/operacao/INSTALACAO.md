@@ -197,14 +197,20 @@ preserva os segredos.
 Para começar do zero — e **perder tudo** —, apague `C:\ProgramData\ERP PDV` à
 mão antes de reinstalar.
 
+### Cópias de segurança
+
+O sistema copia e confere o banco sozinho, de hora em hora e a cada fechamento
+de caixa, em `C:\ProgramData\ERP PDV\backup`. Na implantação, mostre ao dono a
+tela **Cópias de segurança** e combine com ele a cópia semanal para um pendrive
+guardado fora da loja: é a única proteção contra roubo e incêndio nesta versão.
+Restaurar, pela tela ou sem ela: `docs/operacao/BACKUP.md`.
+
 ---
 
 ## O que ainda não existe
 
 Registrado com honestidade, para o técnico não procurar o que não há:
 
-- **Backup automático.** A pasta existe e nada a preenche ainda (módulo 15).
-  Até lá, copie `C:\ProgramData\ERP PDV\dados` com o serviço parado.
 - **Atualização automática.** Atualizar hoje é rodar o instalador da versão
   nova por cima (módulo 17).
 - **Instalação da estação em modo separado.** O instalador ainda instala tudo;

@@ -66,6 +66,12 @@ import type {
   ImagemParaGravar,
   ImagemRepository,
 } from "../portas/repositorios/RepositoriosBalcao.js";
+import type {
+  BackupRepository,
+  ConfiguracaoDeBackup,
+  ExecucaoDeBackup,
+  OperacaoDeBackup,
+} from "../portas/repositorios/RepositoriosBackup.js";
 import type { RegistroAuditoria } from "../auditoria/RegistroAuditoria.js";
 
 /**
@@ -229,6 +235,53 @@ export class AuditoriaEmMemoria implements AuditoriaRepository {
   /** Atalho dos testes: os registros de uma ação. */
   da(acao: RegistroAuditoria["acao"]): readonly RegistroAuditoria[] {
     return this.registros.filter((registro) => registro.acao === acao);
+  }
+}
+
+export class BackupRepositorioEmMemoria implements BackupRepository {
+  configuracaoAtual: ConfiguracaoDeBackup | undefined;
+  /** O identificador da linha, na primeira gravação. */
+  idDaConfiguracao: Identificador | undefined;
+  readonly execucoes = new Map<string, ExecucaoDeBackup>();
+
+  configuracao(): Promise<ConfiguracaoDeBackup | undefined> {
+    return Promise.resolve(this.configuracaoAtual);
+  }
+
+  salvarConfiguracao(
+    configuracao: ConfiguracaoDeBackup,
+    idSeNova: Identificador,
+  ): Promise<void> {
+    this.configuracaoAtual = configuracao;
+    this.idDaConfiguracao ??= idSeNova;
+    return Promise.resolve();
+  }
+
+  registrarExecucao(execucao: ExecucaoDeBackup): Promise<void> {
+    this.execucoes.set(execucao.id.valor, execucao);
+    return Promise.resolve();
+  }
+
+  ultimasExecucoes(
+    limite: number,
+    operacao?: OperacaoDeBackup,
+  ): Promise<readonly ExecucaoDeBackup[]> {
+    return Promise.resolve(
+      [...this.execucoes.values()]
+        .filter((execucao) => operacao === undefined || execucao.operacao === operacao)
+        // Desempate pelo id, como no banco: o relógio dos testes é parado.
+        .sort(
+          (a, b) =>
+            b.iniciadaEm.getTime() - a.iniciadaEm.getTime() ||
+            b.id.valor.localeCompare(a.id.valor),
+        )
+        .slice(0, limite),
+    );
+  }
+
+  /** Atalho dos testes: as tentativas, na ordem em que começaram. */
+  emOrdem(): readonly ExecucaoDeBackup[] {
+    return [...this.execucoes.values()];
   }
 }
 
@@ -706,6 +759,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   readonly devolucoes: DevolucaoRepositorioEmMemoria;
   readonly auditoria: AuditoriaEmMemoria;
   readonly imagens: ImagemRepositorioEmMemoria;
+  readonly backup: BackupRepositorioEmMemoria;
   readonly hasher: HasherFalso;
   readonly unitOfWork: UnitOfWorkEmMemoria;
   readonly relogio: RelogioFixo;
@@ -729,6 +783,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
   const devolucoes = new DevolucaoRepositorioEmMemoria();
   const auditoria = new AuditoriaEmMemoria();
   const imagens = new ImagemRepositorioEmMemoria();
+  const backup = new BackupRepositorioEmMemoria();
 
   return {
     produtos,
@@ -749,6 +804,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
     devolucoes,
     auditoria,
     imagens,
+    backup,
     hasher: new HasherFalso(),
     unitOfWork: new UnitOfWorkEmMemoria({
       produtos,
@@ -769,6 +825,7 @@ export function montarAmbiente(instante = new Date("2026-07-30T12:00:00.000Z")):
       devolucoes,
       auditoria,
       imagens,
+      backup,
     }),
     relogio: new RelogioFixo(instante),
     geradorId: new GeradorIdSequencial(),

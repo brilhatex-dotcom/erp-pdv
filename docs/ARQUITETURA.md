@@ -19,6 +19,7 @@
 | **1.2** | 31/07/2026 | **ADR-0021**: cache de contingência do PDV passa de SQLite embarcado para **arquivos na estação** (fila append-only + índice em memória). Motivo: SQLite no Electron exige módulo nativo recompilado por ABI, e o custo de suporte de um instalador que compila no cliente supera o ganho, nos volumes do §12.2. Impacta §5.1, §5.2.2 e §12.2. |
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
 | **1.3** | 31/07/2026 | Acrescenta `@erp/cliente-api` ao grafo de §3.3 e à tabela de §3.4: o cliente HTTP e o contexto de sessão saem de `apps/web` para um pacote, porque o PDV precisa dos mesmos. Duplicá-los faria a renovação de token divergir entre as duas aplicações — e divergência em renovação de sessão aparece como "o PDV desloga sozinho". |
+| **1.4** | 17/10/2026 | **ADR-0027**: a V1 entrega a camada local do backup (§10.7) — `pg_dump` de hora em hora e no fechamento de caixa, toda cópia provada por restauração, retenção GFS e restauração pela retaguarda. **PITR e cópia externa automática ficam para depois**: na V1, o RPO é o intervalo da agenda (1 h no padrão), não "próximo de zero". Impacta §1.5 (RNF-07), §10.5 e §10.6. |
 
 ---
 
@@ -131,7 +132,7 @@ Requisito sem número é opinião. Estas são as metas que o sistema deve cumpri
 | RNF-04 | Finalização de venda (sem fiscal) | < 300 ms (p95) | Benchmark de integração |
 | RNF-05 | Autorização de NFC-e online | < 3 s (p95) | Métrica de produção |
 | RNF-06 | Disponibilidade do PDV | **99,9%, independente de internet** | Telemetria de indisponibilidade |
-| RNF-07 | Perda máxima de dados (RPO) | **próximo de zero** (PITR) | Teste de restauração |
+| RNF-07 | Perda máxima de dados (RPO) | **próximo de zero** (PITR). **Na V1: o intervalo da agenda de cópias, 1 h no padrão** (ADR-0027) | Teste de restauração |
 | RNF-08 | Tempo de recuperação (RTO) | 30 minutos | Simulação de desastre |
 | RNF-09 | Instalação completa | < 10 minutos, por não-técnico | Teste com usuário real |
 | RNF-10 | Consumo de RAM da estação PDV | < 500 MB | Profiling |
@@ -1219,13 +1220,33 @@ graph TB
 
 | Métrica | Meta | Como se cumpre |
 |---|---|---|
-| **RPO** (perda máxima) | **próximo de zero** (era 15 min) | 🔑 PITR por WAL archiving contínuo + fila local do PDV |
+| **RPO** (perda máxima) | **próximo de zero** (era 15 min). **V1: o intervalo da agenda** (§10.7) | 🔑 PITR por WAL archiving contínuo + fila local do PDV. Na V1, só a cópia de hora em hora + a fila local |
 | **RTO** (tempo de retorno) | 30 min | Restauração por assistente gráfico, sem linha de comando |
 | Retenção | 12 meses (dados) / 5 anos (fiscal) | Política GFS + arquivo fiscal separado |
 
 ### 10.6 Restauração acessível
 
 O `apps/cli` e um assistente gráfico na retaguarda permitem: listar backups com data/tamanho/integridade, pré-visualizar o conteúdo (quantas vendas, qual período), restaurar com confirmação dupla, e **restaurar para uma cópia** (sem sobrescrever o atual) para conferência antes de efetivar. O usuário-alvo não usa terminal — a restauração precisa ser clicável.
+
+Na V1 o assistente é a tela **Cópias de segurança** da retaguarda, e a "restauração para uma cópia" é a **conferência**: a cópia é aberta numa base descartável e mostrada lado a lado com o banco de agora, antes de qualquer troca. O `apps/cli` não existe; sem a tela, o técnico restaura com `pg_restore` (`docs/operacao/BACKUP.md`).
+
+### 10.7 O que a V1 entrega (ADR-0027)
+
+| Camada | Na V1 | Onde |
+|---|---|---|
+| 1 — WAL e PITR | ⬜ Fora da V1 | — |
+| 2 — Local automática | ✅ `pg_dump` (formato próprio) de 1 em 1 a 24 em 24 horas (padrão: de hora em hora), no fechamento de caixa e "agora" pela retaguarda; retenção GFS 24 · 7 · 4 · 12 | `casos-de-uso/backup/`, `database/src/backup/`, `rotas/copias.ts` |
+| 2 — Verificação | ✅ **Toda** cópia restaurada numa base descartável e resumida (vendas, produtos, clientes, período, caixas abertos, migrações) — mais frequente que o teste mensal do §10.4, e mais rasa: não confere somas | `FerramentaPostgres.provar` |
+| 2 — `pg_basebackup` | ⬜ Fora da V1 (só serve de base ao PITR) | — |
+| 3 — Externa | ⚠️ Só o pendrive à mão, orientado pela tela e pelo guia | `docs/operacao/BACKUP.md` |
+| 4 — XMLs fiscais | ⬜ Entra com o fiscal real (ADR-0022) | — |
+
+Regras que a implementação acrescenta ao desenho:
+
+- **Toda tentativa é registrada** (`execucoes_backup`), inclusive a que falhou sem deixar arquivo; a tela abre pela última cópia **boa** e pela última falha.
+- **A cópia não começa com menos de 1 GB livre**: banco e cópias dividem o disco.
+- **Restaurar** exige `config:backup`, a palavra RESTAURAR, a mesma lista de migrações na cópia e no banco, caixas fechados (salvo pedido explícito), e faz uma cópia do banco de agora antes de trocar. A troca é `pg_restore --clean --single-transaction` — tudo ou nada — com a API em manutenção (503), que o PDV trata como servidor fora e atravessa pela fila da estação.
+- A cópia feita antes de uma restauração fica **pelo menos 7 dias** e não dispara a retenção — senão, feita na mesma hora, ela tiraria da pasta a cópia que ia ser restaurada.
 
 ---
 

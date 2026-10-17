@@ -22,6 +22,7 @@ import {
 function dados(sobrescritas: Partial<DadosDaInstalacao> = {}): DadosDaInstalacao {
   return {
     raiz: "C:\\Program Files\\ERP PDV",
+    pastaDeCopias: "C:\\ProgramData\\ERP PDV\\backup",
     portaServidor: PORTA_SERVIDOR_PADRAO,
     portaPostgres: PORTA_POSTGRES_PADRAO,
     segredos: {
@@ -118,6 +119,17 @@ describe("arquivo de configuração do servidor", () => {
 
     expect(env).toContain("PASTA_PDV=C:/Program Files/ERP PDV/telas/pdv");
     expect(env).toContain("PASTA_RETAGUARDA=C:/Program Files/ERP PDV/telas/retaguarda");
+  });
+
+  it("🔑 aponta a pasta das cópias e o pg_dump embarcado — sem eles o servidor não sobe", () => {
+    // O `pg_dump` do PATH, quando existe, pode ser de outra versão: mais velho
+    // que o servidor de banco, ele se recusa a copiar, e a loja fica sem cópia.
+    const env = conteudoDoEnv(dados());
+
+    expect(env).toContain("PASTA_COPIAS=C:/ProgramData/ERP PDV/backup");
+    expect(env).toContain(
+      "PASTA_BINARIOS_POSTGRES=C:/Program Files/ERP PDV/postgres/bin",
+    );
   });
 
   it("🔑 converte a barra invertida do Windows", () => {

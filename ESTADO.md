@@ -3,7 +3,7 @@
 > **Leia este arquivo primeiro.** Ele existe para que qualquer sessão nova de
 > desenvolvimento continue de onde a anterior parou, sem reimplementar o que já existe.
 >
-> Última atualização: **01/08/2026** · Ramo de referência: **`main`**
+> Última atualização: **17/10/2026** · Ramo de referência: **`main`**
 >
 > ⚠️ **Há trabalho vivo fora de `main`.** Confira a §0.1 antes de começar qualquer coisa
 > que toque o PDV, a impressão ou a contingência offline.
@@ -42,8 +42,9 @@ git branch -r                       # o que existe
 git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 ```
 
-| Branch | Situação em 02/08/2026 | O que ela mexe |
+| Branch | Situação em 17/10/2026 | O que ela mexe |
 |---|---|---|
+| `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria e **cópias de segurança** (ADR-0027). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. **Ainda faltam**: modo treinamento (ADR-0026, reservado) e o manual do operador |
 | `claude/projeto-andamento-47iofe` | Aguardando merge | Correções da 1ª execução do `instalador.yml`: NSIS instalado no runner, migração passa a morar no `apps/instalador` com o CLI do Prisma embarcado, e a ordem segredos↔`initdb` corrigida. Ao mesclar, apague-a e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
@@ -88,7 +89,11 @@ movimentação é o pior de resolver.
 | **Agente Local** | ✅ Serviço HTTP em `127.0.0.1:9787` — impressão, fila offline e catálogo | `apps/agente/` |
 | Contrato tela ↔ Agente | ✅ Tipos e cliente HTTP compartilhados | `packages/agente-contrato/` |
 | **Contingência offline do PDV** | ✅ Completa, da fila à tela | `apps/pdv/src/principal/`, `vendaComQueda.ts` |
-| **Caixa — abertura e fechamento** | ✅ Completo, com contagem às cegas. **Sangria e suprimento só têm API, sem tela** — ver §2.4 | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Abertura.tsx`, `telas/Fechamento.tsx` |
+| **Caixa — abertura e fechamento** | ✅ Completo, com contagem às cegas. Sangria e suprimento pela tela do caixa, com liberação do supervisor | `casos-de-uso/caixa/`, `rotas/caixa.ts`, `telas/Abertura.tsx`, `telas/Fechamento.tsx`, `componentes/ModalMovimento.tsx` |
+| **Configuração da loja** | ✅ Segmento, recursos, venda sem estoque, comprovante, balança e logotipo — ponta a ponta *(ramo `claude/jolly-planck-c0ues8`)* | `domain/configuracao/`, `rotas/configuracao.ts`, `telas/Configuracao.tsx` |
+| **Balcão da V1** | ✅ Peso, pagamento misto, troco, desconto autorizado, venda guardada, cancelamento e devolução *(mesmo ramo)* | `apps/pdv/src/telas/TelaDeVenda.tsx`, `casos-de-uso/vendas/` |
+| **Auditoria** | ✅ Quem pediu, quem liberou, o quê — na retaguarda *(mesmo ramo)* | `auditoria/`, `rotas/auditoria.ts`, `telas/Auditoria.tsx` |
+| **Cópias de segurança** | ✅ De hora em hora e no fechamento, toda cópia provada por restauração, retenção GFS, restauração pela retaguarda (ADR-0027) *(mesmo ramo)* | `casos-de-uso/backup/`, `database/src/backup/`, `rotas/copias.ts`, `telas/CopiasDeSeguranca.tsx`, `docs/operacao/BACKUP.md` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
@@ -96,7 +101,7 @@ movimentação é o pior de resolver.
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
 | **Instalador Windows** | ⚠️ Workflow verde e `.exe` de 77 MB gerado; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
-**2.686 testes passando.** Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
+**3.553 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026). Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
@@ -202,11 +207,11 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 | 8 | Compras | ✅ Nota de entrada, cancelamento com estorno e lista. **Falta o pedido de compra** — ver §2.4 |
 | 9 | Vendas | ✅ Pronto |
 | 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
-| 11 | Caixa | ⚠️ Abertura, fechamento e conferência prontos. **Sangria e suprimento têm rota e caso de uso, mas nenhuma tela os chama** — ver §2.4 |
+| 11 | Caixa | ✅ Abertura, fechamento, conferência, sangria e suprimento |
 | 12 | Financeiro | ✅ Contas a receber e a pagar, baixa parcial, estorno, parcelamento, adiamento e cancelamento. **Falta a conciliação bancária** — ver §2.4 |
 | 13 | Relatórios | ⚠️ Só a conferência de caixa |
 | 14 | **Dashboard** | ⬜ Nada existe |
-| 15 | **Backup** | ⬜ Nada existe |
+| 15 | **Backup** | ✅ Camada local completa (ADR-0027). **Faltam** a cópia externa automática e cifrada e o PITR — decisão de custo pendente |
 | 16 | Instalação | ⚠️ NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow **verde**, `.exe` gerado; **nunca instalado numa máquina Windows** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
@@ -223,15 +228,20 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 
 ### 2.4 Dívidas conhecidas, pequenas e nomeadas
 
-- **Sangria e suprimento não têm tela.** `POST /api/caixa/sangria` e `/suprimento`
-  existem, com caso de uso e testes; nenhuma tela os chama. A sangria ainda precisa
-  do fluxo de autorização do supervisor, que a rota já devolve como terceiro estado
-  (`AUTORIZACAO_NECESSARIA`), não como negativa. Sem isso a loja não tira dinheiro da
-  gaveta pelo sistema.
-- **`sessoes_caixa.operador_id` não tem FK.** O papel do DBA tem veto sobre FK
-  ausente (`CLAUDE.md` §1), e esta escapou. A consulta de sessões já lida com o
-  caso (mostra `—`), mas a integridade real depende da migração. Fazer junto com
-  a próxima migração de caixa, no padrão expand-contract e com reversão testada.
+- ~~Sangria e suprimento não têm tela~~ ✅ **Resolvido** no ramo
+  `claude/jolly-planck-c0ues8`: o menu do caixa abre `ModalMovimento`, com a
+  liberação do supervisor quando a rota devolve `AUTORIZACAO_NECESSARIA`.
+- ~~`sessoes_caixa.operador_id` não tem FK~~ ✅ **Resolvido** na migração
+  `balcao_completo`, como `NOT VALID`: vale para toda linha nova, e as antigas
+  não são varridas na migração. **Gatilho:** um `VALIDATE CONSTRAINT` numa
+  migração futura, depois de conferir que nenhuma linha antiga aponta para
+  usuário inexistente.
+- **A restauração de cópia espera os caixas fecharem.** Venda que o Agente envia
+  e o servidor recusa sai da fila da estação (fica no log e no arquivo da fila).
+  Restaurar com caixa aberto depois da cópia faria isso com as vendas guardadas
+  durante a troca; por isso há trava, e a saída "mesmo assim" (ADR-0027).
+  **Gatilho:** se o Agente passar a guardar as recusadas para reenvio, a trava
+  pode virar aviso.
 - **Reabertura de caixa não existe.** A permissão `caixa:reabrir` está definida e
   não é usada por nada. Não foi implementada de propósito: reabrir invertendo o
   status é o `UPDATE` que o princípio 5 proíbe. Se o negócio precisar, o caminho é
@@ -255,13 +265,9 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 - **O segredo do Agente vem de `VITE_SEGREDO_AGENTE` no build da PWA.** É
   provisório e está marcado como tal em `balcao.ts`: o certo é o servidor da loja
   entregá-lo junto com a sessão, para não viajar dentro de um bundle público.
-- **Cancelar a venda não cancela os títulos dela.** Não existe caso de uso de
-  cancelar venda — o domínio tem `Venda.cancelar` e nada o chama —, então a
-  função de cancelamento em massa **não foi escrita**: código sem chamador é
-  código morto que ninguém mantém. **Gatilho:** quem escrever `CancelarVenda`
-  precisa alcançar `titulos.porDocumento(vendaId)` e cancelá-los, senão a dívida
-  sobrevive à venda e o cliente é cobrado por mercadoria devolvida. Título com
-  recebimento lançado não cancela — o caminho é estornar antes.
+- ~~Cancelar a venda não cancela os títulos dela~~ ✅ **Resolvido** no ramo
+  `claude/jolly-planck-c0ues8`: `CancelarVenda` alcança
+  `titulos.porDocumento(vendaId)` na mesma transação.
 - **Conciliação bancária não existe.** A permissão `financeiro:conciliar` está
   definida e **não é usada por nada**, como `estoque:inventario` e
   `caixa:reabrir`. Conciliar exige importar extrato (OFX) e casar lançamentos —
@@ -349,6 +355,10 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **Componente de design system criado duas vezes** | Conflito `add/add` no merge, com duas APIs para a mesma coisa | Em 01/08/2026 duas sessões criaram `CampoSelecao` — uma com `value`/`onChange`, outra com `valor`/`aoMudar`. Antes de criar componente em `packages/ui`, rode `git log origin/main --oneline -20` e `ls packages/ui/src/componentes`. Quem chega depois **adota o que está em `main`** e estende, em vez de defender o seu |
 | **`corpos[0]` capturando a chamada errada** | Teste "não chamou nada" falha sem motivo aparente | `ProvedorSessao` consulta `/api/acesso/eu` ao montar. Filtre o dublê de `fetch` pela rota que interessa |
 | **403 confundido com 401** | Cliente tenta renovar token e joga o operador no login | Sem token é **401**; sem alçada é **403**. Trocar faz o operador achar que a sessão caiu |
+| **Dublê em memória escondendo o efeito no disco** | Restauração pela API falhando com `could not open input file` | A cópia "de antes de restaurar", feita na mesma hora, disparava a retenção, que apagava a cópia que ia ser restaurada. Os 70 testes com dublê passavam: a ferramenta falsa não confere se o arquivo existe. Só o teste ponta a ponta com `pg_dump` de verdade pegou. **Fluxo que mexe em arquivo tem ao menos um teste com o disco e a ferramenta reais** |
+| **`pg_dump` mais velho que o servidor** | `server version mismatch`, e nenhuma cópia sai | O `pg_dump` recusa servidor de versão mais nova. O instalador aponta `PASTA_BINARIOS_POSTGRES` para os que embarca; o CI instala o cliente 17 do repositório oficial |
+| **Nome grande na rota vira 414, não 400** | Teste esperava a recusa do Zod e recebeu 414 | O Fastify corta parâmetro de rota acima de 100 caracteres antes da validação. Esquema com `max(120)` num parâmetro é ramo morto |
+| **`inject` dispara o `onReady`** | Relógio de fundo ligando no meio da suíte | Gancho de `onReady` roda em todo teste com `inject`. Relógio de fundo leva `unref()` e para no `onClose` |
 
 ---
 

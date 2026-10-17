@@ -97,6 +97,7 @@ function preparar(): void {
 
   const env = conteudoDoEnv({
     raiz,
+    pastaDeCopias: caminhos.backup,
     portaServidor,
     portaPostgres,
     segredos,

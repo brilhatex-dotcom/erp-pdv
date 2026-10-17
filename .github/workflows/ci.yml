@@ -73,6 +73,8 @@ jobs:
     env:
       DATABASE_URL_TESTE: postgresql://erp:erp@localhost:5432/erp_teste
       DATABASE_URL_TESTE_API: postgresql://erp:erp@localhost:5432/erp_teste_api
+      # As ferramentas da versão do servidor, instaladas no passo abaixo.
+      PASTA_BINARIOS_POSTGRES: /usr/lib/postgresql/17/bin
 
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +85,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      - name: Ferramentas do PostgreSQL 17
+        # A cópia de segurança e o teste de reversão de migração usam
+        # `pg_dump`, `pg_restore` e `psql` — e o `pg_dump` recusa servidor de
+        # versão mais nova que ele: o 16 que vem na imagem do GitHub não copia
+        # o banco 17 do serviço acima. A loja usa as do instalador, da mesma
+        # versão do servidor; o CI, as do repositório oficial do PostgreSQL.
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          "$PASTA_BINARIOS_POSTGRES/pg_dump" --version
 
       - name: Criar bancos de teste
         # Um por suíte: o Turbo roda os pacotes em paralelo, e duas suítes

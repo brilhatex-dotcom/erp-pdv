@@ -12,12 +12,20 @@ export {
   UnitOfWorkPrisma,
 } from "./UnitOfWorkPrisma.js";
 
+// ── Cópias de segurança ─────────────────────────────────────────────────
+export {
+  FerramentaPostgres,
+  type OpcoesFerramentaPostgres,
+} from "./backup/FerramentaPostgres.js";
+export { PastaDeCopiasNoDisco } from "./backup/PastaDeCopiasNoDisco.js";
+
 // ── Repositórios ────────────────────────────────────────────────────────
 export {
   PapelRepositorioPrisma,
   SessaoAcessoRepositorioPrisma,
   UsuarioRepositorioPrisma,
 } from "./repositorios/AcessoRepositorioPrisma.js";
+export { BackupRepositorioPrisma } from "./repositorios/BackupRepositorioPrisma.js";
 export { CaixaRepositorioPrisma } from "./repositorios/CaixaRepositorioPrisma.js";
 export { CompraRepositorioPrisma } from "./repositorios/CompraRepositorioPrisma.js";
 export {
