@@ -30,6 +30,10 @@ xml-fiscal/
 # Instaladores gerados
 tooling/installers/output/
 
+# Saída do teste no navegador: rastros e relatório da última execução
+test-results/
+playwright-report/
+
 # Sistema / editor
 .DS_Store
 Thumbs.db

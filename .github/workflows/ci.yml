@@ -130,6 +130,66 @@ jobs:
       - name: Testes com cobertura
         run: pnpm test:cov
 
+  # O caixa no navegador de verdade (CLAUDE.md §7: venda completa e fechamento
+  # de caixa ponta a ponta). Job à parte, ao lado da qualidade: não a alonga, e
+  # a falha dele diz "a tela não fecha o dia", não "algum teste falhou".
+  ponta-a-ponta:
+    name: Ponta a ponta (navegador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+          POSTGRES_DB: erp_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp -d erp_teste"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # O preparo recria este banco e o do treino a cada execução.
+      DATABASE_URL_E2E: postgresql://erp:erp@localhost:5432/erp_teste_e2e
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Chromium do Playwright
+        # A versão do navegador é a que o `@playwright/test` fixado espera: a
+        # imagem do GitHub traz um Chrome, mas de outra versão.
+        run: pnpm --filter @erp/e2e exec playwright install --with-deps chromium
+
+      - name: Teste no navegador
+        # Constrói o servidor e a PWA do PDV, sobe o servidor de verdade e
+        # opera o caixa pelo teclado, do PIN ao fechamento.
+        run: pnpm e2e
+
+      - name: Rastros da falha
+        # O rastro mostra cada tela e cada tecla até o ponto que falhou: é o que
+        # dá para diagnosticar sem reproduzir na máquina de alguém.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rastros-ponta-a-ponta
+          path: apps/e2e/test-results
+          retention-days: 7
+
   seguranca:
     name: Segurança
     runs-on: ubuntu-latest

@@ -1,0 +1,20 @@
+{
+  "name": "@erp/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "O caixa no navegador de verdade, servido pelo servidor de verdade — os testes ponta a ponta do CLAUDE.md §7",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint testes scripts playwright.config.ts"
+  },
+  "devDependencies": {
+    "@erp/config": "workspace:*",
+    "@erp/database": "workspace:*",
+    "@erp/domain": "workspace:*",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.2"
+  }
+}

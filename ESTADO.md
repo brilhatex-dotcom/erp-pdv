@@ -44,7 +44,7 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 17/10/2026 | O que ela mexe |
 |---|---|---|
-| `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria, **cópias de segurança** (ADR-0027) e **modo treinamento** num segundo banco (ADR-0026). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. **Ainda faltam**: a validação ponta a ponta dos cenários pedidos e o manual do operador |
+| `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria, **cópias de segurança** (ADR-0027) e **modo treinamento** num segundo banco (ADR-0026). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. Os cenários pedidos estão validados pela API e no navegador (`pnpm e2e`). **Ainda falta**: o manual do operador |
 | `claude/projeto-andamento-47iofe` | Aguardando merge | Correções da 1ª execução do `instalador.yml`: NSIS instalado no runner, migração passa a morar no `apps/instalador` com o CLI do Prisma embarcado, e a ordem segredos↔`initdb` corrigida. Ao mesclar, apague-a e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
@@ -96,6 +96,8 @@ movimentação é o pior de resolver.
 | **Cópias de segurança** | ✅ De hora em hora e no fechamento, toda cópia provada por restauração, retenção GFS, restauração pela retaguarda (ADR-0027) *(mesmo ramo)* | `casos-de-uso/backup/`, `database/src/backup/`, `rotas/copias.ts`, `telas/CopiasDeSeguranca.tsx`, `docs/operacao/BACKUP.md` |
 | **Modo treinamento** | ✅ Segundo banco (`erp_pdv_treino`), as mesmas rotas sob `/treino`, loja de demonstração montada sozinha, "Treinar" na entrada do caixa, recomeçar pelo menu. Sem fila, sem gaveta, token e cookie próprios (ADR-0026) *(mesmo ramo)* | `casos-de-uso/treinamento/`, `database/src/treinamento/`, `rotas/treinamento.ts`, `apps/pdv/src/modo.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
+| **Cenários de aceitação da V1** | ✅ Os 13 cenários do pedido do produto e os 3 exemplos de conferência, pela API contra o PostgreSQL real *(mesmo ramo)* | `apps/server/src/testes/Aceitacao.test.ts` |
+| **Teste no navegador (E2E)** | ✅ Um dia de caixa no Chromium — os 3 exemplos, peso, fechamento às cegas — e o treino sem rastro na loja. Job próprio no CI *(mesmo ramo)* | `apps/e2e/`, `pnpm e2e` |
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 | **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
@@ -405,11 +407,19 @@ cp packages/database/.env.example packages/database/.env   # não vem do git
 pnpm db:up          # PostgreSQL 17 na porta 55432 (três bancos)
 pnpm db:deploy      # aplica migrações; `db:migrate` é interativo, ver §3
 pnpm verify         # suíte completa
+pnpm e2e            # o caixa no Chromium, contra o servidor e o banco de verdade
 
 pnpm --filter @erp/server dev   # API   → 3000
 pnpm --filter @erp/web dev      # web   → 5173
 pnpm --filter @erp/pdv dev      # PDV   → 5174
 ```
+
+**O teste no navegador** (`pnpm e2e`) constrói o servidor e a PWA do PDV, sobe o
+servidor de verdade na porta 3999 e recria do zero os bancos `erp_teste_e2e` e
+`erp_teste_e2e_treino` (`DATABASE_URL_E2E` troca o endereço). O Chromium vem do
+Playwright: no contêiner de desenvolvimento ele já está em `/opt/pw-browsers`; noutra
+máquina, `pnpm --filter @erp/e2e exec playwright install chromium`. Quando falha, o
+rastro de cada tela fica em `apps/e2e/test-results/` (`npx playwright show-trace`).
 
 **Se o Docker estiver morto** (acontece após reinício do contêiner):
 
