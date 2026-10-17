@@ -10,6 +10,10 @@ import {
   prepararBanco,
 } from "./apoio.js";
 
+/** Um PNG de um pixel — a menor foto que o servidor aceita como foto. */
+const PNG_1X1 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
 let servidor: FastifyInstance;
 let container: Container;
 
@@ -119,6 +123,55 @@ describe("Categorias", () => {
       { nome: "Bebidas", ativa: true },
     );
     expect(inexistente.statusCode).toBe(404);
+  });
+
+  it("🔑 ícone e foto vão e voltam, e a alteração sem eles os tira", async () => {
+    // O botão do caixa mostra a foto da categoria, ou o ícone na falta dela.
+    // A alteração é estado completo: o que não vem, sai.
+    const cabecalho = await comoPapel("ESTOQUISTA");
+    const imagem = await post("/api/imagens", cabecalho, { conteudo: PNG_1X1 });
+    const imagemId = imagem.json<{ id: string }>().id;
+
+    const criada = await post("/api/categorias", cabecalho, {
+      nome: "Padaria",
+      icone: "🍞",
+      imagemId,
+    });
+    expect(criada.json()).toMatchObject({ nome: "Padaria", icone: "🍞", imagemId });
+
+    const { id } = criada.json<{ id: string }>();
+    const lista = await get("/api/categorias", cabecalho);
+    expect(lista.json<{ itens: unknown[] }>().itens).toEqual([
+      expect.objectContaining({ icone: "🍞", imagemId }),
+    ]);
+
+    const sem = await put(`/api/categorias/${id}`, cabecalho, {
+      nome: "Padaria",
+      ativa: true,
+    });
+    expect(sem.json<{ icone?: string; imagemId?: string }>().icone).toBeUndefined();
+    expect(sem.json<{ icone?: string; imagemId?: string }>().imagemId).toBeUndefined();
+  });
+
+  it("ícone comprido e foto que não existe são recusados com a frase do domínio", async () => {
+    const cabecalho = await comoPapel("ESTOQUISTA");
+
+    const longo = await post("/api/categorias", cabecalho, {
+      nome: "Padaria",
+      icone: "pãozinho quente",
+    });
+    expect(longo.statusCode).toBe(400);
+    expect(longo.json<{ erro: { codigo: string } }>().erro.codigo).toBe(
+      "CATEGORIA_ICONE_LONGO",
+    );
+
+    const semFoto = await post("/api/categorias", cabecalho, {
+      nome: "Padaria",
+      imagemId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e7f0009",
+    });
+    expect(semFoto.json<{ erro: { codigo: string } }>().erro.codigo).toBe(
+      "IMAGEM_NAO_ENCONTRADA",
+    );
   });
 
   it("🔑 o operador de caixa não cria categoria", async () => {

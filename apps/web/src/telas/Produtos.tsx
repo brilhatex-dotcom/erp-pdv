@@ -7,10 +7,14 @@ import {
   centavosParaReais,
   ErroDeTela,
   formatarDinheiro,
+  formatarQuantidade,
+  quantidadeParaMilesimos,
   reaisParaCentavos,
   Vazio,
 } from "@erp/ui";
 import { type ReactNode, type SyntheticEvent, useEffect, useRef, useState } from "react";
+
+import { EnviarImagem } from "../componentes/EnviarImagem.js";
 
 export interface ReferenciaDoProduto {
   readonly tipo: "EAN" | "FABRICANTE" | "ORIGINAL" | "SIMILAR" | "INTERNO" | "FORNECEDOR";
@@ -41,6 +45,16 @@ export interface ProdutoDaLista {
   readonly referencias: readonly ReferenciaDoProduto[];
   readonly embalagens: readonly EmbalagemDoProduto[];
   readonly ativo: boolean;
+  /** Milésimos da unidade base, em texto. Ausente: fora da lista de reposição. */
+  readonly estoqueMinimo?: string;
+  readonly fornecedorId?: string;
+  readonly imagemId?: string;
+  readonly botaoRapido?: boolean;
+}
+
+interface FornecedorDaLista {
+  readonly id: string;
+  readonly exibicao: string;
 }
 
 interface CategoriaDaLista {
@@ -335,6 +349,12 @@ function Formulario({
     produto?.embalagens ?? [],
   );
   const [ativo, setAtivo] = useState(produto?.ativo ?? true);
+  const [estoqueMinimo, setEstoqueMinimo] = useState(
+    produto?.estoqueMinimo === undefined ? "" : formatarQuantidade(produto.estoqueMinimo),
+  );
+  const [fornecedorId, setFornecedorId] = useState(produto?.fornecedorId ?? "");
+  const [imagemId, setImagemId] = useState(produto?.imagemId);
+  const [botaoRapido, setBotaoRapido] = useState(produto?.botaoRapido ?? false);
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [salvando, setSalvando] = useState(false);
 
@@ -361,6 +381,13 @@ function Formulario({
     const custoCentavos = podeVerCusto ? reaisParaCentavos(custo) : undefined;
     if (podeVerCusto && custoCentavos === undefined) {
       setErro("Custo inválido. Use o formato 6,50.");
+      return;
+    }
+
+    const minimo =
+      estoqueMinimo.trim() === "" ? undefined : quantidadeParaMilesimos(estoqueMinimo);
+    if (estoqueMinimo.trim() !== "" && minimo === undefined) {
+      setErro("Estoque mínimo inválido. Use um número, como 12 ou 1,5.");
       return;
     }
 
@@ -392,6 +419,13 @@ function Formulario({
         ? { codigoBalanca: codigoBalanca.trim() }
         : {}),
       ...(categoriaId === "" ? {} : { categoriaId }),
+      // A alteração é o estado completo: o que não vier, sai. Por isso estes
+      // quatro vão sempre que existem — sem eles, salvar a descrição apagaria
+      // a foto, o fornecedor e o botão do caixa.
+      ...(minimo === undefined ? {} : { estoqueMinimo: minimo }),
+      ...(fornecedorId === "" ? {} : { fornecedorId }),
+      ...(imagemId === undefined ? {} : { imagemId }),
+      botaoRapido,
     };
 
     try {
@@ -563,6 +597,18 @@ function Formulario({
           aoMudar={setCategoriaId}
         />
 
+        <MaisOpcoes
+          unidade={unidade}
+          estoqueMinimo={estoqueMinimo}
+          fornecedorId={fornecedorId}
+          imagemId={imagemId}
+          botaoRapido={botaoRapido}
+          aoMudarEstoqueMinimo={setEstoqueMinimo}
+          aoMudarFornecedor={setFornecedorId}
+          aoMudarImagem={setImagemId}
+          aoMudarBotaoRapido={setBotaoRapido}
+        />
+
         <Referencias referencias={referencias} aoMudar={setReferencias} />
 
         <Embalagens
@@ -595,6 +641,130 @@ function Formulario({
         </div>
       </form>
     </section>
+  );
+}
+
+/**
+ * O que não é de todo produto: foto, botão no caixa, reposição e fornecedor.
+ *
+ * Aberto quando o produto já usa alguma coisa daqui, recolhido quando não —
+ * o refrigerante de código de barras não precisa de foto nem de botão, e a
+ * banana precisa dos dois.
+ */
+function MaisOpcoes(props: {
+  readonly unidade: string;
+  readonly estoqueMinimo: string;
+  readonly fornecedorId: string;
+  readonly imagemId: string | undefined;
+  readonly botaoRapido: boolean;
+  readonly aoMudarEstoqueMinimo: (valor: string) => void;
+  readonly aoMudarFornecedor: (valor: string) => void;
+  readonly aoMudarImagem: (valor: string | undefined) => void;
+  readonly aoMudarBotaoRapido: (valor: boolean) => void;
+}): ReactNode {
+  const { cliente: api, pode } = useSessao();
+  const emUso =
+    props.estoqueMinimo !== "" ||
+    props.fornecedorId !== "" ||
+    props.imagemId !== undefined ||
+    props.botaoRapido;
+  const [aberto, setAberto] = useState(emUso);
+  const [fornecedores, setFornecedores] = useState<readonly FornecedorDaLista[]>([]);
+  const podeVerFornecedores = pode("fornecedor:consultar");
+
+  useEffect(() => {
+    if (!aberto || !podeVerFornecedores) return;
+    let vivo = true;
+
+    // Falhar aqui não trava o cadastro: o seletor fica com o que já estava.
+    api
+      .requisitar<{ readonly itens: readonly FornecedorDaLista[] }>(
+        "/api/fornecedores?limite=200",
+      )
+      .then((resposta) => {
+        if (vivo) setFornecedores(resposta.itens);
+      })
+      .catch(() => undefined);
+
+    return (): void => {
+      vivo = false;
+    };
+  }, [aberto, api, podeVerFornecedores]);
+
+  if (!aberto) {
+    return (
+      <div>
+        <Botao
+          tom="secundario"
+          onClick={() => {
+            setAberto(true);
+          }}
+        >
+          Mais opções: foto, botão no caixa, estoque mínimo e fornecedor
+        </Botao>
+      </div>
+    );
+  }
+
+  // O fornecedor gravado continua na lista mesmo que a busca não o traga — sem
+  // isso, o seletor mostraria "sem fornecedor" e salvar o apagaria.
+  const conhecido = fornecedores.some(
+    (fornecedor) => fornecedor.id === props.fornecedorId,
+  );
+
+  return (
+    <fieldset className="flex flex-col gap-4 rounded-md border border-borda p-4">
+      <legend className="px-1 text-sm font-medium text-tinta">Mais opções</legend>
+
+      <EnviarImagem
+        rotulo="Foto do produto"
+        imagemId={props.imagemId}
+        aoMudar={props.aoMudarImagem}
+      />
+
+      <label className="flex items-center gap-2 text-tinta">
+        <input
+          type="checkbox"
+          checked={props.botaoRapido}
+          className="size-5 accent-acao"
+          onChange={(evento) => {
+            props.aoMudarBotaoRapido(evento.target.checked);
+          }}
+        />
+        Mostrar como botão rápido no caixa
+      </label>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CampoTexto
+          rotulo={`Estoque mínimo (${props.unidade.toLowerCase()})`}
+          inputMode="decimal"
+          ajuda="Abaixo disto, o produto entra na lista de reposição. Em branco: sem mínimo."
+          value={props.estoqueMinimo}
+          onChange={(evento) => {
+            props.aoMudarEstoqueMinimo(evento.target.value.replace(/[^\d,.]/g, ""));
+          }}
+        />
+
+        {podeVerFornecedores && (
+          <CampoSelecao
+            rotulo="Fornecedor principal"
+            ajuda="De quem a loja costuma comprar. Sugerido na compra."
+            valor={props.fornecedorId}
+            opcoes={[
+              { valor: "", rotulo: "Sem fornecedor" },
+              ...(props.fornecedorId !== "" && !conhecido
+                ? [{ valor: props.fornecedorId, rotulo: "Fornecedor atual" }]
+                : []),
+              ...fornecedores.map((fornecedor) => ({
+                valor: fornecedor.id,
+                rotulo: fornecedor.exibicao,
+              })),
+            ]}
+            aoMudar={props.aoMudarFornecedor}
+          />
+        )}
+      </div>
+    </fieldset>
   );
 }
 

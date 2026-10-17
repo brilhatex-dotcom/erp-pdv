@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import type { Container } from "../composicao/container.js";
 import { exigirAutenticacao, exigirPermissao } from "../http/autenticacao.js";
+import { identificadorValidadoOpcional } from "../http/entrada.js";
 import { responderErro } from "../http/erros.js";
 
 /**
@@ -51,7 +52,15 @@ const zEndereco = z.object({
   cep: z.string().regex(/^\d{8}$/, "CEP deve ter 8 dígitos"),
 });
 
-const corpoCategoria = z.object({ nome: zTexto(60) });
+const corpoCategoria = z.object({
+  nome: zTexto(60),
+  /**
+   * A figura do botão do caixa quando a categoria não tem foto. O tamanho fino
+   * é do domínio, que explica o limite ao gerente; aqui só o teto do fio.
+   */
+  icone: z.string().trim().max(32).optional(),
+  imagemId: z.uuid().optional(),
+});
 const corpoCategoriaAlteracao = corpoCategoria.extend({ ativa: z.boolean() });
 
 const camposCliente = {
@@ -133,7 +142,11 @@ export function rotasDeCadastros(servidor: FastifyInstance, container: Container
       const entrada = corpoCategoria.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Informe o nome da categoria.");
 
-      const resultado = await container.cadastrarCategoria.executar(entrada.data);
+      const resultado = await container.cadastrarCategoria.executar({
+        nome: entrada.data.nome,
+        icone: entrada.data.icone,
+        imagemId: identificadorValidadoOpcional(entrada.data.imagemId),
+      });
       if (resultado.isErr()) return responderErro(resposta, resultado.error);
 
       return resposta.status(201).send(apresentarCategoria(resultado.unwrap()));
@@ -150,10 +163,14 @@ export function rotasDeCadastros(servidor: FastifyInstance, container: Container
       const entrada = corpoCategoriaAlteracao.safeParse(requisicao.body);
       if (!entrada.success) return recusar(resposta, "Informe o nome da categoria.");
 
+      // Estado completo, como nos demais cadastros: ícone ou foto ausentes
+      // saem da categoria.
       const resultado = await container.alterarCategoria.executar({
         id,
         nome: entrada.data.nome,
         ativa: entrada.data.ativa,
+        icone: entrada.data.icone,
+        imagemId: identificadorValidadoOpcional(entrada.data.imagemId),
       });
 
       if (resultado.isErr()) return responderErro(resposta, resultado.error);
@@ -376,7 +393,13 @@ function semPermissaoParaLimite(resposta: FastifyReply) {
 // ── Apresentação ─────────────────────────────────────────────────────────
 
 function apresentarCategoria(categoria: Categoria): Record<string, unknown> {
-  return { id: categoria.id.valor, nome: categoria.nome, ativa: categoria.ativa };
+  return {
+    id: categoria.id.valor,
+    nome: categoria.nome,
+    ativa: categoria.ativa,
+    icone: categoria.icone,
+    imagemId: categoria.imagemId?.valor,
+  };
 }
 
 function apresentarCliente(cliente: Cliente): Record<string, unknown> {

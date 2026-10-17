@@ -1169,20 +1169,31 @@ describe("Categorias", () => {
     expect(screen.getByLabelText(/Nova categoria/)).toHaveFocus();
   });
 
-  it("renomeia na própria linha", async () => {
+  it("edita o nome na própria linha, sem perder ícone nem foto", async () => {
     const { corpos } = montarComMetodo({
       "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
-      "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
+      "GET /api/categorias": () =>
+        json(200, {
+          itens: [
+            {
+              ...CATEGORIA,
+              icone: "🥤",
+              imagemId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0801",
+            },
+          ],
+        }),
       "PUT /api/categorias/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0005": () =>
         json(200, CATEGORIA),
     });
 
     await irPara("Categorias");
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Renomear" }));
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(screen.getByLabelText(/Ícone no caixa/)).toHaveValue("🥤");
+    expect(screen.getByRole("img", { name: "Foto no caixa atual" })).toBeVisible();
 
     const campo = screen.getByLabelText(/Novo nome de Bebidas/);
     await userEvent.clear(campo);
@@ -1191,10 +1202,70 @@ describe("Categorias", () => {
     await waitFor(() => {
       expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
     });
-    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toMatchObject({
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toEqual({
       nome: "Bebidas e sucos",
       ativa: true,
+      icone: "🥤",
+      imagemId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0801",
     });
+  });
+
+  it("ícone vazio e foto tirada saem da categoria", async () => {
+    const { corpos } = montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () =>
+        json(200, {
+          itens: [
+            {
+              ...CATEGORIA,
+              icone: "🥤",
+              imagemId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0801",
+            },
+          ],
+        }),
+      "PUT /api/categorias/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0005": () =>
+        json(200, CATEGORIA),
+    });
+
+    await irPara("Categorias");
+    await userEvent.click(await screen.findByRole("button", { name: "Editar" }));
+    await userEvent.clear(screen.getByLabelText(/Ícone no caixa/));
+    await userEvent.click(screen.getByRole("button", { name: "Tirar foto" }));
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => {
+      expect(corpos.some((c) => c.metodo === "PUT")).toBe(true);
+    });
+    expect(corpos.find((c) => c.metodo === "PUT")?.corpo).toEqual({
+      nome: "Bebidas",
+      ativa: true,
+    });
+  });
+
+  it("a lista mostra a foto da categoria, ou o ícone na falta dela", async () => {
+    montarComMetodo({
+      "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
+      "GET /api/categorias": () =>
+        json(200, {
+          itens: [
+            { ...CATEGORIA, icone: "🥤" },
+            {
+              ...CATEGORIA,
+              id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0006",
+              nome: "Padaria",
+              imagemId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0801",
+            },
+          ],
+        }),
+    });
+
+    await irPara("Categorias");
+
+    expect(await screen.findByText("🥤")).toBeVisible();
+    const fotos = document.querySelectorAll(
+      'img[src="/api/imagens/018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0801"]',
+    );
+    expect(fotos).toHaveLength(1);
   });
 
   it("🔑 desativa em vez de apagar, para não deixar relatório antigo órfão", async () => {
@@ -1269,7 +1340,7 @@ describe("Categorias", () => {
     });
   });
 
-  it("cancelar a renomeação volta a linha ao normal", async () => {
+  it("cancelar a edição volta a linha ao normal", async () => {
     montarComMetodo({
       "GET /api/acesso/eu": () => json(200, ESTOQUISTA),
       "GET /api/categorias": () => json(200, { itens: [CATEGORIA] }),
@@ -1277,14 +1348,14 @@ describe("Categorias", () => {
 
     await irPara("Categorias");
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Renomear" }));
+    await userEvent.click(screen.getByRole("button", { name: "Editar" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Renomear" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Editar" })).toBeVisible();
     });
   });
 

@@ -2,10 +2,23 @@ import { mensagemDe, useSessao } from "@erp/cliente-api";
 import { Botao, CampoTexto, Carregando, ErroDeTela, Vazio } from "@erp/ui";
 import { type ReactNode, type SyntheticEvent, useEffect, useRef, useState } from "react";
 
+import { EnviarImagem } from "../componentes/EnviarImagem.js";
+
 interface CategoriaDaLista {
   readonly id: string;
   readonly nome: string;
   readonly ativa: boolean;
+  /** A figura do botão do caixa, quando não há foto. */
+  readonly icone?: string;
+  readonly imagemId?: string;
+}
+
+/** O estado completo que a alteração grava: o que não vier, sai. */
+interface CategoriaGravada {
+  readonly nome: string;
+  readonly ativa: boolean;
+  readonly icone: string | undefined;
+  readonly imagemId: string | undefined;
 }
 
 type Estado =
@@ -18,9 +31,10 @@ type Estado =
  *
  * ### Sem tela de formulário separada
  *
- * Categoria tem **um campo**. Abrir uma tela para preencher um campo e voltar é
- * três cliques onde cabe um — por isso o cadastro é uma linha acima da lista, e
- * a renomeação acontece na própria linha.
+ * Categoria tem **um campo** obrigatório. Abrir uma tela para preencher um
+ * campo e voltar é três cliques onde cabe um — por isso o cadastro é uma linha
+ * acima da lista, e a edição (nome, ícone e foto do botão do caixa) acontece na
+ * própria linha.
  *
  * ### Desativar, nunca apagar
  *
@@ -37,6 +51,8 @@ export function Categorias(): ReactNode {
   const [salvando, setSalvando] = useState(false);
   const [editandoId, setEditandoId] = useState<string | undefined>(undefined);
   const [nomeEditado, setNomeEditado] = useState("");
+  const [iconeEditado, setIconeEditado] = useState("");
+  const [imagemEditada, setImagemEditada] = useState<string | undefined>(undefined);
   const campoNova = useRef<HTMLInputElement>(null);
   const jaCarregou = useRef(false);
 
@@ -93,7 +109,7 @@ export function Categorias(): ReactNode {
 
   async function gravar(
     categoria: CategoriaDaLista,
-    mudancas: { readonly nome?: string; readonly ativa?: boolean },
+    gravada: CategoriaGravada,
   ): Promise<void> {
     setErroForm(undefined);
 
@@ -101,8 +117,10 @@ export function Categorias(): ReactNode {
       await api.requisitar(`/api/categorias/${categoria.id}`, {
         metodo: "PUT",
         corpo: {
-          nome: mudancas.nome ?? categoria.nome,
-          ativa: mudancas.ativa ?? categoria.ativa,
+          nome: gravada.nome,
+          ativa: gravada.ativa,
+          ...(gravada.icone === undefined ? {} : { icone: gravada.icone }),
+          ...(gravada.imagemId === undefined ? {} : { imagemId: gravada.imagemId }),
         },
       });
 
@@ -177,14 +195,20 @@ export function Categorias(): ReactNode {
             >
               {editandoId === item.id ? (
                 <form
-                  className="flex flex-1 items-end gap-3"
+                  className="flex flex-1 flex-col gap-3"
                   onSubmit={(evento) => {
                     evento.preventDefault();
-                    void gravar(item, { nome: nomeEditado });
+                    const icone = iconeEditado.trim();
+                    void gravar(item, {
+                      nome: nomeEditado,
+                      ativa: item.ativa,
+                      icone: icone === "" ? undefined : icone,
+                      imagemId: imagemEditada,
+                    });
                   }}
                   noValidate
                 >
-                  <div className="flex-1">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
                     <CampoTexto
                       rotulo={`Novo nome de ${item.nome}`}
                       autoFocus
@@ -193,21 +217,49 @@ export function Categorias(): ReactNode {
                         setNomeEditado(evento.target.value);
                       }}
                     />
+                    <CampoTexto
+                      rotulo="Ícone no caixa"
+                      ajuda="Um emoji: 🍞 🥤 🍎"
+                      value={iconeEditado}
+                      onChange={(evento) => {
+                        setIconeEditado(evento.target.value);
+                      }}
+                    />
                   </div>
-                  <Botao type="submit">Salvar</Botao>
-                  <Botao
-                    tom="secundario"
-                    type="button"
-                    onClick={() => {
-                      setEditandoId(undefined);
-                    }}
-                  >
-                    Cancelar
-                  </Botao>
+                  <EnviarImagem
+                    rotulo="Foto no caixa"
+                    imagemId={imagemEditada}
+                    aoMudar={setImagemEditada}
+                  />
+                  <div className="flex gap-3">
+                    <Botao type="submit">Salvar</Botao>
+                    <Botao
+                      tom="secundario"
+                      type="button"
+                      onClick={() => {
+                        setEditandoId(undefined);
+                      }}
+                    >
+                      Cancelar
+                    </Botao>
+                  </div>
                 </form>
               ) : (
                 <>
-                  <span className="text-tinta">
+                  <span className="flex items-center gap-2 text-tinta">
+                    {item.imagemId !== undefined ? (
+                      <img
+                        src={`/api/imagens/${item.imagemId}`}
+                        alt=""
+                        className="size-8 rounded object-cover"
+                      />
+                    ) : (
+                      item.icone !== undefined && (
+                        <span aria-hidden="true" className="text-xl">
+                          {item.icone}
+                        </span>
+                      )
+                    )}
                     {item.nome}
                     {!item.ativa && (
                       <span className="ml-2 rounded-md border border-atencao bg-atencao-suave px-2 py-0.5 text-xs">
@@ -223,13 +275,22 @@ export function Categorias(): ReactNode {
                         onClick={() => {
                           setEditandoId(item.id);
                           setNomeEditado(item.nome);
+                          setIconeEditado(item.icone ?? "");
+                          setImagemEditada(item.imagemId);
                         }}
                       >
-                        Renomear
+                        Editar
                       </Botao>
                       <Botao
                         tom="secundario"
-                        onClick={() => void gravar(item, { ativa: !item.ativa })}
+                        onClick={() =>
+                          void gravar(item, {
+                            nome: item.nome,
+                            ativa: !item.ativa,
+                            icone: item.icone,
+                            imagemId: item.imagemId,
+                          })
+                        }
                       >
                         {item.ativa ? "Desativar" : "Reativar"}
                       </Botao>

@@ -22,6 +22,7 @@ export {
   centavosParaReais,
   formatarDinheiro,
   formatarQuantidade,
+  quantidadeParaMilesimos,
   reaisParaCentavos,
 } from "./formato.js";
 export { juntarClasses } from "./juntarClasses.js";

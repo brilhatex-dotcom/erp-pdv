@@ -3,10 +3,12 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useSessao } from "@erp/cliente-api";
 import { BarreiraDeErro } from "./BarreiraDeErro.js";
+import { Auditoria } from "./telas/Auditoria.js";
 import { Caixas } from "./telas/Caixas.js";
 import { Categorias } from "./telas/Categorias.js";
 import { Clientes } from "./telas/Clientes.js";
 import { Compras } from "./telas/Compras.js";
+import { Configuracao } from "./telas/Configuracao.js";
 import { Empresa } from "./telas/Empresa.js";
 import { Financeiro } from "./telas/Financeiro.js";
 import { ConsultarProduto } from "./telas/ConsultarProduto.js";
@@ -106,6 +108,9 @@ const SECOES = [
   // Sem permissão declarada: todo mundo consulta o cabeçalho da loja, que sai
   // impresso em cada cupom. Só o `PUT` exige `config:empresa`, no servidor.
   { chave: "EMPRESA", rotulo: "Empresa", permissao: undefined },
+  // Como a loja vende. Como a empresa, todos leem — só o gerente grava.
+  { chave: "CONFIGURACAO", rotulo: "Configuração", permissao: undefined },
+  { chave: "AUDITORIA", rotulo: "Auditoria", permissao: "auditoria:consultar" },
 ] as const;
 
 type Secao = (typeof SECOES)[number]["chave"];
@@ -185,6 +190,10 @@ function Conteudo({ secao }: { readonly secao: Secao }): ReactNode {
       return <Estoque />;
     case "COMPRAS":
       return <Compras />;
+    case "CONFIGURACAO":
+      return <Configuracao />;
+    case "AUDITORIA":
+      return <Auditoria />;
     default:
       return <Produtos />;
   }

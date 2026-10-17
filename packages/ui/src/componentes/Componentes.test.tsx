@@ -6,6 +6,7 @@ import {
   centavosParaReais,
   formatarDinheiro,
   formatarQuantidade,
+  quantidadeParaMilesimos,
   reaisParaCentavos,
 } from "../formato.js";
 import { juntarClasses } from "../juntarClasses.js";
@@ -365,6 +366,23 @@ describe("Digitação de dinheiro", () => {
       expect(reaisParaCentavos(texto)).toBeUndefined();
     },
   );
+});
+
+describe("Quantidade digitada", () => {
+  it.each([
+    ["12", "12000"],
+    ["1,5", "1500"],
+    ["0,350", "350"],
+    ["2.25", "2250"],
+    [" 3 ", "3000"],
+    ["0", "0"],
+  ])("%p vira %p milésimos", (texto, esperado) => {
+    expect(quantidadeParaMilesimos(texto)).toBe(esperado);
+  });
+
+  it.each([[""], ["abc"], ["1,2345"], ["-1"], ["1,2,3"]])("recusa %p", (texto) => {
+    expect(quantidadeParaMilesimos(texto)).toBeUndefined();
+  });
 });
 
 describe("Junção de classes", () => {

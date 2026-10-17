@@ -78,3 +78,20 @@ export function reaisParaCentavos(texto: string): string | undefined {
   const [inteiro = "0", decimais = ""] = limpo.split(",");
   return (BigInt(inteiro) * 100n + BigInt(decimais.padEnd(2, "0") || "0")).toString();
 }
+
+/**
+ * `"1,5"` → `"1500"` milésimos; `"12"` → `"12000"`. `undefined` quando o texto
+ * não é quantidade.
+ *
+ * Até três casas — o grama do quilo. Se a unidade aceita fração, quem diz é o
+ * domínio: aqui só se lê o número, e "0,5 unidade" chega ao servidor para ser
+ * recusada com a frase certa.
+ */
+export function quantidadeParaMilesimos(texto: string): string | undefined {
+  const limpo = texto.trim().replace(/\./g, ",");
+
+  if (!/^\d+(,\d{0,3})?$/.test(limpo)) return undefined;
+
+  const [inteiro = "0", decimais = ""] = limpo.split(",");
+  return (BigInt(inteiro) * 1000n + BigInt(decimais.padEnd(3, "0") || "0")).toString();
+}
