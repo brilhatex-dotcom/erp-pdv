@@ -1,5 +1,5 @@
 import { maisVendidos, produtosDoBalcao } from "@erp/database";
-import type { ConfiguracaoLoja } from "@erp/domain";
+import { type ConfiguracaoLoja, Dinheiro } from "@erp/domain";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
@@ -14,6 +14,10 @@ import { recusar, usuarioAutenticado } from "../http/entrada.js";
  * Uma chamada de contexto ao abrir, em vez de cinco: o PDV liga de manhã com a
  * fila já formada, e cada ida ao servidor antes da primeira venda é espera.
  */
+
+const consultaClientes = z.object({
+  termo: z.string().trim().min(2).max(60),
+});
 
 const consultaProdutos = z.object({
   termo: z.string().trim().max(60).optional(),
@@ -106,6 +110,58 @@ export function rotasDoPdv(servidor: FastifyInstance, container: Container): voi
   });
 
   /**
+   * Clientes para pôr na venda, com o fiado disponível.
+   *
+   * O operador não tem `financeiro:ver` e não deveria ver o extrato de
+   * ninguém — mas precisa saber, com o cliente na frente, se o fiado cabe. A
+   * resposta traz só o número que decide: quanto ainda pode ser vendido a
+   * prazo. O documento sai mascarado: o nome identifica, e o CPF inteiro na
+   * tela do caixa é dado pessoal exposto a quem está na fila (LGPD).
+   */
+  servidor.get(
+    "/api/pdv/clientes",
+    { preHandler: [autenticado, exigirPermissao(container, "cliente:consultar")] },
+    async (requisicao, resposta) => {
+      const consulta = consultaClientes.safeParse(requisicao.query);
+      if (!consulta.success)
+        return recusar(resposta, "Digite ao menos duas letras do nome.");
+
+      const achados = await container.leitura.clientes.buscar({
+        termo: consulta.data.termo,
+        apenasAtivos: true,
+        limite: 10,
+      });
+
+      const clientes = await Promise.all(
+        achados.map(async (cliente) => {
+          const emAberto = await container.leitura.titulos.emAbertoDaContraparte(
+            cliente.id,
+            "RECEBER",
+          );
+          const devido = emAberto.reduce(
+            (soma, titulo) => soma + titulo.saldo.centavos,
+            0n,
+          );
+
+          return {
+            id: cliente.id.valor,
+            nome: cliente.exibicao,
+            documento: mascarar(cliente.documento?.valor),
+            vendeAPrazo: cliente.vendeAPrazo,
+            limiteCredito: cliente.limiteCredito.centavos.toString(),
+            emAberto: devido.toString(),
+            disponivel: cliente
+              .creditoDisponivel(Dinheiro.deCentavos(devido).unwrap())
+              .centavos.toString(),
+          };
+        }),
+      );
+
+      return resposta.send({ clientes });
+    },
+  );
+
+  /**
    * As categorias e os botões rápidos.
    *
    * Botões: primeiro os que o gerente marcou, depois os mais vendidos do mês,
@@ -179,4 +235,20 @@ export function apresentarConfiguracao(
     },
     logoId: configuracao.logoId?.valor,
   };
+}
+
+/**
+ * `52998224725` → `***.982.247-**`; CNPJ mostra só a raiz do meio.
+ *
+ * O suficiente para o operador desempatar dois "José da Silva" pelo que o
+ * cliente diz em voz alta, e nada que sirva a quem fotografa a tela.
+ */
+function mascarar(documento: string | undefined): string | undefined {
+  if (documento === undefined) return undefined;
+
+  if (documento.length === 11) {
+    return `***.${documento.slice(3, 6)}.${documento.slice(6, 9)}-**`;
+  }
+
+  return `**.${documento.slice(2, 5)}.${documento.slice(5, 8)}/****-**`;
 }

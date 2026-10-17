@@ -244,6 +244,28 @@ async function localizar(
   const unidade = produto.unidadeBase.codigo;
 
   if (entrada.quantidade === undefined) {
+    // Pesável sem peso entraria como 1 kg — o queijo de 350 g cobrado por um
+    // quilo inteiro. A tela recebe o produto junto com a recusa e abre o campo
+    // de peso já com o nome e o preço por quilo. A venda offline importada é
+    // a exceção: ela já aconteceu, com a quantidade que a estação registrou.
+    if (produto.tipo === "PESAVEL" && entrada.origem !== "IMPORTACAO") {
+      return err(
+        new ErroRegraNegocio(
+          "PRODUTO_EXIGE_PESO",
+          `Informe o peso de ${produto.descricaoPdv}.`,
+          {
+            produto: {
+              id: produto.id.valor,
+              codigo: produto.sku,
+              descricao: produto.descricaoPdv,
+              precoVenda: produto.precoVenda.centavos.toString(),
+              unidade,
+            },
+          },
+        ),
+      );
+    }
+
     return ok({
       produto,
       quantidade: Quantidade.de("1", unidade).unwrapOr(Quantidade.zero(unidade)),

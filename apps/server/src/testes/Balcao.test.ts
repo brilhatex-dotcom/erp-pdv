@@ -635,6 +635,108 @@ describe("Apoio ao PDV", () => {
   });
 });
 
+describe("Cliente e peso no balcão", () => {
+  it("🔑 a busca de clientes mostra o fiado disponível e esconde o CPF", async () => {
+    const { operador } = await balcao();
+    const cadastro = await container.cadastrarCliente.executar({
+      nome: "Aparecida Souza",
+      apelido: "Dona Cida",
+      tipoPessoa: "FISICA",
+      documento: "529.982.247-25",
+      limiteCreditoCentavos: 10000n,
+    });
+    const cliente = cadastro.unwrap();
+
+    // R$ 9,90 já no fiado.
+    const venda = await vendaComRefri(operador);
+    await chamar(operador, "PUT", `/api/vendas/${venda.id}/cliente`, {
+      clienteId: cliente.id.valor,
+    });
+    await chamar(operador, "POST", `/api/vendas/${venda.id}/pagamentos`, {
+      forma: "CREDIARIO",
+      valor: "990",
+    });
+    await chamar(operador, "POST", `/api/vendas/${venda.id}/finalizar`, {});
+
+    const busca = await chamar(operador, "GET", "/api/pdv/clientes?termo=apar");
+
+    expect(busca.corpo["clientes"]).toEqual([
+      {
+        id: cliente.id.valor,
+        nome: "Dona Cida",
+        documento: "***.982.247-**",
+        vendeAPrazo: true,
+        limiteCredito: "10000",
+        emAberto: "990",
+        disponivel: "9010",
+      },
+    ]);
+
+    const curta = await chamar(operador, "GET", "/api/pdv/clientes?termo=a");
+    expect(curta.status).toBe(400);
+  });
+
+  it("empresa aparece com o CNPJ mascarado; cliente sem documento, sem máscara nenhuma", async () => {
+    const { operador } = await balcao();
+    await container.cadastrarCliente.executar({
+      nome: "Restaurante Sabor Caseiro Ltda",
+      tipoPessoa: "JURIDICA",
+      documento: "11.222.333/0001-81",
+    });
+    await container.cadastrarCliente.executar({
+      nome: "Restaurante Vizinho",
+      tipoPessoa: "FISICA",
+    });
+
+    const busca = await chamar(operador, "GET", "/api/pdv/clientes?termo=restaurante");
+    const [empresa, vizinho] = busca.corpo["clientes"] as {
+      nome: string;
+      documento?: string;
+      vendeAPrazo: boolean;
+      disponivel: string;
+    }[];
+
+    expect(empresa).toMatchObject({
+      nome: "Restaurante Sabor Caseiro Ltda",
+      documento: "**.222.333/****-**",
+      vendeAPrazo: false,
+      disponivel: "0",
+    });
+    expect(vizinho?.documento).toBeUndefined();
+  });
+
+  it("🔑 pesável bipado sem peso volta com o produto, para a tela pedir o peso", async () => {
+    const { operador } = await balcao();
+    await container.cadastrarProduto.executar({
+      sku: "QJO001",
+      descricao: "Queijo Minas Frescal",
+      tipo: "PESAVEL",
+      unidadeBase: "KG",
+      precoVenda: 2000n,
+    });
+    const venda = await vendaComRefri(operador);
+
+    const semPeso = await chamar(operador, "POST", `/api/vendas/${venda.id}/itens`, {
+      codigo: "QJO001",
+    });
+    expect(semPeso.status).toBe(422);
+    expect(semPeso.corpo["erro"]).toMatchObject({
+      codigo: "PRODUTO_EXIGE_PESO",
+      detalhes: {
+        produto: { codigo: "QJO001", precoVenda: "2000", unidade: "KG" },
+      },
+    });
+
+    // 350 g de queijo a R$ 20,00/kg: R$ 7,00.
+    const comPeso = await chamar(operador, "POST", `/api/vendas/${venda.id}/itens`, {
+      codigo: "QJO001",
+      quantidade: { milesimos: "350000", unidade: "G" },
+    });
+    expect(comPeso.status).toBe(201);
+    expect((comPeso.corpo["item"] as { total: string }).total).toBe("700");
+  });
+});
+
 describe("Configuração da loja", () => {
   it("🔑 o operador lê, mas só o gerente grava — e a mudança vai para a auditoria", async () => {
     const operador = await entrar("OPERADOR_CAIXA");

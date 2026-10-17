@@ -266,6 +266,16 @@ export class VendaLocal {
       return { tipo: "ERRO", mensagem: "Unidade inválida no catálogo local." };
     }
 
+    // Pesado pelo código entraria como 1 kg — o queijo de 350 g cobrado por um
+    // quilo. Online, a tela pede o peso; aqui não há como: a venda offline só
+    // recebe o código. A etiqueta da balança traz o peso e continua valendo.
+    if (produto.unidade === "KG" || produto.unidade === "G") {
+      return {
+        tipo: "ERRO",
+        mensagem: `${produto.descricaoPdv} é vendido por peso. Sem conexão com o servidor, use a etiqueta da balança.`,
+      };
+    }
+
     const quantidade = Quantidade.de("1", produto.unidade);
 
     return quantidade.isErr()

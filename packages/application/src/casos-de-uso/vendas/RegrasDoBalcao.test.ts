@@ -118,6 +118,41 @@ describe("Bipada", () => {
     expect(segunda.item.quantidade.formatar()).toBe("2 un");
   });
 
+  it("🔑 pesável sem peso é recusado com o produto — a tela abre o campo de peso", async () => {
+    const venda = await balcao.vendaCom();
+
+    const resultado = await balcao.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "QJO001",
+    });
+
+    expect(resultado.isErr() && resultado.error.codigo).toBe("PRODUTO_EXIGE_PESO");
+    expect(resultado.isErr() && resultado.error.detalhes).toEqual({
+      produto: {
+        id: expect.any(String) as string,
+        codigo: "QJO001",
+        descricao: "Queijo Minas Frescal",
+        precoVenda: "2000",
+        unidade: "KG",
+      },
+    });
+    expect(venda.itens).toHaveLength(0);
+  });
+
+  it("a venda offline importada aceita o pesável como veio da estação", async () => {
+    const venda = await balcao.vendaCom();
+
+    const resultado = await balcao.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: "QJO001",
+      origem: "IMPORTACAO",
+    });
+
+    expect(resultado.isOk()).toBe(true);
+  });
+
   it("unidade que não converte é recusada com a unidade do produto", async () => {
     const venda = await balcao.vendaCom();
 

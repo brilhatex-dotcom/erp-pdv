@@ -91,6 +91,10 @@ const DETALHES_PUBLICOS = new Set([
   // Os números das vendas guardadas que impedem o fechamento do caixa: a tela
   // as lista para o operador retomar uma a uma.
   "vendas",
+  // O produto pesável bipado sem peso: nome, preço por quilo e unidade, para a
+  // tela abrir o campo de peso sem uma segunda consulta. É o que está na
+  // etiqueta da gôndola — nada interno.
+  "produto",
 ]);
 
 function detalhesPublicos(

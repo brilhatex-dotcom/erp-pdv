@@ -276,6 +276,21 @@ describe("regras de pagamento offline — as mesmas do servidor", () => {
   });
 });
 
+describe("produto pesado offline", () => {
+  it("🔑 pelo código, é recusado com orientação — não entra como 1 kg", () => {
+    const venda = montar();
+    venda.iniciar("estacao-1", "operador-1");
+
+    const resultado = venda.adicionarItem("PICANHA");
+
+    expect(resultado).toEqual({
+      tipo: "ERRO",
+      mensagem:
+        "PICANHA KG é vendido por peso. Sem conexão com o servidor, use a etiqueta da balança.",
+    });
+  });
+});
+
 describe("etiqueta de balança offline", () => {
   it("🔑 registra o peso lido na etiqueta", () => {
     // Açougue e hortifrúti são dois dos nove segmentos-alvo. Um PDV que não

@@ -95,7 +95,10 @@ describe("Alterar quantidade", () => {
   });
 
   it("recusa unidade que não converte para a do item", async () => {
-    const venda = await balcao.vendaCom("QJO001");
+    const venda = await balcao.vendaCom({
+      codigo: "QJO001",
+      quantidade: quantidade("1", "KG"),
+    });
 
     const resultado = await balcao.alterarQuantidade.executar({
       vendaId: venda.id,
