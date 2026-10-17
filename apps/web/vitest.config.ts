@@ -8,6 +8,14 @@ export default mergeConfig(base, {
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     environment: "jsdom",
     globals: true,
+    // A tela inteira da retaguarda montada no jsdom: cada consulta por papel
+    // com nome custa de 50 a 130 ms num núcleo, e o runner do CI, com as
+    // outras suítes rodando ao lado, é umas quatro vezes mais lento que a
+    // máquina de desenvolvimento. Com os 5 s de fábrica, o teste da
+    // configuração da loja passava em 1,2 s aqui e estourava lá. O limite é
+    // guarda contra travamento, não meta de desempenho — teste que chegar
+    // perto dele deve ficar mais leve, e não ganhar mais tempo.
+    testTimeout: 15_000,
     setupFiles: ["./src/testes/preparo.ts"],
     coverage: {
       // A base mede só `.ts`, e as telas são `.tsx`: sem esta linha o portão
