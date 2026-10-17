@@ -116,6 +116,8 @@ export class ClienteAgente {
   async imprimirCupom(dados: {
     readonly cupom: DadosCupom;
     readonly houveDinheiro: boolean;
+    /** Colunas do papel (32 no de 58 mm, 48 no de 80 mm). Ausente: a do Agente. */
+    readonly colunas?: number | undefined;
   }): Promise<string | undefined> {
     try {
       const aviso = await this.#json<AvisoDeImpressao>(ROTAS.imprimirCupom, dados);

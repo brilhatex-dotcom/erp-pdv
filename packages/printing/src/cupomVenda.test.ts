@@ -113,6 +113,31 @@ describe("Cabeçalho", () => {
   });
 });
 
+describe("Avisos de cabeçalho", () => {
+  it("🔑 treinamento e segunda via saem em destaque logo abaixo da loja", () => {
+    const texto = comoTexto(
+      montarCupomVenda({ ...BASE, avisos: ["TREINAMENTO", "SEGUNDA VIA"] }),
+    );
+
+    const loja = texto.indexOf("MERCADINHO DO BAIRRO");
+    const treino = texto.indexOf("*** TREINAMENTO ***");
+    const via = texto.indexOf("*** SEGUNDA VIA ***");
+    const venda = texto.indexOf("VENDA 42");
+
+    expect(loja).toBeGreaterThanOrEqual(0);
+    expect(treino).toBeGreaterThan(loja);
+    expect(via).toBeGreaterThan(treino);
+    expect(venda).toBeGreaterThan(via);
+  });
+
+  it("sem avisos, nenhuma linha de asteriscos no cabeçalho", () => {
+    const texto = comoTexto(montarCupomVenda(BASE));
+    const cabecalho = texto.slice(0, texto.indexOf("VENDA 42"));
+
+    expect(cabecalho).not.toContain("***");
+  });
+});
+
 describe("Itens", () => {
   it("🔑 a descrição fica na própria linha, sem ser cortada", () => {
     // É o que o cliente usa para conferir o que levou. Cortá-la para caber ao

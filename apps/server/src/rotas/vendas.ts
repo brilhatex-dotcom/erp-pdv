@@ -52,8 +52,15 @@ const corpoIniciar = z.object({
 const corpoItem = z.object({
   /** O que o operador bipou, digitou ou tocou num botão. */
   codigo: z.string().trim().min(1).max(60),
-  /** Ausente é uma unidade. Pode vir em gramas para produto vendido por quilo. */
-  quantidade: zQuantidadeNoFio.optional(),
+  /**
+   * Ausente é uma unidade. Pode vir em gramas para produto vendido por quilo.
+   *
+   * **Sem `unidade`** é o "3 ×" digitado antes do código: milésimos na unidade
+   * do próprio produto, que a tela não precisa conhecer.
+   */
+  quantidade: z
+    .object({ milesimos: zInteiroPositivo, unidade: z.string().min(1).max(6).optional() })
+    .optional(),
   supervisor: zSupervisor,
 });
 
@@ -194,7 +201,16 @@ export function rotasDeVendas(servidor: FastifyInstance, container: Container): 
     const entrada = corpoItem.safeParse(requisicao.body);
     if (!entrada.success) return recusar(resposta, "Informe o código do produto.");
 
-    const quantidade = interpretarQuantidade(entrada.data.quantidade);
+    const bruta = entrada.data.quantidade;
+    const naUnidadeDoProduto =
+      bruta !== undefined && bruta.unidade === undefined
+        ? BigInt(bruta.milesimos)
+        : undefined;
+
+    const quantidade =
+      bruta?.unidade === undefined
+        ? undefined
+        : interpretarQuantidade({ milesimos: bruta.milesimos, unidade: bruta.unidade });
     if (quantidade === "INVALIDA") return recusar(resposta, "Quantidade inválida.");
 
     const operadorId = usuarioAutenticado(requisicao);
@@ -206,6 +222,7 @@ export function rotasDeVendas(servidor: FastifyInstance, container: Container): 
       operadorId,
       codigo: entrada.data.codigo,
       quantidade,
+      quantidadeNaUnidadeDoProduto: naUnidadeDoProduto,
       credencialSupervisor: entrada.data.supervisor,
     });
 

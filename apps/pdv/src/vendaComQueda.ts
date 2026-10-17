@@ -1,7 +1,13 @@
-import type { ClienteApi } from "@erp/cliente-api";
-
 import type { VendaNoAgente } from "@erp/agente-contrato";
 
+import type { ApiDoBalcao } from "./api/servidor.js";
+import type {
+  CredencialSupervisor,
+  ItemNoFio,
+  PagamentoNoFio,
+  QuantidadeNoFio,
+  VendaNoFio,
+} from "./api/tipos.js";
 import { agente } from "./balcao.js";
 
 /**
@@ -15,33 +21,20 @@ import { agente } from "./balcao.js";
  * servidor vai recusar na importação — e o operador só descobriria no dia
  * seguinte, com o cliente longe.
  *
- * Distinguir as duas coisas é a decisão inteira deste arquivo. Errar para o
- * lado permissivo enche a fila de lixo; errar para o lado restritivo para a
- * venda quando ela poderia continuar.
- *
  * ### Uma vez offline, offline até o fim da venda
  *
- * Metade dos itens no servidor e metade na fila produziria duas vendas parciais,
- * nenhuma das duas cobrável. Assim que um item cai para o caminho local, a
+ * Metade dos itens no servidor e metade na fila produziria duas vendas
+ * parciais, nenhuma cobrável. Assim que um item cai para o caminho local, a
  * venda inteira segue por ele.
+ *
+ * ### O que a fila faz e o que não faz
+ *
+ * Bipar, receber, concluir e desistir. Desconto, cliente, guardar e
+ * devolução dependem do servidor — a tela desliga esses botões e diz por quê,
+ * em vez de deixar o operador descobrir na hora de apertar.
  */
 
 export type Origem = "SERVIDOR" | "FILA";
-
-/** O que a tela mostra, venha de onde vier. */
-export interface VendaVisivel {
-  readonly id: string;
-  readonly numero?: number | undefined;
-  readonly total: string;
-  readonly faltaPagar: string;
-  readonly itens: readonly {
-    readonly numero: number;
-    readonly descricao: string;
-    readonly quantidade: { readonly milesimos: string; readonly unidade: string };
-    readonly precoUnitario: string;
-    readonly total: string;
-  }[];
-}
 
 export class VendaIndisponivel extends Error {
   constructor(mensagem: string) {
@@ -49,6 +42,9 @@ export class VendaIndisponivel extends Error {
     this.name = "VendaIndisponivel";
   }
 }
+
+const SEM_CONEXAO =
+  "Sem conexão com o servidor da loja. Verifique a rede e tente de novo.";
 
 /**
  * Verdadeiro quando a falha é de transporte, e não do servidor recusando.
@@ -67,41 +63,78 @@ export function ehQuedaDeServidor(causa: unknown): boolean {
 }
 
 export interface ContextoVenda {
-  readonly cliente: ClienteApi;
+  readonly api: ApiDoBalcao;
   readonly estacaoId: string;
   readonly operadorId: string;
+}
+
+export interface Leitura {
+  readonly codigo: string;
+  /** Peso digitado, com unidade. */
+  readonly quantidade?: QuantidadeNoFio | undefined;
+  /** O "3 ×": milésimos na unidade do produto. */
+  readonly multiplicador?: string | undefined;
+  readonly supervisor?: CredencialSupervisor | undefined;
+}
+
+export interface Bipado {
+  readonly venda: VendaNoFio;
+  readonly origem: Origem;
+  /** O item que a leitura criou ou engordou. Ausente na fila. */
+  readonly item?: ItemNoFio | undefined;
+  readonly somado: boolean;
 }
 
 /**
  * Bipa um item, caindo para a fila se o servidor não responder.
  *
- * Devolve a venda e por onde ela seguiu. Quem chama guarda a origem e usa a
- * mesma daí em diante.
+ * Quem chama guarda a origem devolvida e usa a mesma daí em diante.
+ *
+ * `aoAbrir` avisa da venda assim que o servidor a cria — **antes** do item. Se
+ * o item for recusado (código errado, sem estoque), a venda aberta continua
+ * sendo a da tela, e a próxima bipada entra nela em vez de abrir outra: sem
+ * isso, cada código digitado errado deixaria uma venda vazia esquecida no
+ * caixa.
  */
 export async function biparItem(
   contexto: ContextoVenda,
   origem: Origem,
-  vendaAberta: VendaVisivel | undefined,
-  codigo: string,
-): Promise<{ readonly venda: VendaVisivel; readonly origem: Origem }> {
+  vendaAberta: VendaNoFio | undefined,
+  leitura: Leitura,
+  aoAbrir?: (venda: VendaNoFio) => void,
+): Promise<Bipado> {
   if (origem === "FILA") {
-    return { venda: await biparNaFila(contexto, vendaAberta, codigo), origem: "FILA" };
+    return {
+      venda: await biparNaFila(contexto, vendaAberta, leitura),
+      origem,
+      somado: false,
+    };
   }
 
   try {
-    const aberta =
-      vendaAberta ??
-      (await contexto.cliente.requisitar<VendaVisivel>("/api/vendas", {
-        metodo: "POST",
-        corpo: { estacaoId: contexto.estacaoId },
-      }));
+    let aberta = vendaAberta;
 
-    const atualizada = await contexto.cliente.requisitar<{ venda: VendaVisivel }>(
-      `/api/vendas/${aberta.id}/itens`,
-      { metodo: "POST", corpo: { codigo } },
-    );
+    if (aberta === undefined) {
+      aberta = await contexto.api.iniciarVenda(contexto.estacaoId);
+      aoAbrir?.(aberta);
+    }
 
-    return { venda: atualizada.venda, origem: "SERVIDOR" };
+    const resposta = await contexto.api.adicionarItem(aberta.id, {
+      codigo: leitura.codigo,
+      quantidade:
+        leitura.quantidade ??
+        (leitura.multiplicador === undefined
+          ? undefined
+          : { milesimos: leitura.multiplicador }),
+      supervisor: leitura.supervisor,
+    });
+
+    return {
+      venda: resposta.venda,
+      origem: "SERVIDOR",
+      item: resposta.item,
+      somado: resposta.somado,
+    };
   } catch (causa) {
     if (!ehQuedaDeServidor(causa)) throw causa;
 
@@ -109,42 +142,74 @@ export async function biparItem(
     // e a venda local recomeça do zero, com os itens rebipados. Tentar migrar a
     // venda parcial exigiria que a estação conhecesse o estado do servidor
     // justamente quando não consegue falar com ele.
-    return { venda: await biparNaFila(contexto, undefined, codigo), origem: "FILA" };
+    return {
+      venda: await biparNaFila(contexto, undefined, leitura),
+      origem: "FILA",
+      somado: false,
+    };
   }
+}
+
+/** Quantas vezes bipar na fila, que só sabe receber um código de cada vez. */
+function vezesNaFila(leitura: Leitura): number {
+  if (leitura.quantidade !== undefined) {
+    throw new VendaIndisponivel(
+      "Sem conexão com o servidor, o peso digitado não entra. Use a etiqueta da balança.",
+    );
+  }
+
+  if (leitura.multiplicador === undefined) return 1;
+
+  const milesimos = BigInt(leitura.multiplicador);
+
+  if (milesimos % 1000n !== 0n || milesimos > 99_000n) {
+    throw new VendaIndisponivel(
+      "Sem conexão com o servidor, a quantidade precisa ser inteira e até 99. Bipe item a item.",
+    );
+  }
+
+  return Number(milesimos / 1000n);
 }
 
 async function biparNaFila(
   contexto: ContextoVenda,
-  vendaAberta: VendaVisivel | undefined,
-  codigo: string,
-): Promise<VendaVisivel> {
+  vendaAberta: VendaNoFio | undefined,
+  leitura: Leitura,
+): Promise<VendaNoFio> {
+  const vezes = vezesNaFila(leitura);
   const ponte = await agente();
 
-  if (ponte === undefined) {
-    // Navegador, sem processo principal: não há fila. É o único caso em que a
-    // venda realmente para, e ele não existe na estação instalada — onde a
-    // ponte sempre existe. A frase é a mesma que `mensagemDe` usa para rede
-    // caída: para o operador, é a mesma situação.
-    throw new VendaIndisponivel(
-      "Sem conexão com o servidor da loja. Verifique a rede e tente de novo.",
-    );
-  }
+  // Navegador, sem processo principal: não há fila. É o único caso em que a
+  // venda realmente para, e ele não existe na estação instalada.
+  if (ponte === undefined) throw new VendaIndisponivel(SEM_CONEXAO);
 
   if (vendaAberta === undefined) {
-    // Não há verificação de retorno: o cliente do Agente já lança
-    // `AgenteIndisponivel` quando a chamada falha, e conferir de novo aqui
-    // seria um ramo que nenhum teste consegue alcançar.
     await ponte.iniciarVenda({
       estacaoId: contexto.estacaoId,
       operadorId: contexto.operadorId,
     });
   }
 
-  const resultado = await ponte.adicionarItem(codigo);
+  let resultado = await ponte.adicionarItem(leitura.codigo);
+  for (let vez = 1; vez < vezes && resultado.tipo === "OK"; vez += 1) {
+    resultado = await ponte.adicionarItem(leitura.codigo);
+  }
 
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
-  return comoVisivel(resultado.venda);
+  return daFila(resultado.venda, vendaAberta?.pagamentos ?? []);
+}
+
+export interface Pagando {
+  readonly forma: string;
+  /** Rótulo para a lista da tela e o comprovante. */
+  readonly descricao: string;
+  readonly valor: string;
+  readonly chave: string;
+  readonly parcelas?: number | undefined;
+  readonly autorizacao?: string | undefined;
+  readonly confirmacao?: "MANUAL" | "SIMULADA" | undefined;
+  readonly supervisor?: CredencialSupervisor | undefined;
 }
 
 /**
@@ -157,58 +222,129 @@ async function biparNaFila(
 export async function pagar(
   contexto: ContextoVenda,
   origem: Origem,
-  vendaId: string,
-  forma: string,
-  valor: string,
-): Promise<{ readonly faltaPagar: string }> {
+  venda: VendaNoFio,
+  pagamento: Pagando,
+): Promise<VendaNoFio> {
   if (origem === "SERVIDOR") {
-    return contexto.cliente.requisitar<{ faltaPagar: string }>(
-      `/api/vendas/${vendaId}/pagamentos`,
-      { metodo: "POST", corpo: { forma, valor } },
-    );
+    const resposta = await contexto.api.registrarPagamento(venda.id, {
+      forma: pagamento.forma,
+      valor: pagamento.valor,
+      parcelas: pagamento.parcelas,
+      autorizacao: pagamento.autorizacao,
+      confirmacao: pagamento.confirmacao,
+      chave: pagamento.chave,
+      supervisor: pagamento.supervisor,
+    });
+
+    return resposta.venda;
   }
 
   const ponte = await agente();
+  if (ponte === undefined) throw new VendaIndisponivel(SEM_CONEXAO);
 
-  if (ponte === undefined) throw new VendaIndisponivel("Contingência indisponível.");
-
-  const resultado = await ponte.registrarPagamento(forma, valor);
-
+  const resultado = await ponte.registrarPagamento(pagamento.forma, pagamento.valor);
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
-  return { faltaPagar: resultado.faltaPagar };
+  const pagamentos: PagamentoNoFio[] = [
+    ...venda.pagamentos,
+    {
+      indice: venda.pagamentos.length,
+      forma: pagamento.forma,
+      descricao: pagamento.descricao,
+      valor: pagamento.valor,
+      parcelas: pagamento.parcelas ?? 1,
+      autorizacao: pagamento.autorizacao,
+      confirmacao: "MANUAL",
+    },
+  ];
+
+  return {
+    ...venda,
+    faltaPagar: resultado.faltaPagar,
+    ...pagosETroco(venda.total, pagamentos),
+  };
 }
 
-/** Fecha a venda. Na fila, retorna só depois de o disco ter confirmado. */
+/**
+ * Fecha a venda. Na fila, retorna só depois de o disco ter confirmado.
+ *
+ * Devolve a venda como ficou; o troco vem nela.
+ */
 export async function finalizar(
   contexto: ContextoVenda,
   origem: Origem,
-  vendaId: string,
-): Promise<{ readonly troco: string }> {
-  if (origem === "SERVIDOR") {
-    return contexto.cliente.requisitar<{ troco: string }>(
-      `/api/vendas/${vendaId}/finalizar`,
-      { metodo: "POST", corpo: {} },
-    );
-  }
+  venda: VendaNoFio,
+  crediario?: { readonly parcelas: number },
+): Promise<VendaNoFio> {
+  if (origem === "SERVIDOR") return contexto.api.finalizar(venda.id, crediario);
 
   const ponte = await agente();
-
-  if (ponte === undefined) throw new VendaIndisponivel("Contingência indisponível.");
+  if (ponte === undefined) throw new VendaIndisponivel(SEM_CONEXAO);
 
   const resultado = await ponte.finalizar();
-
   if (resultado.tipo === "ERRO") throw new VendaIndisponivel(resultado.mensagem);
 
-  return { troco: resultado.troco };
+  return { ...venda, status: "FINALIZADA", faltaPagar: "0", troco: resultado.troco };
 }
 
-function comoVisivel(venda: VendaNoAgente): VendaVisivel {
+/** Desiste da venda na fila — nada foi gravado, nada sobra. */
+export async function descartarNaFila(): Promise<void> {
+  const ponte = await agente();
+  await ponte?.cancelar();
+}
+
+/**
+ * A venda da fila no formato da tela.
+ *
+ * Sem número — numerar é do servidor, e duas estações isoladas escolhendo
+ * sozinhas produziriam duas vendas 47 no mesmo dia — e sem desconto, que a
+ * fila não aplica.
+ */
+function daFila(venda: VendaNoAgente, pagamentos: readonly PagamentoNoFio[]): VendaNoFio {
   return {
     id: venda.id,
-    numero: undefined,
+    numero: 0,
+    status: "ABERTA",
+    estacaoId: "",
+    operadorId: "",
+    abertaEm: new Date().toISOString(),
+    subtotal: venda.total,
+    descontoItens: "0",
+    descontoVenda: "0",
+    descontoTotal: "0",
     total: venda.total,
     faltaPagar: venda.faltaPagar,
-    itens: venda.itens,
+    ...pagosETroco(venda.total, pagamentos),
+    itens: venda.itens.map((item) => ({
+      numero: item.numero,
+      produtoId: "",
+      descricao: item.descricao,
+      quantidade: item.quantidade,
+      precoUnitario: item.precoUnitario,
+      totalBruto: item.total,
+      desconto: "0",
+      descontoRateado: "0",
+      total: item.total,
+    })),
+    pagamentos,
+  };
+}
+
+/** Só para exibir a venda offline: o troco que vale é o que a fila devolve ao concluir. */
+function pagosETroco(
+  total: string,
+  pagamentos: readonly PagamentoNoFio[],
+): {
+  readonly totalPago: string;
+  readonly troco: string;
+  readonly pagamentos: readonly PagamentoNoFio[];
+} {
+  const pago = pagamentos.reduce((soma, pagamento) => soma + BigInt(pagamento.valor), 0n);
+  const sobra = pago - BigInt(total);
+
+  return {
+    totalPago: pago.toString(),
+    troco: (sobra > 0n ? sobra : 0n).toString(),
+    pagamentos,
   };
 }

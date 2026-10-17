@@ -1,30 +1,28 @@
-import { ClienteApi, ProvedorSessao, Sessao } from "@erp/cliente-api";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import type { VendaNoAgente } from "@erp/agente-contrato";
+import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "../App.js";
-import type { ClienteAgente } from "@erp/agente-contrato";
-
 import { definirAgenteParaTeste } from "../balcao.js";
+import {
+  type AgenteFalso,
+  bipar,
+  campoDeCodigo,
+  instalarAgente,
+  montar,
+  type OpcoesServidor,
+  pularOrientacao,
+  ServidorFalso,
+  totalDaVenda,
+} from "./servidorFalso.js";
 
 /**
  * O balcão com o servidor fora do ar.
  *
  * É o cenário que justifica o produto inteiro: a loja não pode parar de vender
  * porque um cabo caiu. O que se verifica aqui é o que o **operador** vê — que a
- * venda continua, que ele sabe que está offline, e que o troco aparece igual.
+ * venda continua, que ele sabe que está sem conexão, e que o troco aparece
+ * igual.
  */
-
-const OPERADOR = {
-  id: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0001",
-  nome: "Maria da Silva",
-  matricula: "42",
-  papel: "OPERADOR_CAIXA",
-  permissoes: ["venda:criar"],
-  precisaTrocarCredencial: false,
-};
 
 const ITEM_LOCAL = {
   numero: 1,
@@ -35,69 +33,40 @@ const ITEM_LOCAL = {
   total: "990",
 };
 
-const VENDA_LOCAL = {
+const VENDA_LOCAL: VendaNoAgente = {
   id: "local-1",
-  offline: true as const,
+  offline: true,
   total: "990",
   faltaPagar: "990",
   itens: [ITEM_LOCAL],
 };
 
-function json(status: number, corpo: unknown): Response {
-  return new Response(JSON.stringify(corpo), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-/** Agente completo, como a estação instalada o expõe. */
-function instalarPonte(sobrescritas: Partial<ClienteAgente> = {}): void {
-  const ponte = {
-    disponivel: vi.fn().mockResolvedValue(true),
-    imprimirCupom: vi.fn().mockResolvedValue(undefined),
-    abrirGaveta: vi.fn().mockResolvedValue(undefined),
+function agenteComFila(
+  sobrescritas: Parameters<typeof instalarAgente>[0] = {},
+): AgenteFalso {
+  return instalarAgente({
     estado: vi.fn().mockResolvedValue({ tipo: "OFFLINE", pendentes: 2 }),
-    iniciarVenda: vi.fn().mockResolvedValue({
-      id: "local-1",
-      offline: true,
-      total: "0",
-      faltaPagar: "0",
-      itens: [],
-    }),
     adicionarItem: vi.fn().mockResolvedValue({ tipo: "OK", venda: VENDA_LOCAL }),
     registrarPagamento: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
     finalizar: vi.fn().mockResolvedValue({ tipo: "OK", troco: "10" }),
-    cancelar: vi.fn().mockResolvedValue(undefined),
-    sincronizar: vi.fn(),
     ...sobrescritas,
-  };
-
-  definirAgenteParaTeste(ponte as unknown as ClienteAgente);
+  });
 }
 
-/** Servidor que autentica e depois some — a queda no meio do expediente. */
-function montarComServidorFora(): void {
-  const buscar = vi.fn((url: string) => {
-    if (url.includes("/api/acesso/eu")) return Promise.resolve(json(200, OPERADOR));
+/** O servidor autentica, a tela carrega, e aí o servidor some. */
+async function servidorCaiDepoisDeCarregar(
+  opcoes: OpcoesServidor = {},
+): Promise<ReturnType<typeof montar>> {
+  const balcao = montar(opcoes);
+  await campoDeCodigo();
+  balcao.servidor.fora = true;
 
-    return Promise.reject(new TypeError("Failed to fetch"));
-  });
-
-  const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
-
-  function Envolvido(): ReactNode {
-    return (
-      <ProvedorSessao contexto="PDV" cliente={cliente}>
-        <App />
-      </ProvedorSessao>
-    );
-  }
-
-  render(<Envolvido />);
+  return balcao;
 }
 
 beforeEach(() => {
   globalThis.localStorage.clear();
+  pularOrientacao();
 });
 
 afterEach(() => {
@@ -106,97 +75,254 @@ afterEach(() => {
 });
 
 describe("venda com o servidor fora do ar", () => {
-  it("🔑 a venda inteira acontece, do bipe ao troco", async () => {
-    // Nenhuma tecla a mais que no caminho online: o operador não muda de modo,
-    // não confirma nada, não escolhe "vender offline". Ele bipa.
-    instalarPonte();
-    montarComServidorFora();
+  it("🔑 a venda inteira acontece, do bipe ao troco, sem tecla nenhuma a mais", async () => {
+    const agente = agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
 
-    const usuario = userEvent.setup();
-    const campo = await waitFor(() => screen.getByLabelText(/Código do produto/));
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
 
-    await usuario.type(campo, "789{Enter}");
+    await usuario.type(await campoDeCodigo(), "{Enter}");
+    const pagamento = await screen.findByRole("region", { name: "Pagamento" });
+    expect(
+      within(pagamento).queryByRole("button", { name: /Fiado/ }),
+    ).not.toBeInTheDocument();
+    expect(pagamento).toHaveTextContent(
+      "Sem conexão com o servidor, o fiado fica indisponível.",
+    );
 
-    await waitFor(() => {
-      expect(screen.getByLabelText("Total da venda")).toHaveTextContent("9,90");
-    });
-
-    // Enter no campo vazio leva ao pagamento, igual ao caminho online.
-    await usuario.type(screen.getByLabelText(/Código do produto/), "{Enter}");
-
-    const valor = await screen.findByLabelText(/Valor recebido/);
+    await usuario.keyboard("1");
+    const valor = await screen.findByLabelText("Valor recebido");
     await usuario.clear(valor);
     await usuario.type(valor, "1000{Enter}");
 
-    expect(await screen.findByText("R$ 0,10")).toBeInTheDocument();
+    const concluida = await screen.findByRole("region", { name: "Venda concluída" });
+    expect(within(concluida).getByLabelText("Troco a devolver")).toHaveTextContent(
+      "R$ 0,10",
+    );
+    expect(concluida).toHaveTextContent("Venda concluída sem conexão");
+    expect(agente.iniciarVenda).toHaveBeenCalledTimes(1);
+    expect(agente.registrarPagamento).toHaveBeenCalledWith("DINHEIRO", "1000");
+    expect(agente.finalizar).toHaveBeenCalledTimes(1);
   });
 
-  it("🔑 o operador sabe que está offline", async () => {
-    instalarPonte();
-    montarComServidorFora();
+  it("🔑 o operador sabe que está sem conexão, e que as vendas estão guardadas", async () => {
+    agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
 
-    // A tela de carregamento também é `role="status"`; esperar o balcão evita
-    // casar com ela.
-    await waitFor(() => screen.getByLabelText(/Código do produto/));
+    expect(await screen.findByText("Sem conexão com o servidor")).toBeVisible();
+    expect(screen.getByText(/2 vendas aguardando envio/)).toBeVisible();
 
-    const aviso = await screen.findByRole("status");
-
-    expect(aviso).toHaveTextContent("Sem conexão com o servidor");
-    expect(aviso).toHaveTextContent("2 vendas aguardando envio");
+    await bipar(usuario, "789");
+    expect(
+      await screen.findByText(/Venda sem conexão com o servidor: bipe, receba e conclua/),
+    ).toBeVisible();
   });
 
   it("🔑 a venda offline não inventa número", async () => {
-    // Numerar é do servidor. Mostrar um número que vai mudar depois é pior que
-    // não mostrar número nenhum — o operador anota o errado na conferência.
-    instalarPonte();
-    montarComServidorFora();
+    agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
 
-    const usuario = userEvent.setup();
-    const campo = await waitFor(() => screen.getByLabelText(/Código do produto/));
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
 
-    await usuario.type(campo, "789{Enter}");
-
-    expect(await screen.findByText(/Venda offline/)).toBeInTheDocument();
-  });
-
-  it("🔑 a tela de conclusão avisa que a venda ainda vai subir", async () => {
-    instalarPonte();
-    montarComServidorFora();
-
-    const usuario = userEvent.setup();
-    const campo = await waitFor(() => screen.getByLabelText(/Código do produto/));
-
-    await usuario.type(campo, "789{Enter}");
-    await waitFor(() => {
-      expect(screen.getByLabelText("Total da venda")).toHaveTextContent("9,90");
-    });
-    await usuario.type(screen.getByLabelText(/Código do produto/), "{Enter}");
-
-    const valor = await screen.findByLabelText(/Valor recebido/);
-    await usuario.clear(valor);
-    await usuario.type(valor, "1000{Enter}");
-
-    expect(
-      await screen.findByText(/será enviada quando o servidor voltar/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Venda sem conexão · Maria da Silva/)).toBeVisible();
   });
 
   it("🔑 produto fora do catálogo local vira mensagem de operador", async () => {
-    // A réplica pode estar velha. O operador precisa saber que o problema é
-    // este computador, não o produto — senão ele recusa a venda ao cliente.
-    instalarPonte({
+    agenteComFila({
       adicionarItem: vi.fn().mockResolvedValue({
         tipo: "ERRO",
-        mensagem: "Produto não encontrado no catálogo local.",
+        mensagem: "Produto não está no catálogo desta estação.",
       }),
     });
-    montarComServidorFora();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
 
-    const usuario = userEvent.setup();
-    const campo = await waitFor(() => screen.getByLabelText(/Código do produto/));
+    await bipar(usuario, "789");
 
-    await usuario.type(campo, "000{Enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Produto não está no catálogo desta estação. (código 789)",
+    );
+  });
 
-    expect(await screen.findByText(/catálogo local/)).toBeInTheDocument();
+  it("🔑 uma vez na fila, a venda continua na fila, mesmo se o servidor voltar", async () => {
+    const agente = agenteComFila();
+    const { servidor, usuario } = await servidorCaiDepoisDeCarregar();
+
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+    servidor.fora = false;
+    await bipar(usuario, "789");
+
+    await waitFor(() => {
+      expect(agente.adicionarItem).toHaveBeenCalledTimes(2);
+    });
+    expect(servidor.chamadasA("POST /api/vendas/:id/itens")).toHaveLength(0);
+  });
+
+  it("3*código sem conexão bipa três vezes na fila", async () => {
+    const agente = agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
+
+    await bipar(usuario, "3*789");
+
+    await waitFor(() => {
+      expect(agente.adicionarItem).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  it("desconto, cliente e guardar explicam que dependem do servidor", async () => {
+    agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+
+    for (const tecla of ["{F3}", "{F4}", "{F6}", "{F7}", "{F8}"]) {
+      await usuario.keyboard(tecla);
+      expect(
+        await screen.findByText(
+          /Sem conexão com o servidor, só dá para bipar, receber e concluir/,
+        ),
+      ).toBeVisible();
+    }
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("🔑 desistir da venda sem conexão pede confirmação e descarta a fila", async () => {
+    const agente = agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar();
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+
+    await usuario.keyboard("{F9}");
+    const desistir = await screen.findByRole("dialog", { name: "Desistir da venda" });
+    expect(desistir).toHaveTextContent(
+      "Os itens desta venda sem conexão serão descartados.",
+    );
+    await usuario.keyboard("{Enter}");
+
+    expect(await screen.findByText("Venda descartada.")).toBeVisible();
+    expect(agente.cancelar).toHaveBeenCalledTimes(1);
+    await totalDaVenda("R$ 0,00");
+  });
+
+  it("🔑 o comprovante sai pela estação, sem número e marcado, e a gaveta abre junto", async () => {
+    const agente = agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar({
+      configuracao: { impressaoComprovante: "SEMPRE", larguraCupom: 58 },
+    });
+
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+    await usuario.type(await campoDeCodigo(), "{Enter}");
+    await usuario.keyboard("1");
+    const valor = await screen.findByLabelText("Valor recebido");
+    await usuario.clear(valor);
+    await usuario.type(valor, "1000{Enter}");
+
+    await waitFor(() => {
+      expect(agente.imprimirCupom).toHaveBeenCalledWith(
+        expect.objectContaining({
+          houveDinheiro: true,
+          colunas: 32,
+          cupom: expect.objectContaining({
+            numero: 0,
+            avisos: ["VENDA SEM CONEXAO"],
+            loja: { nome: "Padaria Pão Quente" },
+            semValorFiscal: true,
+          }) as unknown,
+        }),
+      );
+    });
+  });
+
+  it("no modo treinamento, o papel sem conexão também sai marcado como treinamento", async () => {
+    const agente = agenteComFila();
+    const { usuario } = await servidorCaiDepoisDeCarregar({
+      modo: "TREINAMENTO",
+      configuracao: { impressaoComprovante: "SEMPRE" },
+    });
+
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+    await usuario.type(await campoDeCodigo(), "{Enter}");
+    await usuario.keyboard("1{Enter}");
+
+    await waitFor(() => {
+      expect(agente.imprimirCupom).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cupom: expect.objectContaining({
+            avisos: ["TREINAMENTO - SEM VALOR", "VENDA SEM CONEXAO"],
+          }) as unknown,
+        }),
+      );
+    });
+  });
+
+  it("falha da fila ao receber ou concluir vira mensagem, e a venda fica na tela", async () => {
+    agenteComFila({
+      registrarPagamento: vi
+        .fn()
+        .mockResolvedValueOnce({ tipo: "ERRO", mensagem: "Disco cheio na estação." })
+        .mockResolvedValue({ tipo: "OK", faltaPagar: "0" }),
+      finalizar: vi
+        .fn()
+        .mockResolvedValueOnce({
+          tipo: "ERRO",
+          mensagem: "Não foi possível gravar a venda.",
+        })
+        .mockResolvedValue({ tipo: "OK", troco: "0" }),
+    });
+    const { usuario } = await servidorCaiDepoisDeCarregar();
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+
+    await usuario.type(await campoDeCodigo(), "{Enter}");
+    await usuario.keyboard("1{Enter}");
+    expect(await screen.findByText("Disco cheio na estação.")).toBeVisible();
+
+    await usuario.click(screen.getByRole("button", { name: "Receber dinheiro (Enter)" }));
+    expect(await screen.findByText("Não foi possível gravar a venda.")).toBeVisible();
+
+    await usuario.click(screen.getByRole("button", { name: "Concluir a venda (Enter)" }));
+    expect(
+      await screen.findByRole("region", { name: "Venda concluída" }),
+    ).toHaveTextContent("Sem troco");
+  });
+
+  it("sem conexão, o pagamento não tem botão de tirar", async () => {
+    agenteComFila({
+      registrarPagamento: vi.fn().mockResolvedValue({ tipo: "OK", faltaPagar: "490" }),
+    });
+    const { usuario } = await servidorCaiDepoisDeCarregar();
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+
+    await usuario.type(await campoDeCodigo(), "{Enter}");
+    await usuario.keyboard("1");
+    const valor = await screen.findByLabelText("Valor recebido");
+    await usuario.clear(valor);
+    await usuario.type(valor, "500{Enter}");
+
+    const lista = await screen.findByRole("list", { name: "Pagamentos registrados" });
+    expect(
+      within(lista).queryByRole("button", { name: /Tirar/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Falta receber")).toHaveTextContent("R$ 4,90");
+  });
+
+  it("servidor fora desde o carregamento: vende pela fila com o padrão seguro", async () => {
+    const agente = agenteComFila();
+    const servidor = new ServidorFalso();
+    servidor.responder("GET /api/caixa/aberto", () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const { usuario } = montar({}, servidor);
+    await campoDeCodigo();
+    servidor.fora = true;
+
+    await bipar(usuario, "789");
+    await totalDaVenda("R$ 9,90");
+    expect(agente.adicionarItem).toHaveBeenCalledWith("789");
   });
 });

@@ -1,8 +1,9 @@
 import { mensagemDe, useSessao } from "@erp/cliente-api";
-import { Botao, CampoTexto, ErroDeTela, formatarDinheiro } from "@erp/ui";
+import { Botao, ErroDeTela } from "@erp/ui";
 import { type ReactNode, useState } from "react";
 
-import { identificadorDaEstacao } from "../estacao.js";
+import type { ApiDoBalcao } from "../api/servidor.js";
+import { CampoDinheiro } from "../componentes/CampoDinheiro.js";
 
 /**
  * Abertura do caixa — a primeira coisa do dia.
@@ -19,29 +20,31 @@ import { identificadorDaEstacao } from "../estacao.js";
  * começo do dia é barato; descobrir no fim que a conta não fecha, não.
  *
  * Zero é resposta válida e comum — há loja que começa sem troco na gaveta. Por
- * isso o campo aceita zero, mas não aceita vazio: campo em branco não distingue
- * "não havia fundo" de "esqueci de contar".
+ * isso o campo aceita zero, mas não aceita **não ter sido digitado**: o campo
+ * intocado não distingue "não havia fundo" de "esqueci de contar".
  *
- * ### Em centavos, como o resto do balcão
+ * ### Dinheiro como na maquininha
  *
- * `10000` são cem reais. É a convenção de toda balança e maquininha, e elimina
- * a dúvida do separador decimal — que num teclado numérico de PDV nem sempre
- * está onde o operador espera.
+ * Os dígitos entram pela direita — 1, 0, 0, 0, 0 vira R$ 100,00 — e o valor
+ * aparece formatado o tempo todo, que é como se pega o zero a mais antes de
+ * ele virar diferença de caixa.
  */
-export function Abertura({ aoAbrir }: { readonly aoAbrir: () => void }): ReactNode {
-  const { cliente, usuario, sair } = useSessao();
+export function Abertura(props: {
+  readonly api: ApiDoBalcao;
+  readonly estacaoId: string;
+  readonly aoAbrir: () => void;
+}): ReactNode {
+  const { usuario, sair } = useSessao();
 
-  const [fundo, setFundo] = useState("");
+  // `undefined` até a primeira tecla: ver a nota acima.
+  const [fundo, setFundo] = useState<string | undefined>(undefined);
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [ocupado, setOcupado] = useState(false);
-
-  const centavos = fundo.replace(/\D/g, "");
 
   async function abrir(): Promise<void> {
     if (ocupado) return;
 
-    // Vazio não é zero: ver a nota acima.
-    if (centavos === "") {
+    if (fundo === undefined) {
       setErro("Informe o fundo de troco. Se a gaveta começa vazia, digite 0.");
       return;
     }
@@ -50,12 +53,8 @@ export function Abertura({ aoAbrir }: { readonly aoAbrir: () => void }): ReactNo
     setOcupado(true);
 
     try {
-      await cliente.requisitar("/api/caixa/abrir", {
-        metodo: "POST",
-        corpo: { estacaoId: identificadorDaEstacao(), fundoTroco: centavos },
-      });
-
-      aoAbrir();
+      await props.api.abrirCaixa(props.estacaoId, fundo);
+      props.aoAbrir();
     } catch (causa) {
       setErro(mensagemDe(causa));
     } finally {
@@ -91,26 +90,17 @@ export function Abertura({ aoAbrir }: { readonly aoAbrir: () => void }): ReactNo
 
           {erro !== undefined && <ErroDeTela mensagem={erro} />}
 
-          <CampoTexto
+          <CampoDinheiro
             rotulo="Fundo de troco"
-            numerico
-            required
+            valor={fundo ?? "0"}
             autoFocus
-            ajuda="Em centavos: 10000 são cem reais. Digite 0 se a gaveta está vazia."
-            value={fundo}
-            onChange={(evento) => {
-              setFundo(evento.target.value.replace(/\D/g, "").slice(0, 9));
+            grande
+            ajuda="Digite os números: 1, 0, 0, 0, 0 são R$ 100,00. Gaveta vazia: digite 0."
+            aoMudar={(centavos) => {
+              setErro(undefined);
+              setFundo(centavos);
             }}
           />
-
-          {/* O valor por extenso confirma a leitura antes de gravar: 1000 e
-              10000 são fáceis de confundir num teclado numérico, e o erro só
-              apareceria no fechamento, como uma diferença de noventa reais. */}
-          {centavos !== "" && (
-            <p className="text-sm text-tinta-suave">
-              Abrindo com <strong>{formatarDinheiro(centavos)}</strong> na gaveta.
-            </p>
-          )}
 
           <Botao
             type="submit"

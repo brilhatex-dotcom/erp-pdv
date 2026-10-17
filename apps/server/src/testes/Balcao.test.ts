@@ -167,6 +167,22 @@ describe("Venda em andamento", () => {
     expect(atual.total).toBe("1980");
   });
 
+  it("🔑 '3 ×' antes do código vale na unidade do produto", async () => {
+    const { operador } = await balcao();
+    const aberta = await chamar(operador, "POST", "/api/vendas", {
+      estacaoId: ESTACAO.valor,
+    });
+    const id = aberta.corpo["id"] as string;
+
+    const tres = await chamar(operador, "POST", `/api/vendas/${id}/itens`, {
+      codigo: "7891000315507",
+      quantidade: { milesimos: "3000" },
+    });
+
+    expect(tres.status).toBe(201);
+    expect((tres.corpo["item"] as { total: string }).total).toBe("2970");
+  });
+
   it("muda a quantidade e tira o item", async () => {
     const { operador } = await balcao();
     const venda = await vendaComRefri(operador);

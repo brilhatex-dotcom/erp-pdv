@@ -4,3 +4,30 @@
 /* O Tailwind 4 precisa saber onde procurar as classes usadas. */
 @source "../src";
 @source "../../../packages/ui/src";
+
+/**
+ * Impressão pelo navegador — só para a estação sem Agente Local.
+ *
+ * Na tela, o comprovante não aparece. Na impressão, só ele aparece: o resto da
+ * página some, e o papel sai com a largura do rolo térmico (58 ou 80 mm,
+ * definida no próprio elemento). Sem margem de página: a impressora térmica já
+ * corta rente.
+ */
+.area-impressao {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  body > *:not(.area-impressao) {
+    display: none !important;
+  }
+
+  .area-impressao {
+    display: block;
+    padding: 2mm;
+  }
+}

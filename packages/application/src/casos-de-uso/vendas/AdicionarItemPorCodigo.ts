@@ -45,6 +45,13 @@ export interface EntradaAdicionarItem {
    * inteiros. Etiqueta de balança traz a sua e ignora esta.
    */
   readonly quantidade?: Quantidade | undefined;
+  /**
+   * Milésimos **na unidade do próprio produto** — o "3 ×" digitado antes do
+   * código. A tela não sabe se o produto é vendido em unidade, peça ou dúzia,
+   * e não precisa saber: 3 é 3 da unidade dele. Ignorada quando vem
+   * `quantidade` ou quando o código é etiqueta de balança.
+   */
+  readonly quantidadeNaUnidadeDoProduto?: bigint | undefined;
   /** Só na segunda tentativa, depois de `AUTORIZACAO_NECESSARIA`. */
   readonly credencialSupervisor?: CredencialSupervisor | undefined;
   /**
@@ -242,6 +249,21 @@ async function localizar(
   }
 
   const unidade = produto.unidadeBase.codigo;
+
+  if (
+    entrada.quantidade === undefined &&
+    entrada.quantidadeNaUnidadeDoProduto !== undefined
+  ) {
+    // Meia unidade de refrigerante é recusada aqui, pelo próprio `Quantidade`:
+    // a unidade não é fracionável, e a mensagem diz isso ao operador.
+    const multiplicada = Quantidade.deMilesimos(
+      entrada.quantidadeNaUnidadeDoProduto,
+      unidade,
+    );
+    if (multiplicada.isErr()) return err(multiplicada.error);
+
+    return ok({ produto, quantidade: multiplicada.unwrap() });
+  }
 
   if (entrada.quantidade === undefined) {
     // Pesável sem peso entraria como 1 kg — o queijo de 350 g cobrado por um

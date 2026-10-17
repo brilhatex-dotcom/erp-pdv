@@ -1,9 +1,12 @@
-import { mensagemDe, useSessao } from "@erp/cliente-api";
-import { Botao, CampoTexto, ErroDeTela, formatarDinheiro } from "@erp/ui";
+import { mensagemDe } from "@erp/cliente-api";
+import { Botao, ErroDeTela, formatarDinheiro } from "@erp/ui";
 import { type ReactNode, useState } from "react";
 
+import type { ApiDoBalcao } from "../api/servidor.js";
+import type { Conferencia } from "../api/tipos.js";
 import { agente } from "../balcao.js";
-import { identificadorDaEstacao } from "../estacao.js";
+import { CampoDinheiro } from "../componentes/CampoDinheiro.js";
+import { rotuloDaForma } from "../formas.js";
 
 /**
  * Fechamento do caixa — a conferência do dia.
@@ -29,35 +32,30 @@ import { identificadorDaEstacao } from "../estacao.js";
  * Por um motivo diferente: essa diferença **não é real**. A venda que a estação
  * ainda não enviou não entrou no esperado, e o dinheiro dela está certo na
  * gaveta. Fechar assim inventaria uma falta que ninguém consegue explicar.
+ *
+ * ### Pix e cartão não entram na gaveta
+ *
+ * O relatório separa: a gaveta é só dinheiro, e o resto aparece por forma de
+ * pagamento, para conferir com o extrato do banco e da maquininha.
  */
-
-type Fase = "CONTANDO" | "CONFERIDO";
-
-interface Conferencia {
-  readonly fundoTroco: string;
-  readonly recebidoEmDinheiro: string;
-  readonly trocoDevolvido: string;
-  readonly suprimentos: string;
-  readonly sangrias: string;
-  readonly esperadoEmDinheiro: string;
-  readonly contadoEmDinheiro: string;
-  readonly divergenciaEmDinheiro: string;
-  readonly totalVendido: string;
-  readonly quantidadeVendas: number;
-}
-
-export function Fechamento({ aoSair }: { readonly aoSair: () => void }): ReactNode {
-  const { cliente } = useSessao();
-
-  const [fase, setFase] = useState<Fase>("CONTANDO");
-  const [contado, setContado] = useState("");
+export function Fechamento(props: {
+  readonly api: ApiDoBalcao;
+  readonly estacaoId: string;
+  readonly aoVoltar: () => void;
+  readonly aoConcluir: () => void;
+}): ReactNode {
+  const [contado, setContado] = useState<string | undefined>(undefined);
   const [conferencia, setConferencia] = useState<Conferencia | undefined>(undefined);
   const [erro, setErro] = useState<string | undefined>(undefined);
   const [ocupado, setOcupado] = useState(false);
 
   async function confirmar(): Promise<void> {
-    const centavos = contado.replace(/\D/g, "");
-    if (centavos === "" || ocupado) return;
+    if (ocupado) return;
+
+    if (contado === undefined) {
+      setErro("Conte o dinheiro da gaveta e digite o total. Gaveta vazia: digite 0.");
+      return;
+    }
 
     setErro(undefined);
     setOcupado(true);
@@ -67,17 +65,13 @@ export function Fechamento({ aoSair }: { readonly aoSair: () => void }): ReactNo
       // nunca chegou não deixa rastro no servidor.
       const pendentes = await vendasPendentes();
 
-      const resultado = await cliente.requisitar<Conferencia>("/api/caixa/fechar", {
-        metodo: "POST",
-        corpo: {
-          estacaoId: identificadorDaEstacao(),
-          contadoEmDinheiro: centavos,
+      setConferencia(
+        await props.api.fecharCaixa({
+          estacaoId: props.estacaoId,
+          contadoEmDinheiro: contado,
           vendasPendentes: pendentes,
-        },
-      });
-
-      setConferencia(resultado);
-      setFase("CONFERIDO");
+        }),
+      );
     } catch (causa) {
       setErro(mensagemDe(causa));
     } finally {
@@ -85,8 +79,8 @@ export function Fechamento({ aoSair }: { readonly aoSair: () => void }): ReactNo
     }
   }
 
-  if (fase === "CONFERIDO" && conferencia !== undefined) {
-    return <Resultado conferencia={conferencia} aoSair={aoSair} />;
+  if (conferencia !== undefined) {
+    return <Resultado conferencia={conferencia} aoConcluir={props.aoConcluir} />;
   }
 
   return (
@@ -100,54 +94,54 @@ export function Fechamento({ aoSair }: { readonly aoSair: () => void }): ReactNo
 
       {erro !== undefined && <ErroDeTela mensagem={erro} />}
 
-      <CampoTexto
-        rotulo="Total contado na gaveta (centavos)"
-        numerico
-        autoFocus
-        value={contado}
-        onChange={(evento) => {
-          setContado(evento.target.value);
-        }}
-        onKeyDown={(evento) => {
-          if (evento.key !== "Enter") return;
+      <form
+        noValidate
+        className="flex flex-col gap-6"
+        onSubmit={(evento) => {
           evento.preventDefault();
           void confirmar();
         }}
-      />
+      >
+        <CampoDinheiro
+          rotulo="Total contado na gaveta"
+          valor={contado ?? "0"}
+          autoFocus
+          grande
+          ajuda="Só o dinheiro: notas e moedas. Pix e cartão são conferidos à parte."
+          aoMudar={(centavos) => {
+            setErro(undefined);
+            setContado(centavos);
+          }}
+        />
 
-      <p className="text-sm text-tinta-suave" aria-live="polite">
-        {contado.replace(/\D/g, "") === ""
-          ? "Digite em centavos: 125000 são R$ 1.250,00."
-          : formatarDinheiro(contado.replace(/\D/g, ""))}
-      </p>
-
-      <div className="flex gap-3">
-        <Botao
-          tamanho="grande"
-          ocupado={ocupado}
-          rotuloOcupado="Conferindo…"
-          onClick={() => void confirmar()}
-        >
-          Conferir e fechar
-        </Botao>
-        <Botao tom="discreto" tamanho="grande" onClick={aoSair}>
-          Voltar
-        </Botao>
-      </div>
+        <div className="flex gap-3">
+          <Botao
+            type="submit"
+            tamanho="grande"
+            ocupado={ocupado}
+            rotuloOcupado="Conferindo…"
+          >
+            Conferir e fechar
+          </Botao>
+          <Botao tom="discreto" tamanho="grande" onClick={props.aoVoltar}>
+            Voltar
+          </Botao>
+        </div>
+      </form>
     </main>
   );
 }
 
 function Resultado(props: {
   readonly conferencia: Conferencia;
-  readonly aoSair: () => void;
+  readonly aoConcluir: () => void;
 }): ReactNode {
   const { conferencia } = props;
   const divergencia = BigInt(conferencia.divergenciaEmDinheiro);
   const bate = divergencia === 0n;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold text-tinta">Caixa fechado</h1>
 
       <section
@@ -166,24 +160,83 @@ function Resultado(props: {
         </strong>
       </section>
 
-      <dl className="flex flex-col gap-2 text-sm">
-        <Linha rotulo="Fundo de troco" valor={conferencia.fundoTroco} />
-        <Linha rotulo="Recebido em dinheiro" valor={conferencia.recebidoEmDinheiro} />
-        <Linha rotulo="Troco devolvido" valor={conferencia.trocoDevolvido} />
-        <Linha rotulo="Suprimentos" valor={conferencia.suprimentos} />
-        <Linha rotulo="Sangrias" valor={conferencia.sangrias} />
-        <Linha rotulo="Esperado na gaveta" valor={conferencia.esperadoEmDinheiro} forte />
-        <Linha rotulo="Contado por você" valor={conferencia.contadoEmDinheiro} forte />
-      </dl>
+      <section aria-labelledby="titulo-gaveta" className="flex flex-col gap-2">
+        <h2 id="titulo-gaveta" className="text-lg font-semibold text-tinta">
+          Dinheiro na gaveta
+        </h2>
+        <dl className="flex flex-col gap-2 text-sm">
+          <Linha rotulo="Fundo de troco" valor={conferencia.fundoTroco} />
+          <Linha rotulo="Recebido em dinheiro" valor={conferencia.recebidoEmDinheiro} />
+          <Linha rotulo="Troco devolvido" valor={conferencia.trocoDevolvido} negativo />
+          <Linha rotulo="Suprimentos" valor={conferencia.suprimentos} />
+          <Linha rotulo="Sangrias" valor={conferencia.sangrias} negativo />
+          {conferencia.devolvidoEmDinheiro !== "0" && (
+            <Linha
+              rotulo="Devolvido em dinheiro"
+              valor={conferencia.devolvidoEmDinheiro}
+              negativo
+            />
+          )}
+          <Linha
+            rotulo="Esperado na gaveta"
+            valor={conferencia.esperadoEmDinheiro}
+            forte
+          />
+          <Linha rotulo="Contado por você" valor={conferencia.contadoEmDinheiro} forte />
+        </dl>
+      </section>
 
-      <p className="text-sm text-tinta-suave">
-        {conferencia.quantidadeVendas === 1
-          ? "1 venda"
-          : `${String(conferencia.quantidadeVendas)} vendas`}{" "}
-        · {formatarDinheiro(conferencia.totalVendido)} vendidos
-      </p>
+      <section aria-labelledby="titulo-vendas" className="flex flex-col gap-2">
+        <h2 id="titulo-vendas" className="text-lg font-semibold text-tinta">
+          Vendas do caixa
+        </h2>
+        <p className="text-sm text-tinta-suave">
+          {conferencia.quantidadeVendas === 1
+            ? "1 venda"
+            : `${String(conferencia.quantidadeVendas)} vendas`}{" "}
+          · {formatarDinheiro(conferencia.totalVendido)} vendidos
+        </p>
+        <dl className="flex flex-col gap-2 text-sm">
+          <Linha rotulo="Descontos dados" valor={conferencia.descontos} />
+          <Linha
+            rotulo={`Cancelamentos (${String(conferencia.cancelamentos.quantidade)})`}
+            valor={conferencia.cancelamentos.total}
+          />
+          <Linha
+            rotulo={`Devoluções (${String(conferencia.devolucoes.quantidade)})`}
+            valor={conferencia.devolucoes.total}
+          />
+          {conferencia.totalAReceber !== "0" && (
+            <Linha
+              rotulo="Vendido no fiado (a receber)"
+              valor={conferencia.totalAReceber}
+            />
+          )}
+        </dl>
+      </section>
 
-      <Botao tamanho="grande" autoFocus onClick={props.aoSair}>
+      {conferencia.porForma.length > 0 && (
+        <section aria-labelledby="titulo-formas" className="flex flex-col gap-2">
+          <h2 id="titulo-formas" className="text-lg font-semibold text-tinta">
+            Por forma de pagamento
+          </h2>
+          <p className="text-sm text-tinta-suave">
+            Pix e cartão não entram na gaveta: confira com o extrato do banco e da
+            maquininha.
+          </p>
+          <dl className="flex flex-col gap-2 text-sm">
+            {conferencia.porForma.map((forma) => (
+              <Linha
+                key={forma.forma}
+                rotulo={rotuloDaForma(forma.forma)}
+                valor={forma.esperado}
+              />
+            ))}
+          </dl>
+        </section>
+      )}
+
+      <Botao tamanho="grande" autoFocus onClick={props.aoConcluir}>
         Concluir
       </Botao>
     </main>
@@ -194,17 +247,18 @@ function Linha(props: {
   readonly rotulo: string;
   readonly valor: string;
   readonly forte?: boolean;
+  /** Sai da gaveta: mostrado com sinal, para a conta fechar de cabeça. */
+  readonly negativo?: boolean;
 }): ReactNode {
+  const forte = props.forte === true;
+
   return (
     <div className="flex items-baseline justify-between border-b border-borda pb-1">
-      <dt className={props.forte === true ? "text-tinta" : "text-tinta-suave"}>
-        {props.rotulo}
-      </dt>
+      <dt className={forte ? "text-tinta" : "text-tinta-suave"}>{props.rotulo}</dt>
       <dd
-        className={`font-numero ${
-          props.forte === true ? "font-semibold text-tinta" : "text-tinta-suave"
-        }`}
+        className={`font-numero ${forte ? "font-semibold text-tinta" : "text-tinta-suave"}`}
       >
+        {props.negativo === true && props.valor !== "0" ? "- " : ""}
         {formatarDinheiro(props.valor)}
       </dd>
     </div>

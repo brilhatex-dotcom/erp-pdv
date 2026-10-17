@@ -26,6 +26,15 @@ export interface DadosCupom {
   readonly troco: string;
   readonly cliente?: string | undefined;
   /**
+   * Linhas em destaque logo abaixo do cabeçalho: "TREINAMENTO", "SEGUNDA
+   * VIA", "VENDA CANCELADA".
+   *
+   * Ficam no alto de propósito: é a primeira coisa que quem pega o papel lê, e
+   * um comprovante de treinamento confundido com venda de verdade é dinheiro
+   * que a conferência procura e não acha.
+   */
+  readonly avisos?: readonly string[] | undefined;
+  /**
    * Aviso obrigatório quando o cupom **não** é documento fiscal.
    *
    * Sem ele, um comprovante de venda pode ser confundido com NFC-e — e a loja
@@ -83,6 +92,10 @@ export function montarCupomVenda(
   }
   if (dados.loja.endereco !== undefined) {
     cupom.linha(dados.loja.endereco);
+  }
+
+  for (const aviso of dados.avisos ?? []) {
+    cupom.negrito(true).linha(`*** ${aviso} ***`).negrito(false);
   }
 
   cupom.quebrar().alinhar("ESQUERDA").separador();

@@ -153,6 +153,46 @@ describe("Bipada", () => {
     expect(resultado.isOk()).toBe(true);
   });
 
+  it("🔑 '3 ×' vale na unidade do produto: 3 refrigerantes, 0,5 kg de queijo", async () => {
+    const venda = await balcao.vendaCom();
+
+    const refris = (
+      await balcao.adicionarItem.executar({
+        vendaId: venda.id,
+        operadorId: OPERADOR,
+        codigo: EAN_REFRI,
+        quantidadeNaUnidadeDoProduto: 3000n,
+      })
+    ).unwrap();
+    expect(refris.item.quantidade.formatar()).toBe("3 un");
+
+    const queijo = (
+      await balcao.adicionarItem.executar({
+        vendaId: venda.id,
+        operadorId: OPERADOR,
+        codigo: "QJO001",
+        quantidadeNaUnidadeDoProduto: 500n,
+      })
+    ).unwrap();
+    expect(queijo.item.quantidade.formatar()).toBe("0,5 kg");
+    expect(queijo.item.total.formatar()).toBe("R$ 10,00");
+  });
+
+  it("meia unidade de quem não fraciona é recusada com a mensagem do domínio", async () => {
+    const venda = await balcao.vendaCom();
+
+    const resultado = await balcao.adicionarItem.executar({
+      vendaId: venda.id,
+      operadorId: OPERADOR,
+      codigo: EAN_REFRI,
+      quantidadeNaUnidadeDoProduto: 1500n,
+    });
+
+    expect(resultado.isErr() && resultado.error.codigo).toBe(
+      "QUANTIDADE_NAO_FRACIONAVEL",
+    );
+  });
+
   it("unidade que não converte é recusada com a unidade do produto", async () => {
     const venda = await balcao.vendaCom();
 

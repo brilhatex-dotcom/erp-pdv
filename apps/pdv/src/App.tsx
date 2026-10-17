@@ -2,8 +2,8 @@ import { useSessao } from "@erp/cliente-api";
 import { Carregando } from "@erp/ui";
 import type { ReactNode } from "react";
 
+import { Balcao } from "./telas/Balcao.js";
 import { Login } from "./telas/Login.js";
-import { Venda } from "./telas/Venda.js";
 
 /**
  * Raiz do PDV.
@@ -24,5 +24,5 @@ export function App(): ReactNode {
     );
   }
 
-  return usuario === undefined ? <Login /> : <Venda />;
+  return usuario === undefined ? <Login /> : <Balcao />;
 }
