@@ -10,41 +10,36 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 ## Estado atual
 
 > **Continuando o desenvolvimento? Leia [`ESTADO.md`](ESTADO.md) primeiro.** Ele diz
-> onde o trabalho parou, o que vem em seguida e quais armadilhas já foram pagas.
-> Todo o código vivo está em `main` — não há trabalho em outra branch.
+> onde o trabalho parou, o que vem em seguida, quais armadilhas já foram pagas — e,
+> na §0.1, se há trabalho vivo fora de `main`.
 
-| Etapa | Situação |
+**A V1 do balcão está pronta** para padaria, mercadinho, frutaria e loja mista: venda
+por unidade e por peso (com a etiqueta da balança), pagamento misto, troco, fiado,
+desconto com liberação do supervisor, cancelamento e devolução, abertura e fechamento
+de caixa às cegas, venda sem servidor, cópias de segurança provadas por restauração e
+um modo treinamento num banco separado. Os detalhes — o que foi entregue, **como foi
+testado**, o que depende de integração externa e as limitações conhecidas — estão em
+[`docs/ENTREGA-V1.md`](docs/ENTREGA-V1.md).
+
+| Área | Situação |
 |---|---|
-| Arquitetura | ✅ Definida — [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) |
-| Análise de segmentos | ✅ Concluída — [`docs/ANALISE-SEGMENTOS.md`](docs/ANALISE-SEGMENTOS.md) |
-| Etapa 0 — Fundação | ✅ Concluída — monorepo, portões de qualidade e CI operantes |
-| Etapa 1 — Domínio: objetos de valor | ✅ Concluída |
-| **Etapa 2 — Agregados e catálogo** | ✅ **Concluída** — `Produto`, códigos de barras e balança. 448 testes, 100% de cobertura |
-| **Etapa 3a — Estoque** | ✅ **Concluída** — movimentos comutativos e custo médio. 535 testes |
-| **Etapa 3b — Venda** | ✅ **Concluída** — itens, pagamentos, desconto rateado, crediário. 678 testes |
-| **Etapa 3c — Caixa** | ✅ **Concluída** — sangria, suprimento e conferência. 734 testes |
-| **Etapa 4 — Aplicação** | ✅ **Concluída** — portas e fluxo de venda ponta a ponta. 772 testes |
-| **Etapa 5 — Persistência** | ✅ **Concluída** — Prisma, migrações, repositórios e `UnitOfWork` transacional. 797 testes, 43 deles contra PostgreSQL real |
-| **Etapa 6a — Identidade** | ✅ **Concluída** — usuário, papéis, permissões, limites por valor e bloqueio progressivo. 859 testes |
-| **Etapa 6b — Servidor HTTP** | ✅ **Concluída** — Fastify, container, login com Argon2id, sessão rotativa e autorização no servidor. 1.121 testes |
-| **Etapa 7a — Design system e retaguarda** | ✅ **Concluída** — tokens calibrados para o balcão, primitivos acessíveis, login e consulta de produto. 1.187 testes |
-| **Etapa 7b — Rotas de venda** | ✅ **Concluída** — carrinho, pagamento e fechamento pela API, com o operador vindo do token. 1.219 testes |
-| **Etapa 7c — `@erp/cliente-api`** | ✅ **Concluída** — cliente HTTP e sessão extraídos de `apps/web` para o PDV reusar. 1.223 testes |
-| **Etapa 8 — PDV: tela de venda** | ✅ **Concluída** — bipagem, carrinho, pagamento e troco, a venda inteira sem mouse. 1.243 testes |
-| **Etapa 8b — Correções e persistência dos cadastros** | ✅ **Concluída** — login do balcão, abertura de caixa, e categoria/cliente/fornecedor no Postgres. 1.490 testes |
-| **Etapa 8c — Cadastros ponta a ponta** | ✅ **Concluída** — rotas HTTP, permissões e tela de clientes na retaguarda. 1.537 testes |
-| **Etapa 8d — Fornecedores e categorias** | ✅ **Concluída** — as três telas de cadastro, com abas por permissão. 1.555 testes |
-| **Etapa 9a — Cupom, gaveta e casca Electron** | ✅ **Concluída** — `@erp/printing`, ponte de hardware e impressão que nunca trava a venda. 1.647 testes |
-| **Etapa 9b — PDV offline** | ✅ **Concluída** — fila durável, catálogo replicado, sincronização idempotente e rota de caixa. 1.714 testes |
-| **Etapa 9c — Contingência na tela** | ✅ **Concluída** — indicador, venda pela fila, catálogo replicado e sincronização automática |
-| **Ferramentas de impressão sem hardware** | ✅ **Concluídas** — pré-visualização do cupom e impressora virtual na porta 9100 |
-| **Etapa 9d — Fechamento de caixa** | ✅ **Concluída** — sangria com alçada, suprimento e conferência às cegas |
-| **Etapa 9e — Conferência dos caixas** | ✅ **Concluída** — sessões do período com divergência recalculada, na retaguarda |
-| **Estratégia revista em 01/08/2026** | 🧭 Fiscal **fora do caminho crítico** ([ADR-0022](docs/adr/0022-fiscal-fora-do-caminho-critico.md)) · PDV vira **PWA + Agente Local** ([ADR-0023](docs/adr/0023-pdv-como-pwa-com-agente-local.md)) · **uma empresa por instalação** ([ADR-0024](docs/adr/0024-uma-empresa-por-instalacao.md)) |
-| **Agente Local** | ✅ **Concluído** — serviço em `127.0.0.1:9787` com impressão, fila offline e catálogo; três camadas de defesa na porta |
-| Próximo — Cadastro de Empresa | ⬜ Ver [`ESTADO.md`](ESTADO.md) §2.1 |
-| Depois — Compras, Financeiro, Dashboard, Backup, Instalador, PWA, drivers por marca | ⬜ Ordem em [`ESTADO.md`](ESTADO.md) §2.2 |
-| Por último — Fiscal com provedor real | ⬜ Até lá, `ProvedorFiscalSimulado` |
+| Balcão (PDV), caixa, pagamentos | ✅ Pronto — a venda inteira pelo teclado |
+| Cadastros, estoque, compras, financeiro (fiado e despesas) | ✅ Pronto |
+| Cópias de segurança e restauração | ✅ Pronto ([ADR-0027](docs/adr/0027-copias-de-seguranca-da-v1.md)) |
+| Modo treinamento | ✅ Pronto ([ADR-0026](docs/adr/0026-modo-treinamento-em-banco-separado.md)) |
+| Instalador Windows | ⚠️ Gera o `.exe` no CI; ainda não instalado numa máquina Windows |
+| Relatórios de vendas e painel | ⬜ Só a conferência dos caixas |
+| Fiscal (NFC-e) | ⬜ Provedor simulado ([ADR-0022](docs/adr/0022-fiscal-fora-do-caminho-critico.md)) — **não serve para a loja operar legalmente** |
+
+### Para quem vai usar
+
+| Para | Leia |
+|---|---|
+| Instalar na loja | [`docs/operacao/INSTALACAO.md`](docs/operacao/INSTALACAO.md) |
+| Configurar a loja depois de instalar | [`docs/operacao/PRIMEIROS-PASSOS.md`](docs/operacao/PRIMEIROS-PASSOS.md) |
+| Operar o caixa | [`docs/operacao/MANUAL-DO-OPERADOR.md`](docs/operacao/MANUAL-DO-OPERADOR.md) |
+| Cópias de segurança e restauração | [`docs/operacao/BACKUP.md`](docs/operacao/BACKUP.md) |
+| Testar a tela com um operador novo | [`docs/operacao/ROTEIRO-DE-USABILIDADE.md`](docs/operacao/ROTEIRO-DE-USABILIDADE.md) |
 
 ## Requisitos
 
@@ -56,10 +51,36 @@ lojas de conveniência, depósitos, açougues e hortifrutis.
 
 ```bash
 pnpm install          # instala as dependências do monorepo
+cp packages/database/.env.example packages/database/.env   # não vem do git
 pnpm db:up            # sobe o PostgreSQL 17 (porta 55432)
-pnpm db:migrate       # aplica as migrações no banco de desenvolvimento
+pnpm db:deploy        # aplica as migrações no banco de desenvolvimento
 pnpm verify           # roda TODOS os portões de qualidade
 ```
+
+### Usar o sistema na sua máquina
+
+```bash
+# O banco do treino: o mesmo PostgreSQL, outro banco (o `deploy` o cria).
+DATABASE_URL=postgresql://erp:erp_dev_only@localhost:55432/erp_pdv_treino pnpm db:deploy
+
+pnpm build            # servidor, PDV e retaguarda
+
+DATABASE_URL=postgresql://erp:erp_dev_only@localhost:55432/erp_pdv \
+DATABASE_URL_TREINAMENTO=postgresql://erp:erp_dev_only@localhost:55432/erp_pdv_treino \
+SEGREDO_TOKEN=$(openssl rand -hex 32) \
+PASTA_PDV=$PWD/apps/pdv/dist PASTA_RETAGUARDA=$PWD/apps/web/dist \
+pnpm --filter @erp/server start
+```
+
+Abra a retaguarda em `http://localhost:3000/retaguarda/` — o primeiro acesso cria o
+administrador — e o caixa em `http://localhost:3000/`. O caminho dali em diante está
+em [`docs/operacao/PRIMEIROS-PASSOS.md`](docs/operacao/PRIMEIROS-PASSOS.md); para só
+experimentar o caixa, use **Treinar, sem valer de verdade** na entrada dele: a loja de
+demonstração vem pronta.
+
+Para mexer na tela com recarga a quente, suba o servidor sem as `PASTA_*` e use
+`pnpm --filter @erp/pdv dev` (`localhost:5174`) e `pnpm --filter @erp/web dev`
+(`localhost:5173`): os dois repassam a API para a porta 3000.
 
 O `db:up` cria três bancos: `erp_pdv` para desenvolvimento, `erp_teste` para a
 suíte de persistência e `erp_teste_api` para a do servidor. São separados de
@@ -81,6 +102,7 @@ localmente, passa no CI.
 | Comando | O que faz |
 |---|---|
 | `pnpm verify` | Todos os portões de qualidade (use antes de commitar) |
+| `pnpm e2e` | O caixa no Chromium, contra o servidor e o banco de verdade |
 | `pnpm build` | Compila todos os pacotes |
 | `pnpm test` | Testes |
 | `pnpm test:cov` | Testes com cobertura (mínimo 90% no domínio) |
@@ -111,11 +133,16 @@ packages/
 apps/
   server/      API HTTP: composição, autenticação, autorização e rotas
   web/         retaguarda: SPA React + Vite
-  pdv/         frente de caixa: venda por teclado (React + Vite)
+  pdv/         frente de caixa: PWA, venda por teclado (React + Vite)
   agente/      Agente Local da estação: impressão, fila offline e catálogo
+  quiosque/    casca Electron opcional, tela cheia, sem lógica
+  instalador/  instalador Windows: segredos, banco, migrações e verificação
+  e2e/         o caixa no navegador de verdade (Playwright)
 docs/
   ARQUITETURA.md        arquitetura completa (fonte da verdade técnica)
   ANALISE-SEGMENTOS.md  requisitos por segmento e impacto no domínio
+  ENTREGA-V1.md         o que a V1 entrega, como foi testado e o que falta
+  operacao/             instalação, primeiros passos, manual, backup, usabilidade
   fiscal/               arquitetura fiscal e análise de custo dos provedores
   adr/                  decisões arquiteturais registradas
 CLAUDE.md      diretrizes permanentes: papéis, fluxo e padrões

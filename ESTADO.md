@@ -84,7 +84,7 @@ movimentação é o pior de resolver.
 | **Compras — entrada de mercadoria** | ✅ Completo, ponta a ponta | `domain/compras/`, `casos-de-uso/compras/`, `rotas/compras.ts`, `telas/Compras.tsx` |
 | Barreira de erro da retaguarda | ✅ Tela que quebra não derruba a página | `apps/web/src/BarreiraDeErro.tsx` |
 | Cupom ESC/POS e gaveta | ✅ Completo, sem hardware nativo | `packages/printing/src/` |
-| Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/pdv/src/ferramentas/` |
+| Pré-visualização e impressora virtual | ✅ Conferir o cupom sem impressora | `packages/printing/src/previsualizacao.ts`, `apps/agente/src/ferramentas/` (`pnpm --filter @erp/agente impressora:virtual`) |
 | Catálogo replicado na estação | ✅ `GET /api/catalogo/replica` → arquivo local | `packages/database/src/consultas/` |
 | **Agente Local** | ✅ Serviço HTTP em `127.0.0.1:9787` — impressão, fila offline e catálogo | `apps/agente/` |
 | Contrato tela ↔ Agente | ✅ Tipos e cliente HTTP compartilhados | `packages/agente-contrato/` |
@@ -190,11 +190,9 @@ verificação de saúde.
 
 Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 
-> ⚠️ **O servidor da loja ainda não serve a PWA.** Hoje a PWA sobe pelo Vite em
-> desenvolvimento; em produção quem entrega `index.html`, `sw.js` e os ícones é o
-> servidor da loja, e isso ainda não existe. Sem esse passo o service worker não
-> registra: ele só vale para conteúdo servido pela mesma origem. **É parte do
-> módulo 16 (Instalação)** e está listado em §2.4.
+> ✅ **O servidor da loja serve a PWA** (`apps/server/src/http/estaticos.ts`): PDV na
+> raiz, retaguarda em `/retaguarda`, e o service worker registra porque a origem é a
+> mesma. O teste no navegador (`pnpm e2e`) usa exatamente esse caminho.
 
 ### 2.2 Módulos do ERP, na ordem pedida
 
@@ -202,22 +200,22 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 |---|---|---|
 | 1 | Login | ✅ Pronto |
 | 2 | Usuários | ✅ Pronto — domínio, casos de uso, rotas, tela e **primeiro acesso da instalação** |
-| 3 | Empresas | ✅ Pronto — cadastro único por instalação, com aviso de aptidão a emitir. Falta só o logotipo, que entra com a impressão comum |
+| 3 | Empresas | ✅ Pronto — cadastro único por instalação, com aviso de aptidão a emitir. O logotipo mora na configuração da loja e sai no PDV e no comprovante |
 | 4 | Clientes | ✅ Pronto |
 | 5 | Fornecedores | ✅ Pronto |
 | 6 | Produtos | ✅ Pronto — cadastro, alteração, busca da retaguarda e correção de preço pelo supervisor |
 | 7 | Estoque | ✅ Movimento, saldo e extrato prontos. **Falta a contagem de inventário em lote** — ver §2.4 |
 | 8 | Compras | ✅ Nota de entrada, cancelamento com estorno e lista. **Falta o pedido de compra** — ver §2.4 |
 | 9 | Vendas | ✅ Pronto |
-| 10 | PDV | ⚠️ Já fala com o Agente por HTTP; **falta o manifesto PWA** (item 18) |
+| 10 | PDV | ✅ A V1 do balcão completa, PWA servida pelo servidor da loja, modo treinamento — e testada no navegador (`pnpm e2e`) |
 | 11 | Caixa | ✅ Abertura, fechamento, conferência, sangria e suprimento |
 | 12 | Financeiro | ✅ Contas a receber e a pagar, baixa parcial, estorno, parcelamento, adiamento e cancelamento. **Falta a conciliação bancária** — ver §2.4 |
-| 13 | Relatórios | ⚠️ Só a conferência de caixa |
+| 13 | Relatórios | ⚠️ Conferência dos caixas, saldos e extrato de estoque, contas a receber e a pagar, auditoria. **Faltam** vendas por período e por produto, e margem |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ✅ Camada local completa (ADR-0027). **Faltam** a cópia externa automática e cifrada e o PITR — decisão de custo pendente |
 | 16 | Instalação | ⚠️ NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow **verde**, `.exe` gerado; **nunca instalado numa máquina Windows** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
-| 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho. **Falta o servidor da loja entregar os arquivos** — módulo 16 |
+| 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho, servidos pelo servidor da loja |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
 | 20 | **Impressoras térmicas por marca** | ⚠️ ESC/POS genérico pronto no Agente; faltam Bematech, Elgin, Epson e Daruma |
 
@@ -450,8 +448,11 @@ DATABASE_URL="postgresql://erp:erp_dev_only@localhost:55432/erp_pdv" pnpm db:dep
 
 1. `CLAUDE.md` — diretrizes permanentes. **Prevalece sobre qualquer outra coisa.**
 2. Este arquivo — onde o trabalho parou.
-3. `docs/ARQUITETURA.md` — fonte da verdade técnica.
-4. `docs/adr/README.md` — por que cada decisão foi tomada.
+3. `docs/ENTREGA-V1.md` — o que a V1 entrega, como foi testada e o que falta.
+4. `docs/ARQUITETURA.md` — fonte da verdade técnica.
+5. `docs/adr/README.md` — por que cada decisão foi tomada.
+6. `docs/operacao/` — instalação, primeiros passos, manual do operador, backup e
+   roteiro de usabilidade: o que a loja lê.
 
 > **Manter este arquivo atualizado é parte da etapa 9 do fluxo** (`CLAUDE.md` §3:
 > "Documentar a etapa"). Uma sessão que avança e não atualiza o `ESTADO.md` recria

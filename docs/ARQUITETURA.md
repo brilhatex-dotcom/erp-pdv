@@ -1376,7 +1376,7 @@ Regra de produto: **o operador precisa saber o estado, sem precisar entender de 
 
 - Indicador permanente: 🟢 Conectado · 🟡 Offline (N vendas pendentes) · 🔴 Offline há mais de 4 h
 - Nenhum diálogo de erro técnico interrompe a venda. Falhas vão para o log; o caixa só vê o que precisa agir.
-- No fechamento de caixa, se houver pendências, o sistema **avisa e explica** — mas não impede o fechamento.
+- No fechamento de caixa, se houver venda na fila da estação, o sistema **explica e espera** a fila subir: o dinheiro dela está na gaveta e ainda não no esperado, e fechar antes inventaria uma falta que ninguém consegue explicar (`CAIXA_COM_VENDAS_PENDENTES`).
 - O gerente recebe alerta na retaguarda quando alguma estação está offline há muito tempo.
 
 ### 12.5 Limites honestos do modo offline

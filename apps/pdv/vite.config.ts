@@ -30,6 +30,8 @@ export default defineConfig({
     proxy: {
       "/api": { target: "http://127.0.0.1:3000", changeOrigin: true },
       "/saude": { target: "http://127.0.0.1:3000", changeOrigin: true },
+      // A API do modo treinamento mora sob `/treino` (ADR-0026).
+      "/treino": { target: "http://127.0.0.1:3000", changeOrigin: true },
     },
   },
   build: {
