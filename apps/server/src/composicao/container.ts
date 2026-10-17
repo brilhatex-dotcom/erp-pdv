@@ -247,7 +247,10 @@ export function montarContainer(
 ): Container {
   const prisma = criarPrismaClient({
     urlBanco,
-    registrarConsultas: !ambiente.ehProducao,
+    // Só no desenvolvimento. No teste, cada consulta registrada vai para o log
+    // do CI — mais de um milhão de caracteres por execução —, e a saída da
+    // suíte que falhou fica soterrada além do que se consegue ler.
+    registrarConsultas: ambiente.NODE_ENV === "development",
   });
 
   const unitOfWork = new UnitOfWorkPrisma(prisma);
