@@ -12,8 +12,15 @@
  * já vendida. Criar explicitamente custa uma chamada e não depende de ninguém.
  */
 
-/** Nome do banco. Casa com o `urlDoBanco` de `configuracao.ts`. */
+/** Nome do banco da loja. Casa com o `urlDoBanco` de `configuracao.ts`. */
 export const NOME_DO_BANCO = "erp_pdv";
+
+/**
+ * O banco do modo treinamento (ADR-0026): o mesmo servidor de banco, outro
+ * banco. O sufixo `_treino` não é enfeite — é o que o servidor confere antes de
+ * montar a loja de demonstração ou de esvaziar qualquer coisa nele.
+ */
+export const NOME_DO_BANCO_DE_TREINO = "erp_pdv_treino";
 
 /** Papel dono do banco, criado pelo `initdb`. */
 export const PAPEL_DO_BANCO = "erp";
@@ -27,7 +34,10 @@ export const PAPEL_DO_BANCO = "erp";
  * cliente, com o defeito aparecendo como lista fora de ordem que ninguém
  * consegue reproduzir.
  */
-export function argumentosDoCreatedb(porta: number): readonly string[] {
+export function argumentosDoCreatedb(
+  porta: number,
+  banco: string = NOME_DO_BANCO,
+): readonly string[] {
   return [
     "--host=localhost",
     `--port=${String(porta)}`,
@@ -37,7 +47,7 @@ export function argumentosDoCreatedb(porta: number): readonly string[] {
     "--encoding=UTF8",
     "--locale-provider=icu",
     "--icu-locale=pt-BR",
-    NOME_DO_BANCO,
+    banco,
   ];
 }
 
@@ -48,7 +58,10 @@ export function argumentosDoCreatedb(porta: number): readonly string[] {
  * versão, técnico refazendo um passo. Recriar o banco ali apagaria as vendas,
  * então a existência é consultada antes, e a criação é pulada em silêncio.
  */
-export function argumentosDaConsultaDeBanco(porta: number): readonly string[] {
+export function argumentosDaConsultaDeBanco(
+  porta: number,
+  banco: string = NOME_DO_BANCO,
+): readonly string[] {
   return [
     "--host=localhost",
     `--port=${String(porta)}`,
@@ -58,7 +71,8 @@ export function argumentosDaConsultaDeBanco(porta: number): readonly string[] {
     "--tuples-only",
     "--no-align",
     "--command",
-    `SELECT 1 FROM pg_database WHERE datname = '${NOME_DO_BANCO}'`,
+    // O nome é uma das constantes acima, nunca entrada de fora.
+    `SELECT 1 FROM pg_database WHERE datname = '${banco}'`,
   ];
 }
 

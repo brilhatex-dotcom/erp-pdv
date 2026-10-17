@@ -6,7 +6,9 @@ import type { ApiDoBalcao } from "../api/servidor.js";
 import type { Conferencia } from "../api/tipos.js";
 import { agente } from "../balcao.js";
 import { CampoDinheiro } from "../componentes/CampoDinheiro.js";
+import { FaixaDoTreino } from "../componentes/FaixaDoTreino.js";
 import { rotuloDaForma } from "../formas.js";
+import { useModo } from "../modo.js";
 
 /**
  * Fechamento do caixa — a conferência do dia.
@@ -44,6 +46,7 @@ export function Fechamento(props: {
   readonly aoVoltar: () => void;
   readonly aoConcluir: () => void;
 }): ReactNode {
+  const { treinamento } = useModo();
   const [contado, setContado] = useState<string | undefined>(undefined);
   const [conferencia, setConferencia] = useState<Conferencia | undefined>(undefined);
   const [erro, setErro] = useState<string | undefined>(undefined);
@@ -62,8 +65,9 @@ export function Fechamento(props: {
 
     try {
       // A estação é quem sabe quantas vendas ainda não subiram: uma venda que
-      // nunca chegou não deixa rastro no servidor.
-      const pendentes = await vendasPendentes();
+      // nunca chegou não deixa rastro no servidor. As da fila são da loja; o
+      // treino não tem fila (ADR-0026), e não pode ser travado por ela.
+      const pendentes = treinamento ? 0 : await vendasPendentes();
 
       setConferencia(
         await props.api.fecharCaixa({
@@ -85,6 +89,7 @@ export function Fechamento(props: {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      {treinamento && <FaixaDoTreino />}
       <header>
         <h1 className="text-2xl font-semibold text-tinta">Fechamento de caixa</h1>
         <p className="mt-1 text-sm text-tinta-suave">

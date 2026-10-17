@@ -27,6 +27,7 @@ import {
 } from "../componentes/ModalAjuda.js";
 import { ModalCancelar } from "../componentes/ModalCancelar.js";
 import { ModalCliente } from "../componentes/ModalCliente.js";
+import { FaixaDoTreino } from "../componentes/FaixaDoTreino.js";
 import { ModalConfirmar } from "../componentes/ModalConfirmar.js";
 import { ModalDesconto, type PedidoDeDesconto } from "../componentes/ModalDesconto.js";
 import { type DevolucaoFeita, ModalDevolucao } from "../componentes/ModalDevolucao.js";
@@ -121,6 +122,7 @@ type Janela =
   | { readonly tipo: "DESISTIR_SEM_CONEXAO" }
   | { readonly tipo: "GUARDADAS" }
   | { readonly tipo: "MENU" }
+  | { readonly tipo: "RECOMECAR_TREINO" }
   | { readonly tipo: "MOVIMENTO"; readonly movimento: TipoMovimento }
   | { readonly tipo: "REIMPRIMIR" }
   | { readonly tipo: "DEVOLUCAO" }
@@ -184,6 +186,8 @@ export interface PropsTelaDeVenda {
   readonly recuperada: VendaNoFio | undefined;
   readonly aoFecharCaixa: () => void;
   readonly aoSair: () => void;
+  /** Só no treino: volta à entrada do caixa de verdade (ADR-0026). */
+  readonly aoSairDoTreino: () => void;
 }
 
 export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
@@ -194,8 +198,15 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
   const fiadoLigado = configuracao.recursos.includes("FIADO");
 
   const contextoVenda = useMemo(
-    () => ({ api, estacaoId, operadorId: operador.id }),
-    [api, estacaoId, operador.id],
+    () => ({ api, estacaoId, operadorId: operador.id, treinamento }),
+    [api, estacaoId, operador.id, treinamento],
+  );
+
+  // No treino, a gaveta de verdade não abre para o troco de mentira (ADR-0026).
+  const abrirAGaveta = useCallback(
+    (): Promise<string | undefined> =>
+      treinamento ? Promise.resolve(undefined) : abrirGaveta(),
+    [treinamento],
   );
 
   // A venda e a origem vivem também em referência: a fila de leituras e a
@@ -717,7 +728,7 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
       );
 
       if (resposta.estornos.some((estorno) => estorno.forma === "DINHEIRO"))
-        void abrirGaveta();
+        void abrirAGaveta();
     });
   }
 
@@ -806,7 +817,7 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
     if (imprimeSozinho) {
       void imprimirConcluida(finalizada, de, true);
     } else if (teveDinheiro(finalizada)) {
-      void abrirGaveta().then(setAviso);
+      void abrirAGaveta().then(setAviso);
     }
   }
 
@@ -835,12 +846,11 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
             loja: contexto.loja?.nome,
             operador: operador.nome,
             larguraCupom: configuracao.larguraCupom,
-            treinamento,
             abrirGaveta: abrindoGaveta,
           })
         : await imprimirComprovante(api, alvo.id, {
             segundaVia: false,
-            abrirGaveta: abrindoGaveta,
+            abrirGaveta: abrindoGaveta && !treinamento,
           });
 
     if (resultado.via === "NAVEGADOR") {
@@ -900,14 +910,24 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
           ? `Sangria de ${formatarDinheiro(movimento.valor)} registrada.`
           : `Suprimento de ${formatarDinheiro(movimento.valor)} registrado.`,
       );
-      void abrirGaveta();
+      void abrirAGaveta();
     });
   }
 
   function devolvida(feita: DevolucaoFeita): void {
     setJanela(undefined);
     setAviso(instrucaoDeReembolso(feita));
-    if (feita.formaReembolso === "DINHEIRO") void abrirGaveta();
+    if (feita.formaReembolso === "DINHEIRO") void abrirAGaveta();
+  }
+
+  function recomecarTreino(): void {
+    void executar(async () => {
+      await api.recomecarTreino();
+      setJanela(undefined);
+      // As pessoas de treino foram montadas de novo: a sessão de agora não
+      // existe mais, e a entrada do treino é o próximo passo.
+      props.aoSair();
+    });
   }
 
   function escolherNoMenu(opcao: OpcaoDoMenu): void {
@@ -934,6 +954,13 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
       case "TROCAR_OPERADOR":
         setJanela(undefined);
         props.aoSair();
+        return;
+      case "RECOMECAR_TREINO":
+        setJanela({ tipo: "RECOMECAR_TREINO" });
+        return;
+      case "SAIR_DO_TREINO":
+        setJanela(undefined);
+        props.aoSairDoTreino();
     }
   }
 
@@ -1073,14 +1100,7 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
   return (
     <ErroDaJanela.Provider value={janelaAberta ? erro : undefined}>
       <main className="flex h-screen flex-col gap-3 p-3">
-        {treinamento && (
-          <p
-            role="note"
-            className="rounded-md bg-atencao px-3 py-1 text-center font-semibold text-tinta"
-          >
-            MODO TREINAMENTO — nada do que acontece aqui vale como venda de verdade.
-          </p>
-        )}
+        {treinamento && <FaixaDoTreino />}
 
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1101,7 +1121,8 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
           </Botao>
         </header>
 
-        <IndicadorConexao />
+        {/* O indicador fala da fila do Agente, que o treino não usa. */}
+        {!treinamento && <IndicadorConexao />}
 
         {origem === "FILA" && (
           <p
@@ -1312,6 +1333,7 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
       {janela?.tipo === "AJUDA" && (
         <ModalAjuda
           primeiraVez={janela.primeiraVez}
+          exemplos={contexto.treinamento?.exemplos}
           aoFechar={() => {
             marcarOrientacaoVista();
             fecharJanela();
@@ -1465,9 +1487,27 @@ export function TelaDeVenda(props: PropsTelaDeVenda): ReactNode {
       {janela?.tipo === "MENU" && (
         <ModalMenuCaixa
           vendaEmCurso={comItens}
+          treinamento={treinamento}
           aoEscolher={escolherNoMenu}
           aoFechar={fecharJanela}
         />
+      )}
+
+      {janela?.tipo === "RECOMECAR_TREINO" && (
+        <ModalConfirmar
+          titulo="Recomeçar o treino"
+          rotuloConfirmar="Recomeçar"
+          ocupado={ocupado}
+          rotuloOcupado="Recomeçando…"
+          aoConfirmar={recomecarTreino}
+          aoFechar={fecharJanela}
+        >
+          <p>
+            As vendas, o caixa e o estoque do treino voltam ao começo, e quem estiver
+            treinando entra de novo.
+          </p>
+          <p>A loja de verdade não é tocada.</p>
+        </ModalConfirmar>
       )}
 
       {janela?.tipo === "MOVIMENTO" && (

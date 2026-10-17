@@ -78,3 +78,6 @@ export {
   type VendaComNomes,
   vendasRecentes,
 } from "./consultas/balcao.js";
+
+// ── Treinamento (ADR-0026) ──────────────────────────────────────────────
+export { BancoDeTreinamentoPrisma } from "./treinamento/BancoDeTreinamentoPrisma.js";

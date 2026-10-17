@@ -16,7 +16,8 @@ Um executável só. Ele:
    com gerador criptográfico, diferentes em cada instalação;
 4. inicializa o banco numa **porta dedicada** (55433), isolado de qualquer
    PostgreSQL que já exista na máquina;
-5. cria o banco e aplica as migrações;
+5. cria o banco da loja e o do treinamento (`erp_pdv_treino`) e aplica as
+   migrações nos dois;
 6. registra dois serviços do Windows e os inicia;
 7. **confere que o sistema respondeu** antes de dizer "concluído".
 
@@ -196,6 +197,28 @@ preserva os segredos.
 
 Para começar do zero — e **perder tudo** —, apague `C:\ProgramData\ERP PDV` à
 mão antes de reinstalar.
+
+### Treinamento
+
+A entrada do caixa tem o botão **Treinar, sem valer de verdade**. Ele abre o
+mesmo caixa sobre um **banco separado** (`erp_pdv_treino`), com uma loja de
+demonstração pronta — produtos por unidade, por peso e com código de barras,
+clientes com fiado — e três pessoas de treino:
+
+| Matrícula | PIN | Quem é |
+|---|---|---|
+| 901 | 121212 | Operador |
+| 902 | 232323 | Supervisor (libera desconto, cancela, devolve) |
+| 903 | 343434 | Gerente |
+
+Nada do que acontece no treino chega à loja: outro banco, outro login, e a
+gaveta não abre. **Recomeçar o treino** (menu do caixa, opção 8) volta tudo ao
+começo. O treino não entra nas cópias de segurança.
+
+Se o banco do treino falhar, o caixa de verdade funciona normalmente e o botão
+some da entrada; o log do servidor diz o motivo. Para **desligar** o treino,
+apague a linha `DATABASE_URL_TREINAMENTO` do `servidor\.env` e reinicie o
+serviço do servidor.
 
 ### Cópias de segurança
 

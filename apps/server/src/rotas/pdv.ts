@@ -1,3 +1,4 @@
+import { exemplosDeCodigo } from "@erp/application";
 import { maisVendidos, produtosDoBalcao } from "@erp/database";
 import { type ConfiguracaoLoja, Dinheiro } from "@erp/domain";
 import type { FastifyInstance } from "fastify";
@@ -85,6 +86,9 @@ export function rotasDoPdv(servidor: FastifyInstance, container: Container): voi
               },
         configuracao: { ...apresentarConfiguracao(loja), gravada },
         integracoes: INTEGRACOES,
+        // Os códigos para treinar sem leitor, que a ajuda do caixa mostra.
+        treinamento:
+          container.modo === "TREINAMENTO" ? { exemplos: exemplosDeCodigo() } : undefined,
       });
     },
   );

@@ -119,6 +119,25 @@ export interface ContextoDoPdv {
     | undefined;
   readonly configuracao: ConfiguracaoNoFio;
   readonly integracoes: readonly IntegracaoNoFio[];
+  /** Só no treino: os códigos para treinar sem leitor, que a ajuda (F1) mostra. */
+  readonly treinamento?: { readonly exemplos: readonly ExemploDeCodigo[] } | undefined;
+}
+
+/** Um código para digitar no campo do caixa, e o que ele é. */
+export interface ExemploDeCodigo {
+  readonly descricao: string;
+  readonly codigo: string;
+}
+
+/** A entrada do treino: com quem entrar e o que digitar (ADR-0026). */
+export interface TreinoNoFio {
+  readonly pessoas: readonly {
+    readonly matricula: string;
+    readonly nome: string;
+    readonly pin: string;
+    readonly oQueFaz: string;
+  }[];
+  readonly exemplos: readonly ExemploDeCodigo[];
 }
 
 export interface ProdutoDoBalcao {

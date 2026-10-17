@@ -28,7 +28,17 @@ declare module "fastify" {
   }
 }
 
-const EMISSOR = "erp-pdv";
+/**
+ * Quem emitiu o token — e, com isso, para qual banco ele vale.
+ *
+ * O treinamento emite com outro nome (ADR-0026): o segredo de assinatura é o
+ * mesmo, e sem esta diferença o token do "Operador de treino" abriria as rotas
+ * do banco da loja. Com ela, a conferência recusa o token do outro modo como
+ * recusaria um adulterado.
+ */
+function emissor(container: Container): string {
+  return container.modo === "TREINAMENTO" ? "erp-pdv-treinamento" : "erp-pdv";
+}
 
 /**
  * Emite o token de acesso.
@@ -58,7 +68,7 @@ export async function emitirTokenAcesso(
     mat: dados.matricula,
   })
     .setProtectedHeader({ alg: "HS256" })
-    .setIssuer(EMISSOR)
+    .setIssuer(emissor(container))
     .setSubject(dados.usuarioId.valor)
     .setIssuedAt(Math.floor(agora.getTime() / 1000))
     .setExpirationTime(Math.floor(expiraEm.getTime() / 1000))
@@ -74,6 +84,7 @@ export async function emitirTokenAcesso(
  */
 export function exigirAutenticacao(container: Container) {
   const segredo = new TextEncoder().encode(container.ambiente.SEGREDO_TOKEN);
+  const deQuem = emissor(container);
 
   return async function autenticar(
     requisicao: FastifyRequest,
@@ -91,7 +102,7 @@ export function exigirAutenticacao(container: Container) {
 
     try {
       const { payload } = await jwtVerify(cabecalho.slice("Bearer ".length), segredo, {
-        issuer: EMISSOR,
+        issuer: deQuem,
       });
 
       const usuarioId = Id.criar(String(payload.sub));
@@ -114,6 +125,24 @@ export function exigirAutenticacao(container: Container) {
         resposta,
         new ErroNaoAutorizado("TOKEN_INVALIDO", "Sua sessão expirou. Entre de novo."),
       );
+      return;
+    }
+
+    // No treino, o token sozinho não basta: "recomeçar" apaga as pessoas e as
+    // sessões, e o token emitido antes ainda valeria por minutos para alguém
+    // que não existe mais — a outra estação que treinava veria erro em vez de
+    // voltar à entrada. Uma consulta a mais por requisição, e só no treino.
+    if (container.modo === "TREINAMENTO") {
+      const sessao = await container.leitura.sessoes.porId(
+        requisicao.autenticado.sessaoId,
+      );
+
+      if (sessao?.estaValida(container.relogio.agora()) !== true) {
+        await responderErro(
+          resposta,
+          new ErroNaoAutorizado("SESSAO_INVALIDA", "Sua sessão expirou. Entre de novo."),
+        );
+      }
     }
   };
 }

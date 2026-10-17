@@ -1,4 +1,5 @@
 import {
+  criarPrismaClient,
   HasherArgon2,
   PapelRepositorioPrisma,
   UsuarioRepositorioPrisma,
@@ -54,6 +55,8 @@ export async function montarServidorDeTeste(
 ): Promise<{
   readonly servidor: FastifyInstance;
   readonly container: Container;
+  /** O container do treino, quando `DATABASE_URL_TREINAMENTO` foi passada. */
+  readonly treino: Container | undefined;
 }> {
   const ambiente = carregarAmbiente({
     NODE_ENV: "test",
@@ -68,8 +71,60 @@ export async function montarServidorDeTeste(
   });
 
   const container = montarContainer(ambiente, "REAL", ambiente.DATABASE_URL, opcoes);
+  // A mesma decisão do `index.ts`, que fica fora da cobertura: o treino só
+  // existe quando o ambiente aprovou o banco dele.
+  const treino =
+    ambiente.treinamento.url === undefined
+      ? undefined
+      : montarContainer(ambiente, "TREINAMENTO", ambiente.treinamento.url);
 
-  return { servidor: await montarServidor(container), container };
+  return { servidor: await montarServidor(container, treino), container, treino };
+}
+
+/** O banco de treino da suíte: o dela, com o sufixo que o treino exige. */
+export function urlBancoDeTreino(): string {
+  const endereco = new URL(urlBancoDeTeste());
+  endereco.pathname = `${endereco.pathname}_treino`;
+  return endereco.toString();
+}
+
+/**
+ * Cria do zero o banco de treino da suíte, já migrado.
+ *
+ * Do zero de propósito: o que se prova é que o treino se prepara sozinho num
+ * banco vazio — um banco que sobrou da execução anterior já teria a loja.
+ */
+export async function criarBancoDeTreino(): Promise<void> {
+  const endereco = new URL(urlBancoDeTreino());
+  const nome = endereco.pathname.slice(1);
+  endereco.pathname = "/postgres";
+  const administrador = criarPrismaClient({ urlBanco: endereco.toString() });
+
+  try {
+    await administrador.$executeRawUnsafe(
+      `DROP DATABASE IF EXISTS "${nome}" WITH (FORCE)`,
+    );
+    await administrador.$executeRawUnsafe(`CREATE DATABASE "${nome}"`);
+  } finally {
+    await administrador.$disconnect();
+  }
+
+  prepararBanco(urlBancoDeTreino());
+}
+
+export async function apagarBancoDeTreino(): Promise<void> {
+  const endereco = new URL(urlBancoDeTreino());
+  const nome = endereco.pathname.slice(1);
+  endereco.pathname = "/postgres";
+  const administrador = criarPrismaClient({ urlBanco: endereco.toString() });
+
+  try {
+    await administrador.$executeRawUnsafe(
+      `DROP DATABASE IF EXISTS "${nome}" WITH (FORCE)`,
+    );
+  } finally {
+    await administrador.$disconnect();
+  }
 }
 
 /**
@@ -79,14 +134,14 @@ export async function montarServidorDeTeste(
  * e invocá-lo daqui encontraria o binário só por acaso, dependendo de como o
  * pnpm resolveu a árvore naquele dia.
  */
-export function prepararBanco(): void {
+export function prepararBanco(url = urlBancoDeTeste()): void {
   const pacoteBanco = fileURLToPath(
     new URL("../../../../packages/database", import.meta.url),
   );
 
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     cwd: pacoteBanco,
-    env: { ...process.env, DATABASE_URL: urlBancoDeTeste() },
+    env: { ...process.env, DATABASE_URL: url },
     stdio: "pipe",
   });
 }

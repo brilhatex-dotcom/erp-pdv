@@ -41,7 +41,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0023](0023-pdv-como-pwa-com-agente-local.md) | PDV como PWA, com Agente Local dono do hardware e da contingência | Aceito |
 | [0024](0024-uma-empresa-por-instalacao.md) | Uma empresa por instalação | Aceito |
 | [0025](0025-financeiro-na-transacao-da-venda.md) | A conta a receber nasce na transação da venda | Aceito |
-| 0026 | Modo treinamento num segundo banco, com as mesmas regras | Reservado — o arquivo entra com o modo treinamento |
+| [0026](0026-modo-treinamento-em-banco-separado.md) | Modo treinamento num segundo banco, com as mesmas regras | Aceito |
 | [0027](0027-copias-de-seguranca-da-v1.md) | Cópias de segurança da V1: `pg_dump` provado por restauração, sem PITR e sem cópia externa automática | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos

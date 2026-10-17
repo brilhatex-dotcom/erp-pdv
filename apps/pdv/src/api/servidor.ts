@@ -25,21 +25,14 @@ import type {
  * chega como `ErroDaApi`, já com a mensagem escrita para o operador — e com o
  * código que diz à tela quando abrir o modal do supervisor.
  *
- * O prefixo existe para o modo treinamento (ADR-0026): as mesmas chamadas, num
- * outro banco, sem que tela nenhuma precise saber em qual está.
+ * Não sabem em qual banco estão: no modo treinamento (ADR-0026), quem leva as
+ * chamadas para `/treino` é o cliente da API, montado para o modo inteiro.
  */
 export class ApiDoBalcao {
-  constructor(
-    private readonly cliente: ClienteApi,
-    private readonly prefixo = "",
-  ) {}
-
-  #caminho(caminho: string): string {
-    return `${this.prefixo}${caminho}`;
-  }
+  constructor(private readonly cliente: ClienteApi) {}
 
   #get<T>(caminho: string): Promise<T> {
-    return this.cliente.requisitar<T>(this.#caminho(caminho));
+    return this.cliente.requisitar<T>(caminho);
   }
 
   #enviar<T>(
@@ -47,7 +40,7 @@ export class ApiDoBalcao {
     corpo: unknown,
     metodo: "POST" | "PUT" = "POST",
   ): Promise<T> {
-    return this.cliente.requisitar<T>(this.#caminho(caminho), { metodo, corpo });
+    return this.cliente.requisitar<T>(caminho, { metodo, corpo });
   }
 
   // ── Contexto ──────────────────────────────────────────────────────────
@@ -272,6 +265,13 @@ export class ApiDoBalcao {
     },
   ): Promise<{ readonly id: string; readonly valorTotal: string }> {
     return this.#enviar(`/api/vendas/${vendaId}/devolucoes`, dados);
+  }
+
+  // ── Treinamento ───────────────────────────────────────────────────────
+
+  /** Apaga o que o treino fez e monta a loja de demonstração de novo. */
+  recomecarTreino(): Promise<void> {
+    return this.#enviar("/api/treinamento/recomecar", {});
   }
 }
 

@@ -1,6 +1,8 @@
 import { Botao } from "@erp/ui";
 import type { ReactNode } from "react";
 
+import type { ExemploDeCodigo } from "../api/tipos.js";
+import { CodigosParaTreinar } from "./CodigosParaTreinar.js";
 import { Modal } from "./Modal.js";
 
 /**
@@ -52,6 +54,8 @@ export function marcarOrientacaoVista(): void {
 
 export function ModalAjuda(props: {
   readonly primeiraVez: boolean;
+  /** No treino: os códigos que valem como a bipada (ADR-0026). */
+  readonly exemplos?: readonly ExemploDeCodigo[] | undefined;
   readonly aoFechar: () => void;
 }): ReactNode {
   return (
@@ -87,6 +91,8 @@ export function ModalAjuda(props: {
           ))}
         </tbody>
       </table>
+
+      {props.exemplos !== undefined && <CodigosParaTreinar exemplos={props.exemplos} />}
 
       <p className="text-sm text-tinta-suave">
         Todos os comandos também estão nos botões da tela. Se a tela travar, aperte F5: a

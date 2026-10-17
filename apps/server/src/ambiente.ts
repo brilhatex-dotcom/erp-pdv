@@ -17,6 +17,13 @@ const esquema = z.object({
   ENDERECO: z.string().default("127.0.0.1"),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL é obrigatória"),
+  /**
+   * O banco do modo treinamento (ADR-0026). Vazio desliga o treino.
+   *
+   * Conferido abaixo, mas sem reprovar a partida: um treino mal configurado
+   * desliga o treino e avisa no log — nunca impede a loja de abrir.
+   */
+  DATABASE_URL_TREINAMENTO: z.string().default(""),
 
   /**
    * Segredo de assinatura do token de acesso.
@@ -90,10 +97,57 @@ const esquemaComRegras = esquema.superRefine((dados, contexto) => {
   }
 });
 
+/**
+ * O banco do treinamento, já conferido: o endereço quando dá para treinar, ou
+ * o motivo de o treino ficar desligado — para o log, que é onde o técnico vai
+ * procurar.
+ */
+export type BancoDoTreinamento =
+  | { readonly url: string }
+  | { readonly url: undefined; readonly aviso?: string | undefined };
+
 export type Ambiente = Readonly<z.infer<typeof esquema>> & {
   readonly origens: readonly string[];
   readonly ehProducao: boolean;
+  readonly treinamento: BancoDoTreinamento;
 };
+
+/** O nome que todo banco de treino tem no fim; o instalador cria `erp_pdv_treino`. */
+const SUFIXO_DO_TREINO = "_treino";
+
+/**
+ * Confere o banco do treinamento antes de montar qualquer coisa sobre ele.
+ *
+ * A regra do nome é a mesma que o banco confere antes de esvaziar: aqui ela
+ * evita montar o treino; lá, é a última trava. Apontar o treino para o banco
+ * da loja — por cópia e cola no `.env` — é o erro que as duas existem para
+ * barrar.
+ */
+export function conferirBancoDoTreinamento(
+  urlTreino: string,
+  urlLoja: string,
+): BancoDoTreinamento {
+  if (urlTreino === "") return { url: undefined };
+
+  let banco: string;
+  try {
+    banco = decodeURIComponent(new URL(urlTreino).pathname.replace(/^\//, ""));
+  } catch {
+    return {
+      url: undefined,
+      aviso: "DATABASE_URL_TREINAMENTO não é um endereço de banco válido",
+    };
+  }
+
+  if (!banco.endsWith(SUFIXO_DO_TREINO) || urlTreino === urlLoja) {
+    return {
+      url: undefined,
+      aviso: `o banco do treinamento precisa ser outro, com nome terminado em ${SUFIXO_DO_TREINO} — "${banco}" não serve`,
+    };
+  }
+
+  return { url: urlTreino };
+}
 
 /**
  * Lê e valida o ambiente.
@@ -156,5 +210,9 @@ export function carregarAmbiente(fonte: NodeJS.ProcessEnv = process.env): Ambien
       .map((origem) => origem.trim())
       .filter((origem) => origem !== ""),
     ehProducao: dados.NODE_ENV === "production",
+    treinamento: conferirBancoDoTreinamento(
+      dados.DATABASE_URL_TREINAMENTO,
+      dados.DATABASE_URL,
+    ),
   };
 }

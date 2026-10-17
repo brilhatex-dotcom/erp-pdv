@@ -75,7 +75,6 @@ export async function imprimirSemConexao(
     readonly loja: string | undefined;
     readonly operador: string;
     readonly larguraCupom: 58 | 80;
-    readonly treinamento: boolean;
     readonly abrirGaveta: boolean;
   },
 ): Promise<ResultadoImpressao> {
@@ -101,7 +100,8 @@ export async function imprimirSemConexao(
       total: venda.total,
       pagamentos: pagamentosDoCupom(venda),
       troco: venda.troco,
-      avisos: [...(dados.treinamento ? [TREINAMENTO] : []), "VENDA SEM CONEXAO"],
+      // Sem a marca de treino: o treino não vende sem servidor (ADR-0026).
+      avisos: ["VENDA SEM CONEXAO"],
       semValorFiscal: true,
     },
     houveDinheiro: dados.abrirGaveta && teveDinheiro(venda),

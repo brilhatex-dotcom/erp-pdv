@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.3 |
+| **Versão do documento** | 1.5 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -20,6 +20,7 @@
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
 | **1.3** | 31/07/2026 | Acrescenta `@erp/cliente-api` ao grafo de §3.3 e à tabela de §3.4: o cliente HTTP e o contexto de sessão saem de `apps/web` para um pacote, porque o PDV precisa dos mesmos. Duplicá-los faria a renovação de token divergir entre as duas aplicações — e divergência em renovação de sessão aparece como "o PDV desloga sozinho". |
 | **1.4** | 17/10/2026 | **ADR-0027**: a V1 entrega a camada local do backup (§10.7) — `pg_dump` de hora em hora e no fechamento de caixa, toda cópia provada por restauração, retenção GFS e restauração pela retaguarda. **PITR e cópia externa automática ficam para depois**: na V1, o RPO é o intervalo da agenda (1 h no padrão), não "próximo de zero". Impacta §1.5 (RNF-07), §10.5 e §10.6. |
+| **1.5** | 17/10/2026 | **ADR-0026**: modo treinamento num **segundo banco** (`erp_pdv_treino`), com as mesmas rotas sob `/treino`, token e cookie próprios e loja de demonstração montada sozinha. O treino **não tem contingência**: sem servidor, ele para — a fila do Agente entregaria a venda de treino ao banco da loja. Impacta §2.7 e §12.6. |
 
 ---
 
@@ -402,6 +403,7 @@ Transações **nunca** cruzam agregados. Comunicação entre agregados é via **
 | 7 | Estoque como eventos | Coluna `saldo` mutável | Auditabilidade + convergência na sincronização |
 | 8 | UUIDv7 como ID | Auto-incremento | Geração offline sem colisão; ordenável por tempo |
 | 9 | Dinheiro em centavos (`bigint`) | `float` / `Decimal` | Exatidão absoluta; sem dependência de driver |
+| 10 | Treino num segundo banco, mesmas rotas sob `/treino` (ADR-0026) | Marca "treino" nas linhas do banco da loja | Uma consulta que esquecesse o filtro misturaria treino com movimento real; outro banco isola por construção |
 
 ---
 
@@ -1388,6 +1390,13 @@ Precisa estar documentado, porque prometer offline total seria desonesto:
 | Autorização de NFC-e em tempo real | Depende da SEFAZ | Contingência legal (§15.5) |
 | Consulta de estoque em outra estação | Sem rede | Mostra o último saldo conhecido, com marca de desatualizado |
 | Relatórios consolidados | Dados em outra máquina | Relatórios apenas da própria estação |
+
+### 12.6 O treino não tem contingência (ADR-0026)
+
+No modo treinamento, a estação **não usa a fila do Agente**: a fila entrega ao
+servidor de verdade, e a venda de treino entraria no movimento da loja. Sem
+servidor, o treino para e diz por quê. Também não guarda a configuração do
+treino como a "última conhecida" do caixa, e não abre a gaveta.
 
 ---
 

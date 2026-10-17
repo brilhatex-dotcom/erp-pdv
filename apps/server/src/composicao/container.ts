@@ -13,6 +13,7 @@ import {
   type GeradorId,
   type Hasher,
   IniciarVenda,
+  LojaDeTreinamento,
   AbrirCaixa,
   FecharCaixa,
   RegistrarSangria,
@@ -61,6 +62,7 @@ import {
   type UnitOfWork,
 } from "@erp/application";
 import {
+  BancoDeTreinamentoPrisma,
   criarPrismaClient,
   FerramentaPostgres,
   HasherArgon2,
@@ -153,6 +155,8 @@ export interface Container {
   readonly copias: CopiasDoServidor | undefined;
   /** Ligada enquanto o banco é trocado por uma cópia: a API responde 503. */
   readonly manutencao: ManutencaoDoServidor;
+  /** A loja de demonstração — só no container do treinamento (ADR-0026). */
+  readonly treinamento: LojaDeTreinamento | undefined;
 
   readonly autenticar: Autenticar;
   readonly renovarSessao: RenovarSessao;
@@ -288,6 +292,16 @@ export function montarContainer(
     hasher,
     copias,
     manutencao,
+    treinamento:
+      modo === "TREINAMENTO"
+        ? new LojaDeTreinamento(
+            unitOfWork,
+            new BancoDeTreinamentoPrisma(prisma),
+            geradorId,
+            hasher,
+            relogio,
+          )
+        : undefined,
 
     autenticar: new Autenticar(unitOfWork, relogio, geradorId, hasher, gerarRefresh),
     renovarSessao: new RenovarSessao(

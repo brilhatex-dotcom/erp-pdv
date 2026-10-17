@@ -161,7 +161,6 @@ describe("imprimirSemConexao", () => {
     loja: "Padaria",
     operador: "Maria",
     larguraCupom: 58 as const,
-    treinamento: false,
     abrirGaveta: true,
   };
 

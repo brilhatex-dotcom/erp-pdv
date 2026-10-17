@@ -5,6 +5,7 @@ import {
   argumentosDoCreatedb,
   bancoExiste,
   NOME_DO_BANCO,
+  NOME_DO_BANCO_DE_TREINO,
 } from "./banco.js";
 
 describe("criação do banco da instalação", () => {
@@ -37,6 +38,30 @@ describe("criação do banco da instalação", () => {
     // Perguntar "existe?" conectando no próprio banco perguntado falharia
     // quando ele não existe — que é exatamente o caso a detectar.
     expect(argumentosDaConsultaDeBanco(55433)).toContain("--dbname=postgres");
+  });
+});
+
+describe("o banco do treinamento (ADR-0026)", () => {
+  it("🔑 tem o sufixo que o servidor confere antes de mexer nele", () => {
+    expect(NOME_DO_BANCO_DE_TREINO.endsWith("_treino")).toBe(true);
+    expect(NOME_DO_BANCO.endsWith("_treino")).toBe(false);
+  });
+
+  it("é criado com o mesmo cuidado do banco da loja", () => {
+    const argumentos = argumentosDoCreatedb(55433, NOME_DO_BANCO_DE_TREINO);
+
+    expect(argumentos.at(-1)).toBe("erp_pdv_treino");
+    expect(argumentos).toContain("--template=template0");
+    expect(argumentos).toContain("--icu-locale=pt-BR");
+  });
+
+  it("a consulta de existência pergunta pelo banco certo", () => {
+    expect(argumentosDaConsultaDeBanco(55433, NOME_DO_BANCO_DE_TREINO).at(-1)).toBe(
+      "SELECT 1 FROM pg_database WHERE datname = 'erp_pdv_treino'",
+    );
+    expect(argumentosDaConsultaDeBanco(55433).at(-1)).toBe(
+      "SELECT 1 FROM pg_database WHERE datname = 'erp_pdv'",
+    );
   });
 });
 

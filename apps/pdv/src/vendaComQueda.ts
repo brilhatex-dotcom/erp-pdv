@@ -66,7 +66,16 @@ export interface ContextoVenda {
   readonly api: ApiDoBalcao;
   readonly estacaoId: string;
   readonly operadorId: string;
+  /**
+   * No treino, a queda do servidor para a venda em vez de cair para a fila: a
+   * fila do Agente entrega ao servidor de verdade, e a venda de treino
+   * entraria no movimento da loja (ADR-0026).
+   */
+  readonly treinamento?: boolean | undefined;
 }
+
+const TREINO_SEM_SERVIDOR =
+  "O treino precisa do servidor da loja, que não respondeu. Verifique a rede e tente de novo.";
 
 export interface Leitura {
   readonly codigo: string;
@@ -137,6 +146,7 @@ export async function biparItem(
     };
   } catch (causa) {
     if (!ehQuedaDeServidor(causa)) throw causa;
+    if (contexto.treinamento === true) throw new VendaIndisponivel(TREINO_SEM_SERVIDOR);
 
     // O servidor sumiu. Se já havia itens registrados nele, eles ficaram lá —
     // e a venda local recomeça do zero, com os itens rebipados. Tentar migrar a

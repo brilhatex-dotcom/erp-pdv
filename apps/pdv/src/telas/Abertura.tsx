@@ -4,6 +4,8 @@ import { type ReactNode, useState } from "react";
 
 import type { ApiDoBalcao } from "../api/servidor.js";
 import { CampoDinheiro } from "../componentes/CampoDinheiro.js";
+import { FaixaDoTreino } from "../componentes/FaixaDoTreino.js";
+import { useModo } from "../modo.js";
 
 /**
  * Abertura do caixa — a primeira coisa do dia.
@@ -35,6 +37,7 @@ export function Abertura(props: {
   readonly aoAbrir: () => void;
 }): ReactNode {
   const { usuario, sair } = useSessao();
+  const { treinamento } = useModo();
 
   // `undefined` até a primeira tecla: ver a nota acima.
   const [fundo, setFundo] = useState<string | undefined>(undefined);
@@ -64,6 +67,7 @@ export function Abertura(props: {
 
   return (
     <main className="flex min-h-screen flex-col gap-4 p-4">
+      {treinamento && <FaixaDoTreino />}
       <header className="flex items-baseline justify-between">
         <h1 className="text-lg font-semibold text-tinta">Abrir o caixa</h1>
         <div className="flex items-center gap-3 text-sm text-tinta-suave">

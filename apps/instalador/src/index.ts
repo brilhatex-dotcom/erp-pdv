@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   argumentosDaConsultaDeBanco,
+  NOME_DO_BANCO,
+  NOME_DO_BANCO_DE_TREINO,
   argumentosDoCreatedb,
   bancoExiste,
 } from "./banco.js";
@@ -18,7 +20,12 @@ import {
   PORTA_SERVIDOR_PADRAO,
   type Segredos,
 } from "./configuracao.js";
-import { acharSchema, ambienteDoPrisma, argumentosDaMigracao } from "./migrar.js";
+import {
+  acharSchema,
+  ambienteDoPrisma,
+  argumentosDaMigracao,
+  bancosParaMigrar,
+} from "./migrar.js";
 import { esperarServidor, portaLivre, resumir } from "./verificacao.js";
 
 /**
@@ -149,19 +156,33 @@ function criarBanco(): void {
   const porta = Number(argumento("porta-postgres", String(PORTA_POSTGRES_PADRAO)));
   const senha = segredosGravados(raiz).senhaBanco;
 
-  const consulta = executarPostgres(
-    raiz,
-    "psql.exe",
-    argumentosDaConsultaDeBanco(porta),
-    senha,
-  );
+  const criar = (banco: string): void => {
+    const consulta = executarPostgres(
+      raiz,
+      "psql.exe",
+      argumentosDaConsultaDeBanco(porta, banco),
+      senha,
+    );
 
-  if (bancoExiste(consulta)) {
-    process.stdout.write("O banco já existe; mantido como está.\n");
-    return;
+    if (bancoExiste(consulta)) {
+      process.stdout.write(`O banco ${banco} já existe; mantido como está.\n`);
+      return;
+    }
+
+    executarPostgres(raiz, "createdb.exe", argumentosDoCreatedb(porta, banco), senha);
+  };
+
+  criar(NOME_DO_BANCO);
+
+  // O treino nunca impede a loja de abrir (ADR-0026): sem o banco dele, o
+  // servidor sobe sem o treino e avisa no log.
+  try {
+    criar(NOME_DO_BANCO_DE_TREINO);
+  } catch {
+    process.stdout.write(
+      "Aviso: o banco do treinamento não pôde ser criado. O caixa funciona normalmente; o treino fica indisponível.\n",
+    );
   }
-
-  executarPostgres(raiz, "createdb.exe", argumentosDoCreatedb(porta), senha);
 }
 
 function migrar(): void {
@@ -180,12 +201,30 @@ function migrar(): void {
 
   const cli = join(aqui, "node_modules", "prisma", "build", "index.js");
   const motor = join(aqui, "engines", "schema-engine-windows.exe");
+  const ambiente = ambienteDoPrisma(process.env, motor, existsSync);
+  const bancos = bancosParaMigrar(readFileSync(caminhoDoEnv(raiz), "utf8"));
 
-  execFileSync(process.execPath, [...argumentosDaMigracao(cli, schema)], {
-    cwd: join(raiz, "servidor"),
-    env: ambienteDoPrisma(process.env, motor, existsSync),
-    stdio: "inherit",
-  });
+  const migrarBanco = (url: string): void => {
+    execFileSync(process.execPath, [...argumentosDaMigracao(cli, schema)], {
+      cwd: join(raiz, "servidor"),
+      env: { ...ambiente, DATABASE_URL: url },
+      stdio: "inherit",
+    });
+  };
+
+  migrarBanco(bancos.loja);
+
+  // As mesmas migrações no banco do treino, depois do da loja e sem poder
+  // derrubá-lo: o treino que não migrou fica indisponível, e só ele.
+  if (bancos.treino !== undefined) {
+    try {
+      migrarBanco(bancos.treino);
+    } catch {
+      process.stdout.write(
+        "Aviso: o banco do treinamento não pôde ser atualizado. O caixa funciona normalmente; o treino fica indisponível.\n",
+      );
+    }
+  }
 }
 
 /**

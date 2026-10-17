@@ -44,7 +44,7 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 
 | Branch | Situação em 17/10/2026 | O que ela mexe |
 |---|---|---|
-| `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria e **cópias de segurança** (ADR-0027). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. **Ainda faltam**: modo treinamento (ADR-0026, reservado) e o manual do operador |
+| `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria, **cópias de segurança** (ADR-0027) e **modo treinamento** num segundo banco (ADR-0026). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. **Ainda faltam**: a validação ponta a ponta dos cenários pedidos e o manual do operador |
 | `claude/projeto-andamento-47iofe` | Aguardando merge | Correções da 1ª execução do `instalador.yml`: NSIS instalado no runner, migração passa a morar no `apps/instalador` com o CLI do Prisma embarcado, e a ordem segredos↔`initdb` corrigida. Ao mesclar, apague-a e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
@@ -94,6 +94,7 @@ movimentação é o pior de resolver.
 | **Balcão da V1** | ✅ Peso, pagamento misto, troco, desconto autorizado, venda guardada, cancelamento e devolução *(mesmo ramo)* | `apps/pdv/src/telas/TelaDeVenda.tsx`, `casos-de-uso/vendas/` |
 | **Auditoria** | ✅ Quem pediu, quem liberou, o quê — na retaguarda *(mesmo ramo)* | `auditoria/`, `rotas/auditoria.ts`, `telas/Auditoria.tsx` |
 | **Cópias de segurança** | ✅ De hora em hora e no fechamento, toda cópia provada por restauração, retenção GFS, restauração pela retaguarda (ADR-0027) *(mesmo ramo)* | `casos-de-uso/backup/`, `database/src/backup/`, `rotas/copias.ts`, `telas/CopiasDeSeguranca.tsx`, `docs/operacao/BACKUP.md` |
+| **Modo treinamento** | ✅ Segundo banco (`erp_pdv_treino`), as mesmas rotas sob `/treino`, loja de demonstração montada sozinha, "Treinar" na entrada do caixa, recomeçar pelo menu. Sem fila, sem gaveta, token e cookie próprios (ADR-0026) *(mesmo ramo)* | `casos-de-uso/treinamento/`, `database/src/treinamento/`, `rotas/treinamento.ts`, `apps/pdv/src/modo.tsx` |
 | Conferência dos caixas na retaguarda | ✅ Lista com divergência por sessão | `consultas/sessoesDeCaixa.ts`, `apps/web/src/telas/Caixas.tsx` |
 | **PWA do PDV** | ✅ Manifesto, ícones e service worker — a tela abre com o servidor da loja fora do ar | `apps/pdv/public/`, `apps/pdv/src/sw/` |
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
@@ -101,7 +102,7 @@ movimentação é o pior de resolver.
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
 | **Instalador Windows** | ⚠️ Workflow verde e `.exe` de 77 MB gerado; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
-**3.553 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026). Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
+**3.616 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026). Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
@@ -361,6 +362,9 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **Tela inteira no jsdom estoura os 5 s do CI** | Verde aqui em 1,2 s, `Test timed out in 5000ms` no runner — duas execuções seguidas | Cada `getByRole` com nome custa de 50 a 130 ms num núcleo, e o runner é ~4 vezes mais lento com as suítes em paralelo. A retaguarda tem `testTimeout: 15_000` (guarda contra travamento, não meta); o teste que se aproximar dele fica mais leve: consulta dentro de `within(seção)`, `getByLabelText` para campo de formulário |
 | **Log do CI soterrado** | A suíte que falhou não aparece no log | O MCP do GitHub devolve só as últimas 5.000 linhas, e o servidor imprimia cada consulta do Prisma no teste. Consulta registrada só com `NODE_ENV=development` |
 | **`inject` dispara o `onReady`** | Relógio de fundo ligando no meio da suíte | Gancho de `onReady` roda em todo teste com `inject`. Relógio de fundo leva `unref()` e para no `onClose` |
+| **Proteção que outra camada esconde** | Teste de isolamento verde mesmo sem a proteção | O teste "o token do treino não abre a loja" passava **com o emissor igual nos dois modos**: a rota consultada procurava o usuário, que não existe no outro banco. Rotas que só exigem token (`/api/caixa/aberto`) ficariam abertas ao PIN público do treino. **Prove cada trava com uma mutação**: tire-a e veja o teste cair |
+| **Contingência atravessando o modo** | Venda de treino entregue ao banco da loja | No treino, a queda do servidor levava a venda para a fila do Agente — que a entrega ao servidor **de verdade**. Todo caminho que grava fora do servidor (fila, `localStorage`, gaveta) pergunta o modo antes (ADR-0026) |
+| **Prefixo novo de API fora das listas** | Resposta de API guardada no cache da PWA; HTML no lugar de JSON | `NUNCA_CACHEIA` (service worker) e `NAO_SAO_TELA` (servidor) só conheciam `/api/`. Prefixo novo de API — como `/treino/` — entra **nas duas** |
 
 ---
 
@@ -387,6 +391,9 @@ Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
   detecta falta nenhuma.
 - Dinheiro em centavos `bigint` (ADR-0009). Quantidade em milésimos. Percentual em
   centésimos de por cento — 5% é `500`.
+- **O treino mora noutro banco** (`erp_pdv_treino`), com as mesmas rotas sob
+  `/treino`, token e cookie próprios, **sem fila e sem gaveta**. O banco confere o
+  próprio nome antes de montar ou esvaziar (ADR-0026).
 
 ---
 

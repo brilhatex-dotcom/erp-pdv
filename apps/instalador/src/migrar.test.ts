@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { acharSchema, ambienteDoPrisma, argumentosDaMigracao } from "./migrar.js";
+import { conteudoDoEnv } from "./configuracao.js";
+import {
+  acharSchema,
+  ambienteDoPrisma,
+  argumentosDaMigracao,
+  bancosParaMigrar,
+} from "./migrar.js";
 
 /**
  * Onde o migrador procura o schema.
@@ -94,5 +100,36 @@ describe("motor de schema do Prisma", () => {
     );
 
     expect(ambiente["DATABASE_URL"]).toBe("postgresql://x");
+  });
+});
+
+describe("os bancos a migrar", () => {
+  const env = conteudoDoEnv({
+    raiz: "C:/ERP",
+    pastaDeCopias: "C:/ERP-dados/copias",
+    portaServidor: 3000,
+    portaPostgres: 55433,
+    segredos: { senhaBanco: "s3nha", segredoToken: "t", segredoAgente: "a" },
+    estacao: "CAIXA-1",
+  });
+
+  it("🔑 migra a loja e o treino, com os endereços que o servidor vai abrir", () => {
+    expect(bancosParaMigrar(env)).toEqual({
+      loja: "postgresql://erp:s3nha@localhost:55433/erp_pdv?schema=public",
+      treino: "postgresql://erp:s3nha@localhost:55433/erp_pdv_treino?schema=public",
+    });
+  });
+
+  it("sem a linha do treino, migra só a loja", () => {
+    const semTreino = env
+      .split("\n")
+      .filter((linha) => !linha.startsWith("DATABASE_URL_TREINAMENTO="))
+      .join("\n");
+
+    expect(bancosParaMigrar(semTreino).treino).toBeUndefined();
+  });
+
+  it("sem o banco da loja, recusa e diz o passo que faltou", () => {
+    expect(() => bancosParaMigrar("NODE_ENV=production\n")).toThrow(/preparar/);
   });
 });

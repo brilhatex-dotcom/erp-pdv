@@ -6,9 +6,35 @@ import type { Container } from "../composicao/container.js";
 import { emitirTokenAcesso, exigirAutenticacao } from "../http/autenticacao.js";
 import { responderErro } from "../http/erros.js";
 
-/** Nome do cookie do refresh. `__Host-` exige HTTPS, caminho `/` e sem domínio. */
-const COOKIE_REFRESH = "erp_refresh";
-const COOKIE_SESSAO = "erp_sessao";
+/**
+ * Os cookies da sessão de cada modo.
+ *
+ * O treinamento tem os seus, com outro nome e restritos ao caminho `/treino`
+ * (ADR-0026): o navegador manda os cookies da loja também para as rotas do
+ * treino, e um nome só faria a sessão de um modo derrubar a do outro na mesma
+ * estação.
+ */
+interface CookiesDoModo {
+  readonly sessao: string;
+  readonly refresh: string;
+  readonly caminho: string;
+}
+
+const COOKIES_DA_LOJA: CookiesDoModo = {
+  sessao: "erp_sessao",
+  refresh: "erp_refresh",
+  caminho: "/",
+};
+
+const COOKIES_DO_TREINO: CookiesDoModo = {
+  sessao: "erp_sessao_treino",
+  refresh: "erp_refresh_treino",
+  caminho: "/treino",
+};
+
+function cookiesDe(container: Container): CookiesDoModo {
+  return container.modo === "TREINAMENTO" ? COOKIES_DO_TREINO : COOKIES_DA_LOJA;
+}
 
 const entradaLogin = z.object({
   matricula: z.string().min(1).max(6),
@@ -96,9 +122,11 @@ export function rotasDeAcesso(servidor: FastifyInstance, container: Container): 
     },
   );
 
+  const cookies = cookiesDe(container);
+
   servidor.post("/api/acesso/renovar", async (requisicao, resposta) => {
-    const sessaoId = Identificador.criar(requisicao.cookies[COOKIE_SESSAO] ?? "");
-    const refresh = requisicao.cookies[COOKIE_REFRESH];
+    const sessaoId = Identificador.criar(requisicao.cookies[cookies.sessao] ?? "");
+    const refresh = requisicao.cookies[cookies.refresh];
 
     if (sessaoId.isErr() || refresh === undefined) {
       await resposta.status(401).send({
@@ -197,31 +225,33 @@ function definirCookies(
   refresh: string,
   expiraEm: Date,
 ): void {
+  const cookies = cookiesDe(container);
   const opcoes = {
     httpOnly: true,
     // `Secure` só em produção: em desenvolvimento o servidor roda em HTTP e o
     // navegador descartaria o cookie silenciosamente.
     secure: container.ambiente.ehProducao,
     sameSite: "strict" as const,
-    path: "/",
+    path: cookies.caminho,
     expires: expiraEm,
   };
 
-  void resposta.setCookie(COOKIE_SESSAO, sessaoId, opcoes);
-  void resposta.setCookie(COOKIE_REFRESH, refresh, opcoes);
+  void resposta.setCookie(cookies.sessao, sessaoId, opcoes);
+  void resposta.setCookie(cookies.refresh, refresh, opcoes);
 }
 
 function limparCookies(
   resposta: Parameters<typeof responderErro>[0],
   container: Container,
 ): void {
+  const cookies = cookiesDe(container);
   const opcoes = {
     httpOnly: true,
     secure: container.ambiente.ehProducao,
     sameSite: "strict" as const,
-    path: "/",
+    path: cookies.caminho,
   };
 
-  void resposta.clearCookie(COOKIE_SESSAO, opcoes);
-  void resposta.clearCookie(COOKIE_REFRESH, opcoes);
+  void resposta.clearCookie(cookies.sessao, opcoes);
+  void resposta.clearCookie(cookies.refresh, opcoes);
 }

@@ -23,6 +23,10 @@ precisar dela.
 
 O caixa **continua vendendo** enquanto a cópia é feita.
 
+O banco do **treinamento** não é copiado: o que se faz nele é de mentira por
+definição, e a cópia dele ocuparia o disco que a cópia da loja precisa
+(ADR-0026).
+
 ### Quantas cópias ficam
 
 As 24 mais recentes, uma por dia dos últimos 7 dias, uma por semana das últimas

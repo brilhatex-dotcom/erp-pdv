@@ -82,3 +82,28 @@ export function ambienteDoPrisma(
 export function argumentosDaMigracao(cli: string, schema: string): readonly string[] {
   return [cli, "migrate", "deploy", "--schema", schema];
 }
+
+/** Os bancos que a instalação migra: o da loja sempre, o do treino quando houver. */
+export interface BancosParaMigrar {
+  readonly loja: string;
+  readonly treino: string | undefined;
+}
+
+/**
+ * Lê do `.env` gravado os endereços dos bancos a migrar.
+ *
+ * Do arquivo, e não montados de novo: é o mesmo endereço com que o servidor
+ * vai subir, e migrar um banco diferente do que o servidor abre é o defeito
+ * que só aparece com a loja aberta.
+ */
+export function bancosParaMigrar(conteudoDoEnv: string): BancosParaMigrar {
+  const loja = /^DATABASE_URL=(.+)$/m.exec(conteudoDoEnv)?.[1];
+
+  if (loja === undefined) {
+    throw new Error(
+      "A configuração do servidor está incompleta. Rode o passo `preparar` antes.",
+    );
+  }
+
+  return { loja, treino: /^DATABASE_URL_TREINAMENTO=(.+)$/m.exec(conteudoDoEnv)?.[1] };
+}

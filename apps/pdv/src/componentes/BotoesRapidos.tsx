@@ -2,6 +2,7 @@ import { formatarDinheiro } from "@erp/ui";
 import type { ReactNode } from "react";
 
 import { enderecoDaImagem } from "../api/servidor.js";
+import { PREFIXO_DO_TREINO, useModo } from "../modo.js";
 import type { CategoriaDoBalcao, ProdutoDoBalcao } from "../api/tipos.js";
 
 /**
@@ -20,6 +21,9 @@ export function BotoesRapidos(props: {
   readonly aoEscolherCategoria: (categoriaId: string | undefined) => void;
   readonly aoEscolherProduto: (produto: ProdutoDoBalcao) => void;
 }): ReactNode {
+  // A foto vem do banco do modo: a do treino mora no banco do treino.
+  const prefixo = useModo().treinamento ? PREFIXO_DO_TREINO : "";
+
   return (
     <section aria-label="Produtos rápidos" className="flex flex-col gap-3">
       {props.categorias.length > 0 && (
@@ -76,7 +80,7 @@ export function BotoesRapidos(props: {
                   </span>
                 ) : (
                   <img
-                    src={enderecoDaImagem(produto.imagemId)}
+                    src={enderecoDaImagem(produto.imagemId, prefixo)}
                     alt=""
                     className="h-12 w-12 rounded object-cover"
                   />

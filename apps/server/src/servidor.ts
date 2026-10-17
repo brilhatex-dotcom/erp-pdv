@@ -24,8 +24,12 @@ import { rotasDePosVenda } from "./rotas/posVenda.js";
 import { rotasDeProdutos } from "./rotas/produtos.js";
 import { rotasDeSaude } from "./rotas/saude.js";
 import { rotasDeSincronizacao } from "./rotas/sincronizacao.js";
+import { rotasDeTreinamento } from "./rotas/treinamento.js";
 import { rotasDeUsuarios } from "./rotas/usuarios.js";
 import { rotasDeVendas } from "./rotas/vendas.js";
+
+/** Onde o modo treinamento atende: as mesmas rotas, noutro banco (ADR-0026). */
+export const PREFIXO_DO_TREINO = "/treino";
 
 /**
  * Monta o servidor HTTP.
@@ -36,8 +40,15 @@ import { rotasDeVendas } from "./rotas/vendas.js";
  *
  * Devolve a instância **sem escutar**, para que o teste use `inject` e não
  * precise de porta livre — o que também deixa a suíte paralelizável.
+ *
+ * O container do treinamento, quando existe, atende as mesmas rotas da loja
+ * sob `/treino` — e só elas: cópia de segurança, saúde e a fila do Agente são
+ * do banco de verdade.
  */
-export async function montarServidor(container: Container): Promise<FastifyInstance> {
+export async function montarServidor(
+  container: Container,
+  treinamento?: Container,
+): Promise<FastifyInstance> {
   const servidor = Fastify({
     logger: {
       level: container.ambiente.ehProducao ? "info" : "warn",
@@ -84,24 +95,31 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   });
 
   rotasDeSaude(servidor, container);
-  rotasDeAcesso(servidor, container);
-  rotasDeProdutos(servidor, container);
-  rotasDeCaixa(servidor, container);
-  rotasDeVendas(servidor, container);
-  rotasDePosVenda(servidor, container);
-  rotasDoPdv(servidor, container);
-  rotasDeConfiguracao(servidor, container);
-  rotasDeImagens(servidor, container);
-  rotasDeAuditoria(servidor, container);
   rotasDeCopias(servidor, container);
-  rotasDeCadastros(servidor, container);
   rotasDeSincronizacao(servidor, container);
-  rotasDeUsuarios(servidor, container);
-  rotasDeCatalogo(servidor, container);
-  rotasDeEstoque(servidor, container);
-  rotasDeCompras(servidor, container);
-  rotasDeEmpresa(servidor, container);
-  rotasDeFinanceiro(servidor, container);
+  rotasDaLoja(servidor, container);
+
+  if (treinamento !== undefined) {
+    await servidor.register(
+      (treino) => {
+        rotasDaLoja(treino, treinamento);
+        rotasDeTreinamento(treino, treinamento);
+
+        return Promise.resolve();
+      },
+      { prefix: PREFIXO_DO_TREINO },
+    );
+  } else if (container.ambiente.treinamento.url === undefined) {
+    const { aviso } = container.ambiente.treinamento;
+
+    // Na partida, e não aqui: é quando o técnico está olhando o log.
+    if (aviso !== undefined) {
+      servidor.addHook("onReady", () => {
+        servidor.log.warn({ motivo: aviso }, "treinamento desligado");
+        return Promise.resolve();
+      });
+    }
+  }
 
   // Depois das rotas, sempre: o `notFound` das telas responde o que sobrar, e
   // registrá-lo antes engoliria as rotas de API declaradas depois dele.
@@ -113,4 +131,29 @@ export async function montarServidor(container: Container): Promise<FastifyInsta
   }
 
   return servidor;
+}
+
+/**
+ * As rotas que a loja e o treino atendem do mesmo jeito.
+ *
+ * Uma lista só, chamada duas vezes: o treino ensina o caixa de verdade, e uma
+ * rota esquecida aqui seria uma tela que funciona na loja e quebra no treino.
+ */
+function rotasDaLoja(servidor: FastifyInstance, container: Container): void {
+  rotasDeAcesso(servidor, container);
+  rotasDeProdutos(servidor, container);
+  rotasDeCaixa(servidor, container);
+  rotasDeVendas(servidor, container);
+  rotasDePosVenda(servidor, container);
+  rotasDoPdv(servidor, container);
+  rotasDeConfiguracao(servidor, container);
+  rotasDeImagens(servidor, container);
+  rotasDeAuditoria(servidor, container);
+  rotasDeCadastros(servidor, container);
+  rotasDeUsuarios(servidor, container);
+  rotasDeCatalogo(servidor, container);
+  rotasDeEstoque(servidor, container);
+  rotasDeCompras(servidor, container);
+  rotasDeEmpresa(servidor, container);
+  rotasDeFinanceiro(servidor, container);
 }

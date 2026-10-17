@@ -5,7 +5,7 @@ import { ApiDoBalcao, enderecoDaImagem } from "./servidor.js";
 
 /**
  * Cada operação do balcão vai ao caminho certo, com o método e o corpo certos —
- * e o prefixo do modo treinamento vale para todas.
+ * e o cliente do modo treinamento leva todas para `/treino`.
  */
 
 interface Pedido {
@@ -14,7 +14,7 @@ interface Pedido {
   readonly corpo: unknown;
 }
 
-function montar(prefixo?: string): {
+function montar(base = ""): {
   readonly api: ApiDoBalcao;
   readonly pedidos: Pedido[];
 } {
@@ -40,9 +40,9 @@ function montar(prefixo?: string): {
     );
   });
 
-  const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+  const cliente = new ClienteApi(new Sessao(), base, buscar as unknown as typeof fetch);
 
-  return { api: new ApiDoBalcao(cliente, prefixo), pedidos };
+  return { api: new ApiDoBalcao(cliente), pedidos };
 }
 
 describe("ApiDoBalcao", () => {
@@ -135,15 +135,17 @@ describe("ApiDoBalcao", () => {
     expect(pedidos[22]?.corpo).toEqual({ crediario: { parcelas: 2 } });
   });
 
-  it("🔑 o prefixo do treinamento vale para todas as chamadas, e para as imagens", async () => {
+  it("🔑 o cliente do treinamento leva todas as chamadas para /treino, e as imagens também", async () => {
     const { api, pedidos } = montar("/treino");
 
     await api.contexto();
     await api.iniciarVenda("e1");
+    await api.recomecarTreino();
 
-    expect(pedidos.map((pedido) => pedido.url)).toEqual([
-      "/treino/api/pdv/contexto",
-      "/treino/api/vendas",
+    expect(pedidos.map((pedido) => [pedido.metodo, pedido.url])).toEqual([
+      ["GET", "/treino/api/pdv/contexto"],
+      ["POST", "/treino/api/vendas"],
+      ["POST", "/treino/api/treinamento/recomecar"],
     ]);
     expect(enderecoDaImagem("img-1")).toBe("/api/imagens/img-1");
     expect(enderecoDaImagem("img-1", "/treino")).toBe("/treino/api/imagens/img-1");

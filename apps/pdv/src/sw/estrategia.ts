@@ -28,7 +28,9 @@ export type Estrategia =
  * O navegador pode descartar o cache dele a qualquer momento, sem avisar. Isso
  * é aceitável para a tela; não é aceitável para uma venda.
  */
-const NUNCA_CACHEIA = ["/api/", "/saude"];
+// O treino entra por inteiro: a API dele mora sob `/treino` (ADR-0026), e uma
+// resposta de treino guardada seria servida à loja sem servidor.
+const NUNCA_CACHEIA = ["/api/", "/saude", "/treino/"];
 
 export function estrategiaPara(pedido: {
   readonly metodo: string;

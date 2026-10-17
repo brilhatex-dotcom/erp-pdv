@@ -236,27 +236,19 @@ describe("venda com o servidor fora do ar", () => {
     });
   });
 
-  it("no modo treinamento, o papel sem conexão também sai marcado como treinamento", async () => {
+  it("🔑 no treino, servidor fora não manda a venda para a fila — e diz por quê", async () => {
+    // A fila do Agente entrega ao servidor de verdade: uma venda de treino
+    // ali entraria no movimento da loja (ADR-0026).
     const agente = agenteComFila();
-    const { usuario } = await servidorCaiDepoisDeCarregar({
-      modo: "TREINAMENTO",
-      configuracao: { impressaoComprovante: "SEMPRE" },
-    });
+    const { usuario } = await servidorCaiDepoisDeCarregar({ modo: "TREINAMENTO" });
 
     await bipar(usuario, "789");
-    await totalDaVenda("R$ 9,90");
-    await usuario.type(await campoDeCodigo(), "{Enter}");
-    await usuario.keyboard("1{Enter}");
 
-    await waitFor(() => {
-      expect(agente.imprimirCupom).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cupom: expect.objectContaining({
-            avisos: ["TREINAMENTO - SEM VALOR", "VENDA SEM CONEXAO"],
-          }) as unknown,
-        }),
-      );
-    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "O treino precisa do servidor da loja",
+    );
+    expect(agente.iniciarVenda).not.toHaveBeenCalled();
+    expect(agente.adicionarItem).not.toHaveBeenCalled();
   });
 
   it("falha da fila ao receber ou concluir vira mensagem, e a venda fica na tela", async () => {

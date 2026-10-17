@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 
+import { NOME_DO_BANCO, NOME_DO_BANCO_DE_TREINO } from "./banco.js";
+
 /**
  * O arquivo de configuração que a instalação gera.
  *
@@ -105,8 +107,9 @@ export interface DadosDaInstalacao {
 export function urlDoBanco(dados: {
   readonly portaPostgres: number;
   readonly senhaBanco: string;
+  readonly banco?: string;
 }): string {
-  return `postgresql://erp:${dados.senhaBanco}@localhost:${String(dados.portaPostgres)}/erp_pdv?schema=public`;
+  return `postgresql://erp:${dados.senhaBanco}@localhost:${String(dados.portaPostgres)}/${dados.banco ?? NOME_DO_BANCO}?schema=public`;
 }
 
 /**
@@ -132,6 +135,9 @@ export function conteudoDoEnv(dados: DadosDaInstalacao): string {
     // servidor pela rede da loja. O firewall do Windows é quem restringe.
     "ENDERECO=0.0.0.0",
     `DATABASE_URL=${urlDoBanco({ portaPostgres: dados.portaPostgres, senhaBanco: dados.segredos.senhaBanco })}`,
+    // O banco do treino (ADR-0026): o caixa treina nele, e nada do que
+    // acontece lá chega ao banco da loja. Apagar esta linha só desliga o treino.
+    `DATABASE_URL_TREINAMENTO=${urlDoBanco({ portaPostgres: dados.portaPostgres, senhaBanco: dados.segredos.senhaBanco, banco: NOME_DO_BANCO_DE_TREINO })}`,
     `SEGREDO_TOKEN=${dados.segredos.segredoToken}`,
     // O servidor não lê este segredo — quem lê é o instalador da estação, ao
     // parear o Agente Local. Fica gravado porque **regenerá-lo desemparelharia

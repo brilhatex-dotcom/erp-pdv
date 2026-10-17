@@ -184,6 +184,8 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | **PDV** | **PWA** servida pelo servidor da loja + **Agente Local** instalado, dono da impressão, da fila offline e do catálogo. Casca Electron **de quiosque** é opcional e não pode ter lógica | **ADR-0023** (supersede 0005) |
 | **Empresas** | **Uma empresa por instalação.** Nenhuma tabela leva `empresa_id`; duas lojas são duas instalações | **ADR-0024** |
 | **Financeiro** | **A conta a receber nasce na mesma transação da venda**, não pela outbox. O fiscal é assíncrono por depender de rede externa; o financeiro é local e obrigatório | **ADR-0025** |
+| **Modo treinamento** | **Segundo banco (`erp_pdv_treino`), mesmas rotas sob `/treino`.** Token, cookie e sessão próprios; sem fila offline, sem gaveta; pagamento simulado só lá. O banco confere o próprio nome (`_treino`) antes de montar ou esvaziar | **ADR-0026** |
+| **Cópias de segurança (V1)** | `pg_dump` de hora em hora e no fechamento, **toda cópia provada por restauração**, retenção GFS, restauração pela retaguarda. Sem PITR e sem cópia externa automática nesta versão | **ADR-0027** |
 | Certificado digital | **É do cliente.** Custódia no provedor quando possível; o ERP guarda só hash, titular e validade | ADR-0015 · §6 |
 | Numeração fiscal | Controlada pelo **ERP**, não pelo provedor. Uma série por estação de PDV | §8 do doc fiscal |
 | Estoque | Eventos comutativos, sem coluna de saldo mutável | ADR-0007 · §11.4 |
@@ -256,6 +258,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 - Acrescentar `empresa_id` a qualquer tabela sem novo ADR (ADR-0024).
 - Guardar a fila de vendas offline no navegador: a garantia de `fsync` é do Agente Local (ADR-0023).
 - Gravar uma venda a prazo sem o título correspondente na mesma transação (ADR-0025).
+- Deixar uma venda de treino chegar à fila do Agente ou ao banco da loja (ADR-0026).
 - Marcar tarefa como concluída com teste falhando ou implementação parcial.
 
 ---

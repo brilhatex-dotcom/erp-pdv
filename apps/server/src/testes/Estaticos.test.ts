@@ -205,5 +205,8 @@ describe("classificação de caminho", () => {
 
     expect(ehCaminhoDeTela("/api/produtos")).toBe(false);
     expect(ehCaminhoDeTela("/saude")).toBe(false);
+    // A API do treino (ADR-0026): rota errada ali é JSON de "não encontrado",
+    // não a tela do caixa.
+    expect(ehCaminhoDeTela("/treino/api/vendas")).toBe(false);
   });
 });

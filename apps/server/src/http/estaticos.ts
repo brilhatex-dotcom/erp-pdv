@@ -45,7 +45,7 @@ export interface PastasDasTelas {
  * `index.html` para uma rota de API errada — e o cliente receberia HTML onde
  * esperava JSON, com erro de sintaxe em vez de "não encontrado".
  */
-const NAO_SAO_TELA = ["/api/", "/saude"];
+const NAO_SAO_TELA = ["/api/", "/saude", "/treino/"];
 
 export function ehCaminhoDeTela(caminho: string): boolean {
   return !NAO_SAO_TELA.some((prefixo) => caminho.startsWith(prefixo));

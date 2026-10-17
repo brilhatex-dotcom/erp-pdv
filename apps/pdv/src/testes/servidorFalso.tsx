@@ -10,6 +10,7 @@ import type {
   Conferencia,
   ItemNoFio,
   PagamentoNoFio,
+  TreinoNoFio,
   VendaNoFio,
 } from "../api/tipos.js";
 import { App } from "../App.js";
@@ -142,6 +143,25 @@ export const SUPERVISORA = {
 
 /** A credencial que o servidor falso aceita para liberar. */
 export const CREDENCIAL = { matricula: "7", pin: "860412" } as const;
+
+/** O que o servidor do treino responde em `/api/treinamento`. */
+export const TREINO: TreinoNoFio = {
+  pessoas: [
+    {
+      matricula: "901",
+      nome: "Operador de treino",
+      pin: "121212",
+      oQueFaz: "Abre o caixa, vende e fecha o caixa.",
+    },
+    {
+      matricula: "902",
+      nome: "Supervisor de treino",
+      pin: "232323",
+      oQueFaz: "Libera desconto maior e cancela venda.",
+    },
+  ],
+  exemplos: [{ descricao: "Refrigerante cola 2 L", codigo: "7890000000017" }],
+};
 
 export const CONFIGURACAO: ConfiguracaoNoFio = {
   segmento: "MISTO",
@@ -389,11 +409,25 @@ export class ServidorFalso {
         "POST",
         "/api/acesso/login",
         (corpo) =>
-          corpo["segredo"] === "419273"
+          corpo["segredo"] === "419273" ||
+          (this.modo === "TREINAMENTO" && corpo["segredo"] === "121212")
             ? json(200, { token: "abc", usuario: this.operador })
             : recusa(401, "CREDENCIAL_INVALIDA", "Matrícula ou PIN incorreto."),
       ],
       ["POST", "/api/acesso/sair", () => json(204)],
+
+      ["GET", "/api/treinamento", () => json(200, TREINO)],
+      [
+        "POST",
+        "/api/treinamento/recomecar",
+        () => {
+          // O banco do treino volta ao começo: ninguém dentro, nada vendido.
+          this.vendas.clear();
+          this.caixaAberto = false;
+          this.autenticado = false;
+          return json(204);
+        },
+      ],
 
       ["GET", "/api/pdv/contexto", () => json(200, this.#contexto())],
       [
@@ -771,6 +805,8 @@ export class ServidorFalso {
       loja: { nome: "Padaria Pão Quente", endereco: "Rua das Flores, 10 - Centro" },
       configuracao: this.configuracao,
       integracoes: [],
+      treinamento:
+        this.modo === "TREINAMENTO" ? { exemplos: TREINO.exemplos } : undefined,
     };
   }
 

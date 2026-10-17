@@ -18,7 +18,11 @@ async function principal(): Promise<void> {
 
   const ambiente = carregarAmbiente();
   const container = montarContainer(ambiente);
-  const servidor = await montarServidor(container);
+  const treinamento =
+    ambiente.treinamento.url === undefined
+      ? undefined
+      : montarContainer(ambiente, "TREINAMENTO", ambiente.treinamento.url);
+  const servidor = await montarServidor(container, treinamento);
 
   /**
    * Encerramento ordenado.
@@ -32,6 +36,7 @@ async function principal(): Promise<void> {
       servidor.log.info({ sinal }, "encerrando");
       await servidor.close();
       await container.encerrar();
+      await treinamento?.encerrar();
       process.exit(0);
     })();
   };

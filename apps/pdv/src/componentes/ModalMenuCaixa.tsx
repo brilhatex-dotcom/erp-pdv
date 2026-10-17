@@ -20,7 +20,9 @@ export type OpcaoDoMenu =
   | "DEVOLUCAO"
   | "CANCELAR_CONCLUIDA"
   | "FECHAR_CAIXA"
-  | "TROCAR_OPERADOR";
+  | "TROCAR_OPERADOR"
+  | "RECOMECAR_TREINO"
+  | "SAIR_DO_TREINO";
 
 interface Opcao {
   readonly codigo: OpcaoDoMenu;
@@ -83,11 +85,31 @@ const OPCOES: readonly Opcao[] = [
   },
 ];
 
+/** Só no treino (ADR-0026): sem tecla F, como o resto do menu. */
+const OPCOES_DO_TREINO: readonly Opcao[] = [
+  {
+    codigo: "RECOMECAR_TREINO",
+    tecla: "8",
+    rotulo: "Recomeçar o treino",
+    explicacao: "Apaga as vendas e o caixa do treino e começa de novo",
+    foraDaVenda: true,
+  },
+  {
+    codigo: "SAIR_DO_TREINO",
+    tecla: "9",
+    rotulo: "Sair do treino",
+    explicacao: "Volta para a entrada do caixa de verdade",
+    foraDaVenda: true,
+  },
+];
+
 export function ModalMenuCaixa(props: {
   readonly vendaEmCurso: boolean;
+  readonly treinamento?: boolean | undefined;
   readonly aoEscolher: (opcao: OpcaoDoMenu) => void;
   readonly aoFechar: () => void;
 }): ReactNode {
+  const opcoes = props.treinamento === true ? [...OPCOES, ...OPCOES_DO_TREINO] : OPCOES;
   const disponivel = (opcao: Opcao): boolean =>
     !(opcao.foraDaVenda && props.vendaEmCurso);
 
@@ -97,14 +119,14 @@ export function ModalMenuCaixa(props: {
         aria-label="Opções do caixa"
         className="flex flex-col gap-2"
         onKeyDown={(evento) => {
-          const opcao = OPCOES.find((atual) => atual.tecla === evento.key);
+          const opcao = opcoes.find((atual) => atual.tecla === evento.key);
           if (opcao === undefined || !disponivel(opcao)) return;
 
           evento.preventDefault();
           props.aoEscolher(opcao.codigo);
         }}
       >
-        {OPCOES.map((opcao) => (
+        {opcoes.map((opcao) => (
           <li key={opcao.codigo}>
             <button
               type="button"
@@ -126,8 +148,9 @@ export function ModalMenuCaixa(props: {
 
       {props.vendaEmCurso && (
         <p className="text-sm text-tinta-suave">
-          Para fechar o caixa ou trocar de operador, conclua ou guarde (F7) a venda da
-          tela.
+          Para fechar o caixa, trocar de operador
+          {props.treinamento === true ? " ou mexer no treino" : ""}, conclua ou guarde
+          (F7) a venda da tela.
         </p>
       )}
 

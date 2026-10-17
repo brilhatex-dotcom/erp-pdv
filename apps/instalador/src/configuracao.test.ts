@@ -98,6 +98,16 @@ describe("arquivo de configuração do servidor", () => {
     expect(env).toContain("SEGREDO_TOKEN=token-de-teste");
   });
 
+  it("🔑 liga o treino num banco próprio, com a mesma senha", () => {
+    const env = conteudoDoEnv(dados());
+
+    expect(env).toContain(
+      "DATABASE_URL_TREINAMENTO=postgresql://erp:senha-de-teste@localhost:55433/erp_pdv_treino?schema=public",
+    );
+    // A linha do treino não confunde a leitura da senha do banco da loja.
+    expect(lerSegredosDoEnv(env)?.senhaBanco).toBe("senha-de-teste");
+  });
+
   it("🔑 escuta na rede, não só em si mesmo", () => {
     // As estações do balcão precisam alcançar o servidor. Com `127.0.0.1`, o
     // sistema funcionaria só na máquina onde foi instalado — e o defeito

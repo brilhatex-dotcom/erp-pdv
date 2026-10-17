@@ -305,3 +305,21 @@ export {
   CadastrarFornecedor,
   type EntradaCadastrarFornecedor,
 } from "./casos-de-uso/cadastros/CadastrarFornecedor.js";
+
+// ── Treinamento (ADR-0026) ──────────────────────────────────────────────
+export {
+  type BancoDeTreinamento,
+  LojaDeTreinamento,
+} from "./casos-de-uso/treinamento/LojaDeTreinamento.js";
+export {
+  CATEGORIAS_DE_TREINO,
+  type CategoriaDeTreino,
+  CLIENTES_DE_TREINO,
+  type ClienteDeTreino,
+  type ExemploDeCodigo,
+  exemplosDeCodigo,
+  PESSOAS_DE_TREINO,
+  type PessoaDeTreino,
+  PRODUTOS_DE_TREINO,
+  type ProdutoDeTreino,
+} from "./casos-de-uso/treinamento/lojaDeTreino.js";

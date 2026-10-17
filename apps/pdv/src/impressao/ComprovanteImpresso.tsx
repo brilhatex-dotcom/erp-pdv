@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import { enderecoDaImagem } from "../api/servidor.js";
+import { PREFIXO_DO_TREINO } from "../modo.js";
 import type { Comprovante } from "../api/tipos.js";
 import { descreverPagamento } from "../formas.js";
 import { avisosDoComprovante } from "./comprovante.js";
@@ -24,6 +25,8 @@ export function ComprovanteImpresso(props: {
 }): ReactNode {
   const { comprovante, segundaVia, aoTerminar } = props;
   const { venda, loja } = comprovante;
+  // O comprovante sabe de onde veio: o logotipo do treino mora no banco do treino.
+  const prefixo = comprovante.treinamento ? PREFIXO_DO_TREINO : "";
 
   useEffect(() => {
     // Depois de pintar: imprimir antes faria o navegador mandar a página vazia.
@@ -48,7 +51,7 @@ export function ComprovanteImpresso(props: {
       <header className="text-center">
         {comprovante.logoId !== undefined && (
           <img
-            src={enderecoDaImagem(comprovante.logoId)}
+            src={enderecoDaImagem(comprovante.logoId, prefixo)}
             alt=""
             className="mx-auto mb-1 max-h-16"
           />

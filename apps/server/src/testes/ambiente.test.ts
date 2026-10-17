@@ -4,7 +4,11 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { carregarAmbiente, carregarArquivoDeAmbiente } from "../ambiente.js";
+import {
+  carregarAmbiente,
+  carregarArquivoDeAmbiente,
+  conferirBancoDoTreinamento,
+} from "../ambiente.js";
 
 const MINIMO = {
   DATABASE_URL: "postgresql://erp@localhost:5432/erp",
@@ -134,5 +138,50 @@ describe("carregamento do arquivo de configuração", () => {
 
     expect(achou).toBe(false);
     expect(carregados).toEqual([]);
+  });
+});
+
+describe("O banco do treinamento (ADR-0026)", () => {
+  const LOJA = "postgresql://erp:senha@localhost:5432/erp_pdv";
+
+  it("sem endereço, o treino fica desligado e não há o que avisar", () => {
+    expect(carregarAmbiente(MINIMO).treinamento).toEqual({ url: undefined });
+  });
+
+  it("aceita o banco de treino do instalador", () => {
+    const treino = "postgresql://erp:senha@localhost:5432/erp_pdv_treino?schema=public";
+
+    expect(conferirBancoDoTreinamento(treino, LOJA)).toEqual({ url: treino });
+    expect(
+      carregarAmbiente({ ...MINIMO, DATABASE_URL_TREINAMENTO: treino }).treinamento,
+    ).toEqual({ url: treino });
+  });
+
+  it("🔑 o treino apontado para o banco da loja fica desligado, com o motivo", () => {
+    const resultado = conferirBancoDoTreinamento(LOJA, LOJA);
+
+    expect(resultado.url).toBeUndefined();
+    expect(resultado).toEqual({
+      url: undefined,
+      aviso: expect.stringContaining('"erp_pdv" não serve') as string,
+    });
+  });
+
+  it("🔑 o mesmo endereço da loja não serve, nem com o nome certo", () => {
+    const igual = "postgresql://erp:senha@localhost:5432/loja_treino";
+
+    expect(conferirBancoDoTreinamento(igual, igual).url).toBeUndefined();
+  });
+
+  it("endereço que não é endereço desliga o treino — sem impedir a loja de subir", () => {
+    const ambiente = carregarAmbiente({
+      ...MINIMO,
+      DATABASE_URL_TREINAMENTO: "erp_pdv_treino",
+    });
+
+    expect(ambiente.treinamento).toEqual({
+      url: undefined,
+      aviso: "DATABASE_URL_TREINAMENTO não é um endereço de banco válido",
+    });
   });
 });

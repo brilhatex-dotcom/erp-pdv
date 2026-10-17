@@ -1,8 +1,8 @@
-import { ProvedorSessao } from "@erp/cliente-api";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App.js";
+import { ProvedorModo } from "./modo.js";
 import { registrarServiceWorker } from "./sw/registrar.js";
 import "./estilo.css";
 
@@ -14,9 +14,9 @@ if (raiz === null) {
 
 createRoot(raiz).render(
   <StrictMode>
-    <ProvedorSessao contexto="PDV">
+    <ProvedorModo>
       <App />
-    </ProvedorSessao>
+    </ProvedorModo>
   </StrictMode>,
 );
 

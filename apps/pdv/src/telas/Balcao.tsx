@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { ApiDoBalcao } from "../api/servidor.js";
 import type { ConfiguracaoNoFio, ContextoDoPdv, VendaNoFio } from "../api/tipos.js";
 import { identificadorDaEstacao } from "../estacao.js";
+import { useModo } from "../modo.js";
 import { ehQuedaDeServidor } from "../vendaComQueda.js";
 import { Abertura } from "./Abertura.js";
 import { Fechamento } from "./Fechamento.js";
@@ -25,6 +26,10 @@ import { TelaDeVenda } from "./TelaDeVenda.js";
  * Agente Local (ADR-0023), com a última configuração conhecida. Mostrar a
  * abertura de caixa nessa hora deixaria a loja parada justamente no cenário em
  * que a contingência existe para funcionar.
+ *
+ * No treino, não (ADR-0026): sem servidor, o treino para e diz por quê. A fila
+ * entregaria a venda de treino ao servidor de verdade, e a configuração do
+ * treino, guardada na estação, seria a que o caixa usaria sem servidor.
  */
 
 type Estado =
@@ -42,6 +47,7 @@ const CHAVE_CONFIGURACAO = "erp.pdv.configuracao";
 
 export function Balcao(): ReactNode {
   const { cliente, usuario, sair } = useSessao();
+  const { treinamento, sairDoTreino } = useModo();
   const api = useMemo(() => new ApiDoBalcao(cliente), [cliente]);
   const estacaoId = useMemo(() => identificadorDaEstacao(), []);
   const [estado, setEstado] = useState<Estado>({ tipo: "CARREGANDO" });
@@ -56,14 +62,14 @@ export function Balcao(): ReactNode {
     let vivo = true;
     setEstado({ tipo: "CARREGANDO" });
 
-    void carregar(api, estacaoId, operador.current).then((carregado) => {
+    void carregar(api, estacaoId, operador.current, treinamento).then((carregado) => {
       if (vivo) setEstado(carregado);
     });
 
     return (): void => {
       vivo = false;
     };
-  }, [api, estacaoId, carga]);
+  }, [api, estacaoId, carga, treinamento]);
 
   const recarregar = useCallback((): void => {
     setCarga((atual) => atual + 1);
@@ -117,6 +123,7 @@ export function Balcao(): ReactNode {
             setEstado({ tipo: "FECHANDO", contexto: estado.contexto });
           }}
           aoSair={() => void sair()}
+          aoSairDoTreino={() => void sair().then(sairDoTreino)}
         />
       );
   }
@@ -126,13 +133,14 @@ async function carregar(
   api: ApiDoBalcao,
   estacaoId: string,
   usuario: UsuarioLogado | undefined,
+  treinamento: boolean,
 ): Promise<Estado> {
   try {
     const [contexto, caixa] = await Promise.all([
       api.contexto(),
       api.caixaAberto(estacaoId),
     ]);
-    guardarConfiguracao(contexto.configuracao);
+    if (!treinamento) guardarConfiguracao(contexto.configuracao);
 
     if (caixa === undefined) return { tipo: "FECHADO" };
 
@@ -143,7 +151,7 @@ async function carregar(
 
     return { tipo: "VENDENDO", contexto, recuperada };
   } catch (causa) {
-    if (ehQuedaDeServidor(causa) && usuario !== undefined) {
+    if (ehQuedaDeServidor(causa) && usuario !== undefined && !treinamento) {
       return {
         tipo: "VENDENDO",
         contexto: contextoSemServidor(usuario),
