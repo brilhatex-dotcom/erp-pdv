@@ -104,7 +104,7 @@ movimentação é o pior de resolver.
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
 | **Instalador Windows** | ⚠️ Workflow verde e `.exe` de 77 MB gerado; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
-**3.616 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026). Todos os portões do `CLAUDE.md` §7 verdes (22 tarefas).
+**3.639 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026), e mais **8 no navegador** (`pnpm e2e`). Todos os portões do `CLAUDE.md` §7 verdes — o de E2E para venda completa e fechamento de caixa; o de emissão fiscal espera o fiscal.
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
