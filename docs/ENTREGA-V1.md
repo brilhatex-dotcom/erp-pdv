@@ -97,7 +97,7 @@
 ## 2. Como foi testado
 
 Tudo abaixo foi **executado**, não só escrito. Números da última execução
-completa (`pnpm verify`, 17/10/2026):
+completa (`pnpm verify`, 18/10/2026):
 
 | Camada | Testes | O que prova |
 |---|---|---|
