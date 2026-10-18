@@ -185,6 +185,7 @@ Derivados de `docs/ARQUITETURA.md`. Qualquer violação exige ADR.
 | **Empresas** | **Uma empresa por instalação.** Nenhuma tabela leva `empresa_id`; duas lojas são duas instalações | **ADR-0024** |
 | **Financeiro** | **A conta a receber nasce na mesma transação da venda**, não pela outbox. O fiscal é assíncrono por depender de rede externa; o financeiro é local e obrigatório | **ADR-0025** |
 | **Modo treinamento** | **Segundo banco (`erp_pdv_treino`), mesmas rotas sob `/treino`.** Token, cookie e sessão próprios; sem fila offline, sem gaveta; pagamento simulado só lá. O banco confere o próprio nome (`_treino`) antes de montar ou esvaziar | **ADR-0026** |
+| **Rede da loja** | **HTTP puro.** Só `localhost` é contexto seguro: o código de navegador **não usa** `crypto.randomUUID`, `crypto.subtle` nem `navigator.clipboard` (o lint reprova), e o cookie é `Secure` só quando a requisição veio por HTTPS. O 2º computador funciona online, sem service worker | **ADR-0028** |
 | **Cópias de segurança (V1)** | `pg_dump` de hora em hora e no fechamento, **toda cópia provada por restauração**, retenção GFS, restauração pela retaguarda. Sem PITR e sem cópia externa automática nesta versão | **ADR-0027** |
 | Certificado digital | **É do cliente.** Custódia no provedor quando possível; o ERP guarda só hash, titular e validade | ADR-0015 · §6 |
 | Numeração fiscal | Controlada pelo **ERP**, não pelo provedor. Uma série por estação de PDV | §8 do doc fiscal |
@@ -259,6 +260,7 @@ Nenhum item é opcional. Cada um corresponde a um papel do comitê (§1):
 - Guardar a fila de vendas offline no navegador: a garantia de `fsync` é do Agente Local (ADR-0023).
 - Gravar uma venda a prazo sem o título correspondente na mesma transação (ADR-0025).
 - Deixar uma venda de treino chegar à fila do Agente ou ao banco da loja (ADR-0026).
+- Usar no navegador uma API que só existe em HTTPS ou `localhost` (`crypto.randomUUID`, `crypto.subtle`, `navigator.clipboard`): o 2º caixa da loja abre o sistema por HTTP (ADR-0028).
 - Marcar tarefa como concluída com teste falhando ou implementação parcial.
 
 ---

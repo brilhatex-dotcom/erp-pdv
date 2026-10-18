@@ -45,7 +45,7 @@ git log --oneline origin/main..origin/<branch>   # o que ela tem a mais
 | Branch | Situação em 17/10/2026 | O que ela mexe |
 |---|---|---|
 | `claude/jolly-planck-c0ues8` | **Aguardando PR e merge** | A V1 do balcão: configuração da loja por segmento (padaria, mercadinho, frutaria, misto), venda por peso e pela etiqueta da balança, pagamento misto e troco, desconto com alçada e liberação do supervisor, venda guardada, cancelamento e devolução com motivo e responsável, sangria e suprimento na tela do caixa, comprovante não fiscal 58/80 mm, auditoria, **cópias de segurança** (ADR-0027) e **modo treinamento** num segundo banco (ADR-0026). Migrações `balcao_completo` e `backup_agenda`, com reversão testada. Os cenários pedidos estão validados pela API e no navegador (`pnpm e2e`). **Ainda falta**: o manual do operador |
-| `claude/projeto-andamento-47iofe` | Aguardando merge | Correções da 1ª execução do `instalador.yml`: NSIS instalado no runner, migração passa a morar no `apps/instalador` com o CLI do Prisma embarcado, e a ordem segredos↔`initdb` corrigida. Ao mesclar, apague-a e esvazie esta tabela |
+| `claude/projeto-andamento-47iofe` | Aguardando merge — **já contida em `claude/jolly-planck-c0ues8`** | Correções do `instalador.yml` achadas nas instalações reais de 02/08/2026 (NSIS, migração pelo CLI embarcado, `initdb` fora de `Program Files`, serviço do NSSM, retaguarda com os próprios assets, parar serviços antes de reinstalar). O merge da branch da V1 leva os 7 commits; depois, apague as duas e esvazie esta tabela |
 
 > Já mescladas e apagadas: `claude/gestao-de-usuarios`, `claude/cadastro-de-empresa`,
 > `claude/agente-local`, `claude/pwa-e-quiosque`, `claude/financeiro` e
@@ -102,9 +102,9 @@ movimentação é o pior de resolver.
 | **Casca de quiosque** | ✅ Electron opcional, tela cheia, **sem lógica** (ADR-0023) | `apps/quiosque/` |
 | **Financeiro — contas a receber e a pagar** | ✅ Completo, ponta a ponta. O crediário da venda vira título na mesma transação (ADR-0025) | `domain/financeiro/`, `casos-de-uso/financeiro/`, `rotas/financeiro.ts`, `telas/Financeiro.tsx` |
 | **Servidor entrega as telas** | ✅ PDV na raiz, retaguarda em `/retaguarda`. **É o que faz o service worker registrar** | `apps/server/src/http/estaticos.ts` |
-| **Instalador Windows** | ⚠️ Workflow verde e `.exe` de 77 MB gerado; nunca instalado num Windows — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
+| **Instalador Windows** | ⚠️ Instalado e reinstalado num Windows em 02/08/2026 (defeitos achados, corrigidos). **O instalador da V1 ainda não foi gerado nem instalado**, e ele não ativa o Agente Local — ver §2.1.1 | `apps/instalador/`, `.github/workflows/instalador.yml` |
 
-**3.639 testes passando** no ramo `claude/jolly-planck-c0ues8` (17/10/2026), e mais **8 no navegador** (`pnpm e2e`). Todos os portões do `CLAUDE.md` §7 verdes — o de E2E para venda completa e fechamento de caixa; o de emissão fiscal espera o fiscal.
+**3.649 testes passando** no ramo `claude/jolly-planck-c0ues8` (18/10/2026), e mais **10 no navegador** (`pnpm e2e`). Todos os portões do `CLAUDE.md` §7 verdes — o de E2E para venda completa e fechamento de caixa; o de emissão fiscal espera o fiscal.
 O grafo de dependências está **sem nenhum órfão**.
 
 Verificação completa em um comando:
@@ -136,7 +136,7 @@ pnpm verify     # format:check + lint + typecheck + arch + test:cov + audit --pr
   casa, não foram reescritos**. A casca Electron e a ponte IPC saíram; a tela
   fala HTTP pelo `@erp/agente-contrato`.
 
-### 2.1.1 ⬅️ PRÓXIMO — instalar numa máquina Windows de verdade
+### 2.1.1 ⬅️ PRÓXIMO — gerar o instalador da V1 e instalá-lo num Windows de teste
 
 O `instalador.yml` foi executado pela primeira vez em 02/08/2026 (run
 30744827814). Tudo até a compilação passou: as dependências, o build, a montagem
@@ -167,7 +167,7 @@ duplicada a cada reinstalação; e as portas nunca eram conferidas, apesar de
 | Script NSIS | ✅ **Compila** — run 30746227226 |
 | Executável gerado | ✅ `erp-pdv-0.1.0-teste-instalador.exe`, **77,2 MB** (de 450,9 MB de carga) |
 | Sequência completa ensaiada no Linux | ✅ `preparar` → `conferir` → `initdb` → `criar-banco` → `migrar` → `verificar`, com Postgres real, 27 tabelas, primeiro acesso e reinstalação por cima preservando os segredos |
-| Instalação numa máquina Windows | ⚠️ **1ª tentativa em 02/08/2026: falhou no `initdb`** por permissão de `Program Files`. Corrigido; falta repetir |
+| Instalação numa máquina Windows | ✅ **Feita em 02/08/2026** (sete correções vindas dessas instalações, ver abaixo): falhou no `initdb`, depois no serviço, e a primeira instalação que chegou ao fim (`a28420a`) subiu o serviço e abriu o PDV. Reinstalação por cima também testada. O último build verde foi o run #10 (`fb755e0`). ⚠️ **Nada disso inclui a V1**: balcão completo, cópias de segurança, treino e as correções de 18/10 nunca foram instalados |
 
 **Por que o resto não foi executado:** o ambiente de desenvolvimento é Linux.
 Compilar NSIS e registrar serviço do Windows exige Windows. O `instalador.yml`
@@ -175,18 +175,40 @@ roda em `windows-latest` e é ali que a prova acontece — mas ele dispara **só
 manualmente ou em tag `v*`**, para não gastar minuto de runner Windows a cada
 commit.
 
-**O próximo passo é:** baixar o artefato `instalador-windows` do run 30746227226
-e executar o `.exe` numa máquina Windows real. É o único elo da corrente que
-ainda nunca rodou — e onde moram `initdb`, os dois serviços, o firewall e a
-verificação de saúde.
+**O que as instalações reais de 02/08/2026 acharam** (cada item virou um commit,
+todos já em `claude/jolly-planck-c0ues8`):
 
-**O que observar na primeira instalação**, em ordem de risco:
+| Commit | Achado numa máquina Windows de verdade |
+|---|---|
+| `984e7c2` | `initdb` falha em `Program Files`; acentos ilegíveis na tela do instalador |
+| `d9d057d`, `88e143b` | Serviço do Windows não subia: aspas do NSSM e `package.json` ausente da carga |
+| `a28420a` | 1ª instalação até o fim: o serviço subiu, o PDV abriu — e a retaguarda abriu **em branco** (assets pedidos na raiz) |
+| `6a4603e` | Administrador recém-criado entrava na retaguarda e **não no caixa**: faltava o PIN |
+| `31a5a9c` | Reinstalar por cima: uma caixa de erro por DLL, com o serviço do banco no ar |
+| `fb755e0` | O operador bipava e recebia "abra o caixa" — **sem tela de abertura** |
 
-1. o `initdb` com `--locale-provider=icu --icu-locale=pt-BR` aceita a locale na
-   máquina do cliente (nunca foi executado no Windows);
-2. o `nssm` sobe o serviço e o Node acha o `.env` ao lado do `index.js`;
-3. a migração roda pelo motor embarcado, **sem** tentar baixar nada;
-4. reinstalar por cima preserva os segredos e não recria o cluster.
+Em todas, o servidor era aberto por `localhost`. O que só aparece **na segunda
+origem** — o 2º computador, por `http://NOME:3000` — foi achado em 18/10/2026
+(ADR-0028).
+
+**O próximo passo é:**
+
+1. gerar o instalador desta branch: Actions → **Instalador Windows** → *Run
+   workflow* → escolher a branch e a versão; baixar o artefato `instalador-windows`
+   (vale 30 dias — o de agosto já expirou e **não tem a V1**);
+2. instalar num Windows **de teste**, não numa loja;
+3. seguir `docs/operacao/PRIMEIROS-PASSOS.md` e, depois, o roteiro de usabilidade.
+
+**O que observar**, em ordem de risco:
+
+1. a migração roda nos **dois** bancos (loja e treino) pelo motor embarcado, e o
+   treino aparece na entrada do caixa;
+2. a cópia de segurança roda com o `pg_dump` embarcado (`PASTA_BINARIOS_POSTGRES`),
+   e a restauração pela retaguarda funciona — nunca executadas no Windows;
+3. reinstalar por cima atualiza o `.env` (acrescenta `DATABASE_URL_TREINAMENTO`) e
+   preserva os segredos e o banco;
+4. um **segundo computador** na rede entra, mantém a sessão e vende (ADR-0028);
+5. a impressão do comprovante pelo navegador numa impressora térmica de verdade.
 
 Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 
@@ -213,7 +235,7 @@ Depois disso, o próximo módulo da ordem é **Relatórios (13)**.
 | 13 | Relatórios | ⚠️ Conferência dos caixas, saldos e extrato de estoque, contas a receber e a pagar, auditoria. **Faltam** vendas por período e por produto, e margem |
 | 14 | **Dashboard** | ⬜ Nada existe |
 | 15 | **Backup** | ✅ Camada local completa (ADR-0027). **Faltam** a cópia externa automática e cifrada e o PITR — decisão de custo pendente |
-| 16 | Instalação | ⚠️ NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Workflow **verde**, `.exe` gerado; **nunca instalado numa máquina Windows** — ver §2.1.1 |
+| 16 | Instalação | ⚠️ NSIS, PostgreSQL embarcado, dois serviços, firewall e verificação de saúde. Instalado e reinstalado num Windows em 02/08/2026; **a V1 ainda não foi instalada** — ver §2.1.1 |
 | 17 | **Atualização** | ⬜ Com PWA, a tela se atualiza sozinha; falta o Agente Local e o servidor |
 | 18 | PWA | ✅ Manifesto, ícones, service worker e instalação na área de trabalho, servidos pelo servidor da loja |
 | 19 | **Impressão comum** | ⬜ Impressora de folha A4, para relatórios e pedidos |
@@ -250,16 +272,26 @@ não para uma loja operar legalmente.** Quem vender o produto precisa saber diss
 - ~~O servidor da loja não serve a PWA~~ ✅ **Resolvido.** `http/estaticos.ts`
   entrega o PDV na raiz e a retaguarda em `/retaguarda`, com `sw.js` sem cache e
   arquivo com hash cacheado por um ano.
-- **O instalador nunca foi executado numa máquina Windows.** Ver §2.1.1 — é a maior incerteza aberta
-  no projeto hoje.
+- **O instalador da V1 nunca foi executado.** As versões de 02/08/2026 foram
+  instaladas e reinstaladas num Windows (§2.1.1); a V1 do balcão, as cópias de
+  segurança e o treino, não. É a maior incerteza aberta no projeto hoje.
 - **O instalador não é assinado.** Decisão registrada: certificado custa de
   R$ 1.500 a R$ 5.000 por ano e exige token físico ou HSM desde 2023. O Windows
   mostra "Editor desconhecido"; o `docs/operacao/INSTALACAO.md` explica ao
   técnico o que fazer. Quando houver certificado, é um passo `signtool` no
   workflow — nada no produto muda.
 - **O modo "somente estação de caixa" não existe.** O instalador instala tudo.
-  A estação precisaria só do Agente Local (ADR-0023), e o `INSTALACAO.md` já
-  descreve o fluxo pretendido.
+  A estação precisaria só do Agente Local (ADR-0023).
+- **O Agente Local não é ativado pelo instalador.** O workflow copia `agente/`
+  para a carga, mas o NSIS não registra serviço nem o inicia — e a tela ainda o
+  autentica com um segredo provisório (`apps/pdv/src/balcao.ts`), porque a rota
+  que entregaria o segredo da instalação à PWA não existe. Efeito hoje:
+  comprovante pelo navegador, gaveta sem abertura automática, nenhuma venda sem
+  servidor. **Próximo passo da contingência**; só se valida num Windows, e o NSIS
+  já mordeu três vezes quem o alterou sem rodar (ver §3).
+- **O 2º computador funciona online, sem tela guardada** (ADR-0028): HTTP puro não
+  é contexto seguro. HTTPS na rede da loja foi adiado por custo de suporte; a
+  casca de quiosque pode marcar a origem como confiável.
 - **O ícone do PWA é provisório.** Gerado por `apps/pdv/scripts/gerar-icones.mjs`,
   um cupom estilizado sem tipografia. Serve para a instalabilidade; a marca do
   produto substitui os três PNG sem tocar em código.
@@ -364,6 +396,7 @@ Cada item abaixo custou tempo real. Estão aqui para não custar duas vezes.
 | **`inject` dispara o `onReady`** | Relógio de fundo ligando no meio da suíte | Gancho de `onReady` roda em todo teste com `inject`. Relógio de fundo leva `unref()` e para no `onClose` |
 | **Proteção que outra camada esconde** | Teste de isolamento verde mesmo sem a proteção | O teste "o token do treino não abre a loja" passava **com o emissor igual nos dois modos**: a rota consultada procurava o usuário, que não existe no outro banco. Rotas que só exigem token (`/api/caixa/aberto`) ficariam abertas ao PIN público do treino. **Prove cada trava com uma mutação**: tire-a e veja o teste cair |
 | **Contingência atravessando o modo** | Venda de treino entregue ao banco da loja | No treino, a queda do servidor levava a venda para a fila do Agente — que a entrega ao servidor **de verdade**. Todo caminho que grava fora do servidor (fila, `localStorage`, gaveta) pergunta o modo antes (ADR-0026) |
+| **Testar só no servidor prova só o servidor** | Instalação testada cinco vezes, e o 2º computador **não entrava**: "Sem conexão com o servidor" com o servidor de pé; depois, sessão derrubada a cada 15 min | `localhost` é contexto seguro; `http://NOME:3000` não é. Lá faltam `crypto.randomUUID`, service worker, e o cookie `Secure` é descartado. Código de navegador não usa essas APIs (o lint reprova), `Secure` segue o protocolo, e o E2E abre o sistema **pelo IP da máquina** (ADR-0028). Teste novo de tela ou instalação passa também pela segunda origem |
 | **Prefixo novo de API fora das listas** | Resposta de API guardada no cache da PWA; HTML no lugar de JSON | `NUNCA_CACHEIA` (service worker) e `NAO_SAO_TELA` (servidor) só conheciam `/api/`. Prefixo novo de API — como `/treino/` — entra **nas duas** |
 
 ---
@@ -391,6 +424,8 @@ Resumo; a fonte é `CLAUDE.md` §5 e `docs/adr/`.
   detecta falta nenhuma.
 - Dinheiro em centavos `bigint` (ADR-0009). Quantidade em milésimos. Percentual em
   centésimos de por cento — 5% é `500`.
+- **A rede da loja é HTTP puro** (ADR-0028): nada de API de navegador que só existe
+  em HTTPS ou `localhost`, e `Secure` no cookie só quando a requisição veio por HTTPS.
 - **O treino mora noutro banco** (`erp_pdv_treino`), com as mesmas rotas sob
   `/treino`, token e cookie próprios, **sem fila e sem gaveta**. O banco confere o
   próprio nome antes de montar ou esvaziar (ADR-0026).

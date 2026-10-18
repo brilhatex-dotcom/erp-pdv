@@ -27,7 +27,7 @@ testado**, o que depende de integração externa e as limitações conhecidas �
 | Cadastros, estoque, compras, financeiro (fiado e despesas) | ✅ Pronto |
 | Cópias de segurança e restauração | ✅ Pronto ([ADR-0027](docs/adr/0027-copias-de-seguranca-da-v1.md)) |
 | Modo treinamento | ✅ Pronto ([ADR-0026](docs/adr/0026-modo-treinamento-em-banco-separado.md)) |
-| Instalador Windows | ⚠️ Gera o `.exe` no CI; ainda não instalado numa máquina Windows |
+| Instalador Windows | ⚠️ As versões de agosto foram instaladas e reinstaladas num Windows; **o instalador da V1 ainda não foi gerado nem instalado** (ver [`ESTADO.md`](ESTADO.md) §2.1.1) |
 | Relatórios de vendas e painel | ⬜ Só a conferência dos caixas |
 | Fiscal (NFC-e) | ⬜ Provedor simulado ([ADR-0022](docs/adr/0022-fiscal-fora-do-caminho-critico.md)) — **não serve para a loja operar legalmente** |
 

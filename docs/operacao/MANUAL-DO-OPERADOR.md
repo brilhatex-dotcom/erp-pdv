@@ -194,6 +194,11 @@ fecha do mesmo jeito; o gerente confere depois.
 
 ## 11. Sem conexão com o servidor
 
+> Esta seção vale quando o **Agente Local** está ativo no computador do caixa. Na
+> instalação de hoje ele ainda não vem ligado (`INSTALACAO.md`): sem ele, a tela
+> avisa que não há conexão e a venda **espera o servidor voltar**. Pergunte ao
+> responsável pela loja qual é o caso do seu caixa.
+
 Se aparecer **Sem conexão com o servidor** no alto da tela, **continue
 vendendo**: as vendas ficam guardadas no computador do caixa e sobem sozinhas
 quando a rede voltar.

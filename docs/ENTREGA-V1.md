@@ -19,7 +19,7 @@
 |---|---|---|
 | Segmento configurável: padaria, mercadinho, frutaria, misto | ✅ Cada um liga os recursos que usa; tudo ajustável depois | Retaguarda → Configuração |
 | Uma loja, um ou mais caixas, vários operadores | ✅ Uma empresa por instalação (ADR-0024); cada operador com matrícula e PIN | — |
-| Vender sem servidor | ✅ Fila na estação, entregue quando a rede volta, sem duplicar | Agente Local (ADR-0023) |
+| Vender sem servidor | ⚠️ Fila na estação, entregue quando a rede volta, sem duplicar — **pronta e testada no código, mas o instalador ainda não ativa o Agente Local** (ADR-0023) | `apps/agente/` |
 | Perfis administrador, gerente, supervisor, operador — permissão conferida **no servidor** | ✅ E também estoquista, financeiro e contador | Retaguarda → Usuários |
 | Senha segura e auditoria | ✅ Argon2id; PIN de 6 números sem sequência óbvia; senha de 12+; bloqueio progressivo; registro de quem pediu e quem liberou | Retaguarda → Auditoria |
 | Cálculo sem erro de arredondamento | ✅ Dinheiro em centavos, quantidade em milésimos, percentual em pontos-base — nunca `float` | `@erp/domain` |
@@ -104,10 +104,10 @@ completa (`pnpm verify`, 17/10/2026):
 | Domínio | 1.331 | As regras, isoladas: dinheiro, peso, troco, desconto, estoque, caixa, permissões |
 | Casos de uso | 548 | Os fluxos, com dublês: venda, devolução, cópia, treino |
 | Banco (PostgreSQL de verdade) | 251 | Gatilhos de imutabilidade, índices únicos, reversão de migração, `pg_dump`/`pg_restore` |
-| Servidor (HTTP + PostgreSQL) | 450 + 23 | As rotas que a tela chama; os **23 cenários de aceitação** abaixo |
-| PDV (tela) | 317 | Cada tecla, janela e mensagem, contra um servidor falso com estado |
-| Retaguarda, Agente, instalador e demais | 719 | — |
-| **No navegador (Chromium)** | 8 | O dia de caixa inteiro, pelo teclado, contra o servidor e o banco de verdade |
+| Servidor (HTTP + PostgreSQL) | 454 + 23 | As rotas que a tela chama; os **23 cenários de aceitação** abaixo |
+| PDV (tela) | 318 | Cada tecla, janela e mensagem, contra um servidor falso com estado |
+| Retaguarda, Agente, instalador e demais | 724 | — |
+| **No navegador (Chromium)** | 10 | O dia de caixa inteiro, pelo teclado, contra o servidor e o banco de verdade |
 
 O CI repete tudo a cada envio, com PostgreSQL 17 — a versão que vai na loja.
 
@@ -137,9 +137,12 @@ O CI repete tudo a cada envio, com PostgreSQL 17 — a versão que vai na loja.
 
 ### O que **não** foi testado
 
-- **Instalação numa máquina Windows de verdade.** O instalador compila no CI e a
-  sequência inteira foi ensaiada no Linux, mas o `.exe` ainda não rodou num
-  Windows (ver `ESTADO.md` §2.1.1). É o próximo passo antes de uma loja.
+- **A instalação da V1 num Windows.** As versões de agosto foram instaladas e
+  reinstaladas numa máquina Windows (sete correções vieram dessas instalações), mas o instalador **com a V1** — balcão completo, cópias de
+  segurança, treino — ainda não foi gerado nem instalado (`ESTADO.md` §2.1.1). É
+  o próximo passo antes de uma loja.
+- **Um segundo computador numa rede de verdade.** Testado no Chromium por um IP de
+  rede (HTTP, origem insegura); nunca com duas máquinas físicas.
 - **Hardware físico:** impressora térmica, gaveta, leitor e balança de verdade.
   Nos testes, o leitor é o teclado (como o leitor USB se apresenta) e a etiqueta
   é gerada no formato de fábrica. Para conferir o cupom sem impressora, há a
@@ -157,6 +160,8 @@ O CI repete tudo a cada envio, com PostgreSQL 17 — a versão que vai na loja.
 | Relatórios de vendas (por período, produto, margem) e painel | O dono não vê a venda do mês numa tela | Conferência dos caixas por período |
 | Alerta de estoque mínimo | Ninguém é avisado do que está acabando | Estoque → saldos zerados e negativos |
 | Cópia externa automática e PITR | Proteção contra roubo e incêndio depende do pendrive semanal | Rotina combinada na implantação (`BACKUP.md`) |
+| Agente Local ativo na instalação | O instalador copia, mas não registra nem inicia o Agente: comprovante pelo navegador, gaveta sem abertura automática, nenhuma venda sem servidor | Impressora com a gaveta ligada ao driver do Windows; servidor sempre no ar |
+| 2º computador sem tela guardada (HTTP, ADR-0028) | Funciona online; com o servidor desligado e a página recarregada, não abre | — |
 | Troca obrigatória da credencial no primeiro acesso | O cadastro marca, mas as telas ainda não exigem | O administrador define o PIN junto com a pessoa |
 | Pedido de compra, inventário em lote, conciliação bancária | — | Nota de entrada, ajuste item a item, baixa manual |
 | Atualização automática | Atualizar é rodar o instalador novo por cima | — |

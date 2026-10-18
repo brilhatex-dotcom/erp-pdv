@@ -7,11 +7,13 @@
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./eslint": "./eslint.base.mjs",
-    "./vitest": "./vitest.base.ts"
+    "./vitest": "./vitest.base.ts",
+    "./eslint-navegador": "./eslint.navegador.mjs"
   },
   "files": [
     "tsconfig.base.json",
     "eslint.base.mjs",
+    "eslint.navegador.mjs",
     "vitest.base.ts"
   ],
   "dependencies": {

@@ -43,6 +43,7 @@ mostra o que foi feito; só o ADR preserva as alternativas descartadas e o motiv
 | [0025](0025-financeiro-na-transacao-da-venda.md) | A conta a receber nasce na transação da venda | Aceito |
 | [0026](0026-modo-treinamento-em-banco-separado.md) | Modo treinamento num segundo banco, com as mesmas regras | Aceito |
 | [0027](0027-copias-de-seguranca-da-v1.md) | Cópias de segurança da V1: `pg_dump` provado por restauração, sem PITR e sem cópia externa automática | Aceito |
+| [0028](0028-servidor-da-loja-em-http-e-o-navegador-da-estacao.md) | Servidor da loja em HTTP puro: o que o navegador da estação não tem — sem APIs de contexto seguro, `Secure` pelo protocolo | Aceito |
 
 > Os ADRs 0001 a 0012 estão descritos em `docs/ARQUITETURA.md` §18 e serão extraídos
 > para arquivos próprios conforme cada área for implementada. Os que já têm arquivo

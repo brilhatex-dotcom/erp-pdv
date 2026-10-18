@@ -32,6 +32,9 @@ export default defineConfig({
     timezoneId: "America/Sao_Paulo",
     // A tela do balcão é desenhada para monitor de caixa, não para celular.
     viewport: { width: 1366, height: 768 },
+    // Tudo é local. Sem isto, o navegador mandaria a origem de rede (o IP desta
+    // máquina) pelo proxy do ambiente, e o teste do 2º caixa falharia por isso.
+    launchOptions: { args: ["--no-proxy-server"] },
     trace: "retain-on-failure",
   },
   webServer: {
@@ -45,7 +48,9 @@ export default defineConfig({
     env: {
       NODE_ENV: "test",
       PORTA: String(PORTA),
-      ENDERECO: "127.0.0.1",
+      // Em todas as interfaces, como a loja: o teste do 2º computador entra
+      // pelo IP da máquina, e não por `localhost`.
+      ENDERECO: "0.0.0.0",
       DATABASE_URL: URL_BANCO,
       DATABASE_URL_TREINAMENTO: URL_BANCO_TREINO,
       SEGREDO_TOKEN: "segredo-do-teste-no-navegador-com-mais-de-32",

@@ -228,9 +228,7 @@ function definirCookies(
   const cookies = cookiesDe(container);
   const opcoes = {
     httpOnly: true,
-    // `Secure` só em produção: em desenvolvimento o servidor roda em HTTP e o
-    // navegador descartaria o cookie silenciosamente.
-    secure: container.ambiente.ehProducao,
+    secure: chegouPorHttps(resposta),
     sameSite: "strict" as const,
     path: cookies.caminho,
     expires: expiraEm,
@@ -247,11 +245,29 @@ function limparCookies(
   const cookies = cookiesDe(container);
   const opcoes = {
     httpOnly: true,
-    secure: container.ambiente.ehProducao,
+    secure: chegouPorHttps(resposta),
     sameSite: "strict" as const,
     path: cookies.caminho,
   };
 
   void resposta.clearCookie(cookies.sessao, opcoes);
   void resposta.clearCookie(cookies.refresh, opcoes);
+}
+
+/**
+ * `Secure` só quando a requisição chegou por HTTPS.
+ *
+ * Antes era `NODE_ENV === "production"`, e o instalador grava `production` — mas
+ * a loja fala **HTTP puro** na rede local (ADR-0028). O navegador **descarta**,
+ * em silêncio, um cookie `Secure` vindo de origem insegura; a única exceção é
+ * `localhost`. Resultado: no computador do servidor tudo funcionava, e no
+ * segundo caixa a renovação respondia 401 — o operador era derrubado ao fim dos
+ * 15 minutos do token, e o F5 perdia a sessão.
+ *
+ * O atributo protege o cookie de trafegar em claro. Numa conexão que já é em
+ * claro, ele não protege nada e só impede o cookie de existir. Atrás de um proxy
+ * HTTPS (`trustProxy`), `X-Forwarded-Proto` liga o atributo sozinho.
+ */
+function chegouPorHttps(resposta: Parameters<typeof responderErro>[0]): boolean {
+  return resposta.request.protocol === "https";
 }

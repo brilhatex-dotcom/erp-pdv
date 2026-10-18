@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { ClienteApi, Sessao } from "./cliente.js";
+import { novoUuid } from "./uuid.js";
 
 export interface UsuarioLogado {
   readonly id: string;
@@ -188,7 +189,9 @@ export function identificadorDoDispositivo(): string {
 
   if (guardado !== null && guardado !== "") return guardado;
 
-  const novo = crypto.randomUUID();
+  // `novoUuid`, e não `crypto.randomUUID()`: este só existe em HTTPS ou
+  // localhost, e o segundo computador da loja abre o sistema por HTTP.
+  const novo = novoUuid();
   globalThis.localStorage.setItem(CHAVE_DISPOSITIVO, novo);
 
   return novo;

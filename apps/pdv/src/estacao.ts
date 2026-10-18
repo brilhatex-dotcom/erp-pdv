@@ -1,3 +1,5 @@
+import { novoIdentificador } from "./identificadores.js";
+
 const CHAVE_ESTACAO = "erp.estacao";
 
 /**
@@ -21,7 +23,10 @@ export function identificadorDaEstacao(): string {
 
   if (guardado !== null && guardado !== "") return guardado;
 
-  const novo = crypto.randomUUID();
+  // Não `crypto.randomUUID()`: ele só existe em HTTPS ou localhost, e a estação
+  // que abre o sistema por `http://NOME-DO-SERVIDOR:3000` quebrava aqui, ao
+  // montar o caixa (ADR-0028).
+  const novo = novoIdentificador();
   globalThis.localStorage.setItem(CHAVE_ESTACAO, novo);
 
   return novo;

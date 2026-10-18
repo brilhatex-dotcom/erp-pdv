@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { identificadorDaEstacao } from "./estacao.js";
 
@@ -10,6 +10,10 @@ import { identificadorDaEstacao } from "./estacao.js";
 
 beforeEach(() => {
   globalThis.localStorage.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("identificadorDaEstacao", () => {
@@ -37,6 +41,22 @@ describe("identificadorDaEstacao", () => {
 
     expect(gerado).not.toBe("");
     expect(globalThis.localStorage.getItem("erp.estacao")).toBe(gerado);
+  });
+
+  it("🔑 funciona sem `crypto.randomUUID` — o segundo computador abre o sistema por HTTP", () => {
+    // `crypto.randomUUID` só existe em HTTPS ou localhost. Sem esta estação, o
+    // caixa nem monta: a tela quebrava logo depois do login.
+    const verdadeiro = globalThis.crypto;
+    vi.stubGlobal("crypto", {
+      getRandomValues: (bytes: Uint8Array) => verdadeiro.getRandomValues(bytes),
+    });
+
+    const gerada = identificadorDaEstacao();
+
+    expect(gerada).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(globalThis.localStorage.getItem("erp.estacao")).toBe(gerada);
   });
 
   it("preserva o valor que o instalador tenha gravado", () => {

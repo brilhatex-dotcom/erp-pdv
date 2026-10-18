@@ -1,5 +1,8 @@
 import { TENTATIVAS_ATE_BLOQUEIO } from "@erp/domain";
 import type { FastifyInstance } from "fastify";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Container } from "../composicao/container.js";
@@ -178,6 +181,96 @@ describe("Login", () => {
     // 429, não 401: é limitação de tentativa, e o cliente pode voltar depois.
     expect(resposta.statusCode).toBe(429);
     expect(resposta.json()).toMatchObject({ erro: { codigo: "USUARIO_BLOQUEADO" } });
+  });
+});
+
+/**
+ * O cookie de sessão e o protocolo (ADR-0028).
+ *
+ * A loja fala HTTP puro na rede local, e o instalador grava `NODE_ENV=production`.
+ * Cookie `Secure` vindo de origem HTTP sem ser `localhost` o navegador descarta
+ * em silêncio — e o segundo caixa perdia a sessão a cada 15 minutos.
+ */
+describe("Cookies da sessão", () => {
+  const LOGIN = {
+    matricula: "42",
+    segredo: PIN_OPERADOR,
+    contexto: "PDV",
+    dispositivoId: "018f3a2b-7c1d-7e4f-8a9b-1c2d3e4f0001",
+  } as const;
+
+  it("🔑 em HTTP puro, os cookies não levam Secure — o navegador do 2º caixa os aceita", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/api/acesso/login",
+      payload: LOGIN,
+    });
+
+    expect(resposta.cookies.map((c) => c.name)).toEqual(["erp_sessao", "erp_refresh"]);
+    expect(resposta.cookies.map((c) => c.secure)).toEqual([undefined, undefined]);
+  });
+
+  it("🔑 atrás de um proxy HTTPS, o Secure liga sozinho", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/api/acesso/login",
+      headers: { "x-forwarded-proto": "https" },
+      payload: LOGIN,
+    });
+
+    expect(resposta.cookies.map((c) => c.secure)).toEqual([true, true]);
+  });
+
+  it("🔑 a saída limpa os cookies com o mesmo atributo com que foram postos", async () => {
+    const { token } = await logar(servidor, "42", PIN_OPERADOR);
+    const headers = { authorization: `Bearer ${token}`, "x-forwarded-proto": "https" };
+
+    const http = await servidor.inject({
+      method: "POST",
+      url: "/api/acesso/sair",
+      headers: { authorization: headers.authorization },
+    });
+    const https = await servidor.inject({
+      method: "POST",
+      url: "/api/acesso/sair",
+      headers,
+    });
+
+    expect(http.cookies.map((c) => c.secure)).toEqual([undefined, undefined]);
+    expect(https.cookies.map((c) => c.secure)).toEqual([true, true]);
+  });
+
+  it("🔑 em produção — como o instalador configura — o servidor continua em HTTP puro", async () => {
+    // O defeito só existia com `NODE_ENV=production`, que é o que a loja roda.
+    const pasta = await mkdtemp(join(tmpdir(), "erp-cookies-"));
+    const producao = await montarServidorDeTeste({
+      NODE_ENV: "production",
+      PASTA_COPIAS: pasta,
+    });
+
+    try {
+      const resposta = await producao.servidor.inject({
+        method: "POST",
+        url: "/api/acesso/login",
+        payload: LOGIN,
+      });
+
+      expect(resposta.statusCode).toBe(200);
+      expect(resposta.cookies.map((c) => c.secure)).toEqual([undefined, undefined]);
+
+      // E o que o navegador mandaria de volta renova a sessão.
+      const cookies = resposta.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+      const renovada = await producao.servidor.inject({
+        method: "POST",
+        url: "/api/acesso/renovar",
+        headers: { cookie: cookies },
+      });
+      expect(renovada.statusCode).toBe(200);
+    } finally {
+      await producao.servidor.close();
+      await producao.container.encerrar();
+      await rm(pasta, { recursive: true, force: true });
+    }
   });
 });
 

@@ -297,6 +297,51 @@ describe("identificadorDoDispositivo", () => {
     expect(gerado).not.toBe("");
     expect(globalThis.localStorage.getItem("erp.dispositivo")).toBe(gerado);
   });
+
+  it("🔑 o segundo computador da loja entra: sem `crypto.randomUUID`, o login segue", async () => {
+    // HTTP que não é localhost não tem `crypto.randomUUID`. Antes, o login
+    // estourava ali e a tela dizia "sem conexão com o servidor" — com o servidor
+    // de pé, e sem nenhuma requisição ter saído.
+    const verdadeiro = globalThis.crypto;
+    vi.stubGlobal("crypto", {
+      getRandomValues: (bytes: Uint8Array) => verdadeiro.getRandomValues(bytes),
+    });
+    const pedidos: Record<string, unknown>[] = [];
+    const buscar = vi.fn((url: string, opcoes?: RequestInit) => {
+      if (url.endsWith("/api/acesso/login")) {
+        pedidos.push(JSON.parse(opcoes?.body as string) as Record<string, unknown>);
+        return Promise.resolve(json(200, { token: "abc", usuario: USUARIO }));
+      }
+
+      return Promise.resolve(
+        json(401, { erro: { codigo: "TOKEN_AUSENTE", mensagem: "x" } }),
+      );
+    });
+    const cliente = new ClienteApi(new Sessao(), "", buscar as unknown as typeof fetch);
+
+    const { result } = renderHook(() => useSessao(), {
+      wrapper: ({ children }) => (
+        <ProvedorSessao contexto="PDV" cliente={cliente}>
+          {children}
+        </ProvedorSessao>
+      ),
+    });
+    await waitFor(() => {
+      expect(result.current.restaurando).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.entrar("42", "482913");
+    });
+
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]?.["dispositivoId"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(result.current.usuario?.matricula).toBe(USUARIO.matricula);
+
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("provedor sem cliente injetado", () => {

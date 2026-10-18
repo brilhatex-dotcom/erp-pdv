@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | **Projeto** | ERP + PDV para pequenas empresas brasileiras |
-| **Versão do documento** | 1.5 |
+| **Versão do documento** | 1.6 |
 | **Status** | Proposta para aprovação |
 | **Data** | 30/07/2026 |
 | **Autor** | Arquitetura / Liderança Técnica |
@@ -20,6 +20,7 @@
 | **1.1** | 30/07/2026 | **ADR-0002 superseado pelo ADR-0013**: banco passa de SQLite (padrão) para **PostgreSQL único embarcado**. Impacta §1.5, §1.7, §2.2, §2.5, §2.7, §5.1, §5.2.1, §7.1, §10, §12, §13.4 e §16.2. RPO melhora de 15 min para próximo de zero via PITR. |
 | **1.3** | 31/07/2026 | Acrescenta `@erp/cliente-api` ao grafo de §3.3 e à tabela de §3.4: o cliente HTTP e o contexto de sessão saem de `apps/web` para um pacote, porque o PDV precisa dos mesmos. Duplicá-los faria a renovação de token divergir entre as duas aplicações — e divergência em renovação de sessão aparece como "o PDV desloga sozinho". |
 | **1.4** | 17/10/2026 | **ADR-0027**: a V1 entrega a camada local do backup (§10.7) — `pg_dump` de hora em hora e no fechamento de caixa, toda cópia provada por restauração, retenção GFS e restauração pela retaguarda. **PITR e cópia externa automática ficam para depois**: na V1, o RPO é o intervalo da agenda (1 h no padrão), não "próximo de zero". Impacta §1.5 (RNF-07), §10.5 e §10.6. |
+| **1.6** | 18/10/2026 | **ADR-0028**: a loja fala HTTP puro na rede local, e só `localhost` é contexto seguro. O código de navegador deixa de usar `crypto.randomUUID` e afins (o 2º computador **não conseguia entrar**), o cookie `Secure` passa a seguir o protocolo da requisição, e fica registrado que o 2º computador funciona online, sem service worker. Impacta §2.7, §8.2 e §12. |
 | **1.5** | 17/10/2026 | **ADR-0026**: modo treinamento num **segundo banco** (`erp_pdv_treino`), com as mesmas rotas sob `/treino`, token e cookie próprios e loja de demonstração montada sozinha. O treino **não tem contingência**: sem servidor, ele para — a fila do Agente entregaria a venda de treino ao banco da loja. Impacta §2.7 e §12.6. |
 
 ---
@@ -404,6 +405,7 @@ Transações **nunca** cruzam agregados. Comunicação entre agregados é via **
 | 8 | UUIDv7 como ID | Auto-incremento | Geração offline sem colisão; ordenável por tempo |
 | 9 | Dinheiro em centavos (`bigint`) | `float` / `Decimal` | Exatidão absoluta; sem dependência de driver |
 | 10 | Treino num segundo banco, mesmas rotas sob `/treino` (ADR-0026) | Marca "treino" nas linhas do banco da loja | Uma consulta que esquecesse o filtro misturaria treino com movimento real; outro banco isola por construção |
+| 11 | Rede da loja em HTTP puro; navegador sem APIs de contexto seguro (ADR-0028) | HTTPS com certificado em cada estação | Certificado por estação multiplica o suporte; o 2º computador funciona online sem ele |
 
 ---
 
@@ -1069,7 +1071,7 @@ sequenceDiagram
 **Decisões:**
 - **Access token JWT curto (15 min)** — sem consulta ao banco a cada requisição.
 - **Refresh token opaco e rotativo (12 h)**, armazenado apenas como hash. Rotação com **detecção de reuso**: se um refresh já usado reaparece, foi roubado — revoga a família inteira.
-- Cookie `httpOnly`, `Secure`, `SameSite=Strict` — imune a roubo por XSS.
+- Cookie `httpOnly` e `SameSite=Strict` — imune a roubo por XSS. `Secure` **quando a requisição chega por HTTPS**: a loja fala HTTP puro na rede local, e o navegador descarta em silêncio o cookie `Secure` vindo de origem insegura que não é `localhost` — a sessão do 2º caixa não existiria (ADR-0028).
 - Sessão vinculada ao **dispositivo**; o administrador vê e encerra sessões remotamente.
 - **Sessão do PDV não expira durante caixa aberto** — expirar sessão no meio de uma venda seria um defeito de produto. Renova enquanto há atividade; encerra no fechamento do caixa.
 
@@ -1398,6 +1400,15 @@ servidor de verdade, e a venda de treino entraria no movimento da loja. Sem
 servidor, o treino para e diz por quê. Também não guarda a configuração do
 treino como a "última conhecida" do caixa, e não abre a gaveta.
 
+### 12.7 A estação que não é o servidor (ADR-0028)
+
+O servidor da loja fala HTTP puro. Só o computador dele abre o sistema por
+`localhost` — contexto seguro para o navegador. As demais estações abrem por
+`http://NOME-DO-SERVIDOR:3000`, e ali o navegador **não** registra service worker,
+não oferece "instalar como aplicativo", não expõe `crypto.randomUUID` e descarta
+cookie `Secure`. Por isso: o código de navegador não usa essas APIs (lint), o
+cookie segue o protocolo, e a estação remota **funciona online** — sem tela
+guardada. A contingência dela depende do Agente Local instalado nela.
 ---
 
 ## 13. Estratégia de atualização

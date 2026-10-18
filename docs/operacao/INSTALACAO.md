@@ -134,21 +134,30 @@ usuários do balcão.
 
 ---
 
-## Instalar uma estação de caixa
+## Usar um segundo computador (estação de caixa)
 
-A estação **não** recebe o sistema inteiro. Ela precisa só do **Agente Local**,
-que é quem fala com a impressora e guarda a fila offline (ADR-0023).
+Hoje não há instalação separada para a estação: o instalador instala tudo, no
+servidor. Os demais computadores só **abrem o sistema pelo navegador**.
 
 Na estação:
 
-1. rode o instalador escolhendo **"Somente estação de caixa"**;
-2. informe o **nome do servidor** da loja;
-3. abra `http://NOME-DO-SERVIDOR:3000/` no Chrome ou Edge;
-4. instale como aplicativo: menu **⋮ → Instalar**.
+1. confira que ela enxerga o servidor (`ping NOME-DO-SERVIDOR`);
+2. abra `http://NOME-DO-SERVIDOR:3000/` no Chrome ou Edge;
+3. entre com a matrícula e o PIN, como no servidor.
 
-A partir daí a tela abre como programa, em tela cheia, e **funciona com o
-servidor fora do ar** — o service worker guarda a tela e o Agente guarda as
-vendas até a rede voltar.
+**Funciona online**, igual ao computador do servidor: venda, pagamento, fechamento
+de caixa e a retaguarda (`/retaguarda/`). O comprovante sai pela impressão do
+navegador.
+
+**O que a estação não tem** (ADR-0028, `docs/adr/`):
+
+| Falta | Por quê | Efeito |
+|---|---|---|
+| "Instalar como aplicativo" e tela guardada | O navegador só libera isso em HTTPS ou em `localhost`, e a loja fala HTTP | Com o servidor desligado e a página recarregada, a tela não abre |
+| Fila de vendas offline, impressão direta e gaveta | Dependem do **Agente Local**, que o instalador **ainda não instala nem inicia** — nem no servidor | Sem servidor, a venda para; o comprovante sai pelo navegador |
+
+Quando o instalador ativar o Agente, a estação passa a ter a contingência; o
+modo "somente estação" também está previsto e não implementado (ADR-0023).
 
 ---
 
@@ -218,7 +227,8 @@ começo. O treino não entra nas cópias de segurança.
 Se o banco do treino falhar, o caixa de verdade funciona normalmente e o botão
 some da entrada; o log do servidor diz o motivo. Para **desligar** o treino,
 apague a linha `DATABASE_URL_TREINAMENTO` do `servidor\.env` e reinicie o
-serviço do servidor.
+serviço do servidor — mas a instalação e a atualização regravam esse arquivo, e
+a linha volta.
 
 ### Cópias de segurança
 
@@ -238,6 +248,10 @@ Registrado com honestidade, para o técnico não procurar o que não há:
   nova por cima (módulo 17).
 - **Instalação da estação em modo separado.** O instalador ainda instala tudo;
   o modo "somente estação" está previsto e não implementado.
+- **Agente Local ativo.** O instalador copia `agente\`, mas não registra nem
+  inicia o serviço, e a tela ainda fala com ele por um segredo provisório. Sem
+  ele: comprovante pelo navegador, gaveta sem abertura automática e nenhuma venda
+  sem servidor. É o próximo passo da contingência, e só se valida num Windows.
 - **Emissão fiscal.** O produto usa provedor simulado (ADR-0022). **Serve para
   demonstração, homologação e implantação — não para uma loja operar
   legalmente.**

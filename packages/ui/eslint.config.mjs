@@ -1,3 +1,3 @@
-import base from "@erp/config/eslint";
+import navegador from "@erp/config/eslint-navegador";
 
-export default base;
+export default navegador;
